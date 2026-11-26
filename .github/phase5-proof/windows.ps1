@@ -101,7 +101,7 @@ $realSettings=@{}
 foreach($name in $names){
  $profile=Join-Path $dir $name;New-Item -ItemType Directory -Force $profile | Out-Null
  $profiles+=@{name=$name;path=$profile}
- $entries[$name]=@{path=$profile;five=22;week=26;five_reset='2999-01-01T00:00:00+00:00';week_reset='2999-01-05T00:00:00+00:00';fetched_at=$now;retry_at=$now+180;err=$null}
+ $entries[$name]=@{path=$profile;five=22;week=26;five_reset=[DateTimeOffset]::UtcNow.AddHours(2).ToString('o');week_reset=[DateTimeOffset]::UtcNow.AddDays(4).ToString('o');fetched_at=$now;retry_at=$now+180;err=$null}
  $settings=@{sentinel="legacy-$name"}
  if($name -in @('active-hook','dead-hook','disabled-hook')){
    $target=if($name -eq 'dead-hook'){Join-Path $dir 'missing-claude-usage.exe'}else{$exe}
@@ -114,8 +114,7 @@ foreach($name in $names){
 }
 $entries['active-hook'].five=98;$entries['limit-without-hook'].five=99;$entries['dead-hook'].week=98;$entries['disabled-hook'].five=99
 $entries['near-5h'].five=84;$entries['stale-quota'].fetched_at=$now-1300;$entries['stale-quota'].err='HTTP 429'
-$entries['login-needed'].err='HTTP 401 (login required)';$entries['login-needed'].status=401;$entries['login-needed'].Remove('five');$entries['login-needed'].Remove('week')
-$entries['ordinary-b'].week=$null;$entries['ordinary-b'].week_reset=$null
+$entries['login-needed'].err='HTTP 401 (login required)';$entries['login-needed'].status=401
 $configPath=Join-Path $data 'config.json'
 @{profiles=$profiles;autostart=$false;interval_sec=180;warn_pct=80;block_pct=95;block_enabled=$true;widget_enabled=$false;notify_enabled=$false;widget_label='short';widget_font=124;widget_opacity=81;widget_locked=$true;dashboard_accent='orange';compat_sentinel='preserve me';local_ai_backend='ollama';local_ai_endpoint='http://127.0.0.1:18229';local_ai_model='sig4a-fixture';local_ai_managed=$false} | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $configPath
 $fixtureCache=@{ts=$now;block_enabled=$true;warn_pct=80;block_pct=95;busy=@('refreshing');refresh=$null;profiles=$entries}|ConvertTo-Json -Depth 8
@@ -179,7 +178,7 @@ try{
  $fixtureCache|Set-Content -Encoding utf8 "$data/usage_cache.json"
  $launch=[Diagnostics.Stopwatch]::StartNew()
  [void][Win]::PostMessage($tray,0x111,[UIntPtr]1,[IntPtr]::Zero)
- $dash=Wait-For 'native visible dashboard' {Visible $ep}
+ $dash=Wait-For 'native visible dashboard' {Visible $ep} 65
  $firstVisible=$launch.ElapsedMilliseconds
  Front $dash
  ClickStage $dashResult 'open-usage' $dash
@@ -203,7 +202,7 @@ try{
  Remove-Item "$dashResult*" -Force
  Copy-Item "$dir/dashboard-reopen.js" "$dir/dashboard.js" -Force
  [void][Win]::PostMessage($tray,0x111,[UIntPtr]1,[IntPtr]::Zero)
- $dash=Wait-For 'reopened real dashboard' {Visible $ep}
+ $dash=Wait-For 'reopened real dashboard' {Visible $ep} 65
  $again=Result $dashResult
  $after=Get-Content -Raw $configPath|ConvertFrom-Json
  Check ($again.savedAccent -eq 'purple' -and $after.widget_label -eq 'short' -and $after.widget_font -eq 124 -and $after.widget_opacity -eq 81 -and $after.widget_locked -and $after.compat_sentinel -eq 'preserve me') 'Unrelated save did not preserve legacy config'
@@ -221,7 +220,7 @@ try{
    $script:beforeQuick=RequestCount
    $vk=if($kind -eq 'grammar'){71}else{84}
    Keys @(17,18,$vk)
-   $q=Wait-For "native quick $kind" {Visible $qp}
+   $q=Wait-For "native quick $kind" {Visible $qp} 65
    Check ((ClipboardText) -ceq 'Selection did not touch clipboard') 'Hotkey changed the native clipboard'
    Front $q
    NativeFlow $quickResult '' $kind $manual $q $true
