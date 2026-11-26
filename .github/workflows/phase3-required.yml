@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: b79846c7473821eba4129d2c00acf2576670ada2
           persist-credentials: false
       - name: Show exact product revision
         run: git rev-parse HEAD
