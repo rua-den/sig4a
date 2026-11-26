@@ -235,6 +235,18 @@ fn dashboard_process_end_to_end() {
     wait_for("process exit on hide()", 10, || {
         main2.0.try_wait().unwrap().is_some()
     });
+    wait_for("window gone", 5, || window().is_null());
+
+    // ---- run 3: result actions follow the active OCR image (mock model, real WebView) ----
+    let (_ocr, result) = run_script(
+        &local,
+        &home,
+        tmp.path(),
+        "ocr",
+        include_str!("js/ocr_result.js"),
+    );
+    assert_eq!(result, json!({"ocr_result_lifecycle": true}), "{result}");
+
     let log = fs::read_to_string(data.join("events.log")).unwrap_or_default();
     assert!(
         !log.contains("js error") && !log.contains("dashboard:"),
