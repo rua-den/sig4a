@@ -51,10 +51,21 @@ static AI_BUSY: AtomicBool = AtomicBool::new(false);
 struct QuickPresentation {
     generation: u64,
     pending: Option<u64>,
+    deadline: Option<Instant>,
 }
 
 impl QuickPresentation {
+    /// Accepting a crop blocks another picker even before WebView can receive a token.
+    fn await_render(&mut self, now: Instant) {
+        self.deadline.get_or_insert(now + QUICK_PRESENT_TIMEOUT);
+    }
+
+    fn awaiting_render(&self) -> bool {
+        self.deadline.is_some()
+    }
+
     fn begin(&mut self) -> u64 {
+        self.await_render(Instant::now());
         self.generation += 1;
         self.pending = Some(self.generation);
         self.generation
@@ -62,6 +73,7 @@ impl QuickPresentation {
 
     fn invalidate(&mut self) {
         self.pending = None;
+        self.deadline = None;
     }
 
     fn acknowledge(&mut self, token: Option<u64>) -> bool {
@@ -455,18 +467,16 @@ fn main() {
     let mut hidden_for_picker = startup_ocr;
     let mut want_reveal = false;
     let mut present = QuickPresentation::default();
-    let mut present_deadline = None;
     let mut hotkey_result: Option<Result<String, String>> = None;
 
     event_loop.run(move |event, _, flow| {
         match event {
             Event::UserEvent(Ev::QuickTool(tool, text)) => {
                 if tool == "ocr" {
-                    if start_capture(None, &window, &proxy) {
+                    if !present.awaiting_render() && start_capture(None, &window, &proxy) {
                         hidden_for_picker = true;
                         want_reveal = false;
                         present.invalidate();
-                        present_deadline = None;
                         app.quick_pending = None;
                         hotkey_result = None;
                     }
@@ -484,9 +494,9 @@ fn main() {
                     }
                     want_reveal = shown;
                 } else {
-                    present_deadline = Some(Instant::now() + QUICK_PRESENT_TIMEOUT);
                     match result {
                         Ok(Some(capture)) => {
+                            present.await_render(Instant::now());
                             let area = win::capture_work_area(capture.bounds, app.hwnd);
                             app.anchored = true;
                             // Move the hidden HWND to the destination before measuring its DPI.
@@ -506,8 +516,10 @@ fn main() {
                             if app.quick_pending.is_none() {
                                 if !shown { app.close(); }
                                 hidden_for_picker = false;
-                                present_deadline = None;
                                 want_reveal = true;
+                            } else {
+                                // A queued regular shortcut may still be waiting for WebView startup.
+                                present.await_render(Instant::now());
                             }
                         }
                         Err(error) => {
@@ -515,10 +527,12 @@ fn main() {
                                 let _ = webview.evaluate_script(&bridge_result(id, Err(error)));
                                 if app.quick_pending.is_none() {
                                     hidden_for_picker = false;
-                                    present_deadline = None;
                                     want_reveal = shown;
+                                } else {
+                                    present.await_render(Instant::now());
                                 }
                             } else {
+                                present.await_render(Instant::now());
                                 hotkey_result = Some(Err(error));
                             }
                         }
@@ -540,7 +554,6 @@ fn main() {
                         && present.acknowledge(a.first().and_then(Value::as_u64))
                     {
                         hidden_for_picker = false;
-                        present_deadline = None;
                         want_reveal = true;
                     }
                 } else if m == "__drag" {
@@ -556,12 +569,11 @@ fn main() {
                     }
                 } else {
                     if m == "ocr_capture" {
-                        if start_capture(Some(id), &window, &proxy) {
+                        if !present.awaiting_render() && start_capture(Some(id), &window, &proxy) {
                             if app.quick_mode {
                                 hidden_for_picker = true;
                                 want_reveal = false;
                                 present.invalidate();
-                                present_deadline = None;
                                 hotkey_result = None;
                             }
                         } else if id != 0 {
@@ -618,7 +630,6 @@ fn main() {
                 if hidden_for_picker {
                     let token = present.begin();
                     js.push_str(&format!("notifyQuickPresented({token});"));
-                    present_deadline = Some(Instant::now() + QUICK_PRESENT_TIMEOUT);
                 }
                 let _ = webview.evaluate_script(&js);
                 if shown && !hidden_for_picker { win::focus(app.hwnd); }
@@ -630,10 +641,9 @@ fn main() {
                 let token = present.begin();
                 let js = format!("showQuickCapture({},{},{token});", json!(image), json!(error));
                 let _ = webview.evaluate_script(&js);
-                present_deadline = Some(Instant::now() + QUICK_PRESENT_TIMEOUT);
             }
         }
-        if !capturing && present_deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+        if !capturing && present.deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             // Fail closed if WebView never acknowledges. Never expose old or centered content.
             cu_core::log::log(&app.core.paths, "OCR popup render was not acknowledged");
             app.close();
@@ -661,7 +671,7 @@ fn main() {
             app.persist_now();
         }
         let mut next: Option<Instant> = app.geo.persist_at;
-        if let Some(t) = present_deadline {
+        if let Some(t) = present.deadline {
             next = Some(next.map_or(t, |n| n.min(t)));
         }
         if !shown && !capturing && !hidden_for_picker {
@@ -692,19 +702,38 @@ fn fail(core: &Core, msg: &str) -> ! {
 
 #[cfg(test)]
 mod quick_presentation_tests {
-    use super::QuickPresentation;
+    use super::{Instant, QuickPresentation, QUICK_PRESENT_TIMEOUT};
 
     #[test]
     fn only_the_latest_ready_token_can_reveal_the_popup_once() {
         let mut present = QuickPresentation::default();
         assert!(!present.acknowledge(None));
         let first = present.begin();
-        present.invalidate(); // another picker started
+        present.invalidate(); // presentation was abandoned
         assert!(!present.acknowledge(Some(first)));
         let second = present.begin();
         assert_ne!(first, second);
         assert!(!present.acknowledge(Some(first)));
         assert!(present.acknowledge(Some(second)));
         assert!(!present.acknowledge(Some(second)));
+    }
+
+    #[test]
+    fn another_picker_is_blocked_between_acceptance_and_render_ack() {
+        let mut present = QuickPresentation::default();
+        let accepted_at = Instant::now();
+        assert!(!present.awaiting_render());
+        present.await_render(accepted_at);
+        // A repeat before WebView is ready cannot start a picker that may cancel.
+        assert!(present.awaiting_render());
+        assert!(!present.acknowledge(None));
+        let token = present.begin();
+        assert!(present.awaiting_render());
+        assert_eq!(present.deadline, Some(accepted_at + QUICK_PRESENT_TIMEOUT));
+        assert!(!present.acknowledge(Some(token + 1)));
+        assert!(present.awaiting_render());
+        assert!(present.acknowledge(Some(token)));
+        assert!(!present.awaiting_render()); // OCR model inference need not have finished
+        assert_eq!(present.deadline, None);
     }
 }
