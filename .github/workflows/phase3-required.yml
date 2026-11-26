@@ -1,0 +1,26 @@
+name: Phase 3 Windows required suite
+on:
+  pull_request:
+    branches: ["dot/phase3-luna"]
+permissions:
+  contents: read
+jobs:
+  required-suite:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - name: Show exact product revision
+        run: git rev-parse HEAD
+      - name: Test dashboard API
+        run: cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard
+      - name: Exercise real WebView2 lifecycle
+        if: success() || failure()
+        run: cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1
