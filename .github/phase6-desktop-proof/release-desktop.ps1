@@ -174,7 +174,7 @@ function Uia([IntPtr]$h,[string]$name,[string]$id='',[string]$kind='',[string]$m
  }catch{return @{found=$false}}
 }
 function Find-Control([IntPtr]$h,[string]$name,[string]$id='',[string]$kind='',[string]$mode='point',[int]$seconds=16){
- return Wait-Proof "UIA $name $id $mode" {$n=Uia $h $name $id $kind $mode;if($n.found){$n}} $seconds
+ return Wait-Proof "UIA $name $id $mode" {$n=Uia $h $name $id $kind $mode;if($n.found -and ($mode -ne 'focus' -or ($n.enabled -and $n.focused))){$n}} $seconds
 }
 function Select-Nav([IntPtr]$h,[string]$name){
  $node=Find-Control $h $name '' 'Button' 'focus'
@@ -232,6 +232,9 @@ function Show-From-Tray {
 function Capture-Dashboard([IntPtr]$h,[string]$label){
  $r=[ProofWin+Rect]::new()
  Assert-Proof ([ProofWin]::GetWindowRect($h,[ref]$r)) 'No real dashboard bounds for screenshot'
+ Foreground $h
+ $midX=[int](($r.Left+$r.Right)/2);$midY=[int](($r.Top+$r.Bottom)/2)
+ Assert-Proof ((Root-At $midX $midY) -eq $h) 'Fixture screenshot centre covered by an unrelated window'
  $bmp=[Drawing.Bitmap]::new($r.Right-$r.Left,$r.Bottom-$r.Top)
  $g=[Drawing.Graphics]::FromImage($bmp)
  $m=[IO.MemoryStream]::new()
@@ -301,6 +304,7 @@ try {
  $fromFirst=$script:lastTray
  $owner=Owner $h
  $n=Open-Dashboard
+ $fromRepeat=$script:lastTray
  Assert-Proof ($n -eq $h -and (Owner $n) -eq $owner -and [ProofWin]::VisibleCount($dashClass,$popupClass) -eq 1) 'Repeated opening produced another owned dashboard'
  Capture-Dashboard $h 'normal-fresh'
  $accent=Find-Control $h '^Màu giao diện$' 'accent' 'ComboBox' 'state'
@@ -316,10 +320,11 @@ try {
  Close-Dashboard $h;Stop-OwnedTray
  Start-Tray
  $h=Open-Dashboard
+ $fromRestart=$script:lastTray
  $acc=Find-Control $h '^Màu giao diện$' 'accent' 'ComboBox' 'state'
  Assert-Proof ($acc.value -match 'Tím|purple' -or ($acc.selection -join ' ') -match 'Tím|purple') 'Accent did not survive release restart'
  Close-Dashboard $h;Stop-OwnedTray
- Write-Host "P6-FRESH-RELEASE: $fromFirst; same HWND/PID on repeat open; no implicit Cleaner scope; fresh orange and persisted purple after tray restart."
+ Write-Host "P6-FRESH-RELEASE: first=$fromFirst repeat=$fromRepeat restart=$fromRestart; same HWND/PID on repeat open; no implicit Cleaner scope; fresh orange and persisted purple after tray restart."
 
  $data=Isolated-Environment 'legacy'
  $base=Split-Path (Split-Path $data -Parent) -Parent
@@ -344,6 +349,14 @@ try {
  @{ts=$now;block_enabled=$true;warn_pct=80;block_pct=95;busy=@();profiles=$cache}|ConvertTo-Json -Depth 8|Set-Content -Encoding utf8 (Join-Path $data 'usage_cache.json')
  Start-Tray
  $h=Open-Dashboard
+ $legacyTrayPath=$script:lastTray
+ $legacyAccent=Find-Control $h '^Màu giao diện$' 'accent' 'ComboBox' 'state'
+ Assert-Proof ($legacyAccent.value -match 'Xanh|blue' -or ($legacyAccent.selection -join ' ') -match 'Xanh|blue') 'Legacy blue accent did not render'
+ Select-Nav $h '^Cài đặt$'
+ Keyboard-Control $h '^Widget$' 't-look'
+ $font=Find-Control $h '^Cỡ chữ' 'wfont' '' 'state'
+ $opac=Find-Control $h '^Độ mờ' 'wopac' '' 'state'
+ Assert-Proof (($font.value -eq '125' -or $font.range -eq 125) -and ($opac.value -eq '84' -or $opac.range -eq 84)) 'Legacy Widget preferences did not render'
  $actualDpi=[ProofWin]::GetDpiForWindow($h)
  $width=[int][Math]::Round(420*$actualDpi/96.0)
  $area=[ProofWin]::WorkAt(100,100)
@@ -375,11 +388,19 @@ try {
  Assert-Proof (!(Uia $h '^Xoá vĩnh viễn|^Đưa vào Thùng rác' '' 'Button' 'point').found) 'Duplicate view exposed visible removal'
  Capture-Dashboard $h 'narrow-duplicates'
  Assert-Proof ((Snapshot-Files $fixtureRoot) -ceq $before -and (Snapshot-Files $outside) -ceq $beforeOutside) 'Release Cleaner fixtures changed despite no confirm'
+ $legacyConfig=Join-Path $data 'config.json'
+ $accent=Find-Control $h '^Màu giao diện$' 'accent' 'ComboBox' 'focus'
+ Send-Keys @(18,40);Send-Keys @(35);Send-Keys @(13)
+ [void](Wait-Proof 'legacy unrelated accent save' {(Get-Content -Raw $legacyConfig|ConvertFrom-Json).dashboard_accent -eq 'purple'} 8)
+ Close-Dashboard $h
+ $h=Open-Dashboard
+ $again=Find-Control $h '^Màu giao diện$' 'accent' 'ComboBox' 'state'
+ Assert-Proof ($again.value -match 'Tím|purple' -or ($again.selection -join ' ') -match 'Tím|purple') 'Legacy accent did not reopen after unrelated save'
  Close-Dashboard $h;Stop-OwnedTray
- $legacy=Get-Content -Raw (Join-Path $data 'config.json')|ConvertFrom-Json
- Assert-Proof ($legacy.dashboard_accent -eq 'blue' -and $legacy.widget_font -eq 125 -and $legacy.widget_opacity -eq 84 -and $legacy.widget_locked -and $legacy.unknown_legacy -eq 'retained') 'Legacy widget/settings did not survive'
+ $legacy=Get-Content -Raw $legacyConfig|ConvertFrom-Json
+ Assert-Proof ($legacy.dashboard_accent -eq 'purple' -and $legacy.widget_font -eq 125 -and $legacy.widget_opacity -eq 84 -and $legacy.widget_locked -and $legacy.unknown_legacy -eq 'retained') 'Legacy widget/settings did not survive'
  foreach($p in $settingsHashes.Keys){Assert-Proof ((Get-FileHash $p -Algorithm SHA256).Hash -ceq $settingsHashes[$p]) 'Legacy hook settings fixture changed'}
- Write-Host "P6-LEGACY-RELEASE: ordinary release DPI $actualDpi at logical 420px; real keyboard Usage/reset windows and Cleaner cancelled, separate read-only duplicate report, all scoped files SHA-256 preserved; legacy settings unchanged."
+ Write-Host "P6-LEGACY-RELEASE: tray=$legacyTrayPath; ordinary release DPI $actualDpi at logical 420px; real keyboard Usage/reset windows and Cleaner cancelled, separate read-only duplicate report, all scoped files SHA-256 preserved; legacy settings unchanged."
 } catch {
   if($data -and (Test-Path "$data/events.log")){Get-Content "$data/events.log" -Tail 40|Write-Host}
   if($script:tray){[ProofWin]::WindowsFor($script:tray.Id)|Write-Host}

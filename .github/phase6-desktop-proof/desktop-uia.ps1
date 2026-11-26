@@ -40,6 +40,7 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
     }
     if($Mode -eq 'focus' -and $c.IsEnabled){ try{$e.SetFocus()}catch{continue} }
     $item=@{found=$true;name=$c.Name;id=$c.AutomationId;kind=$c.ControlType.ProgrammaticName;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen;focused=$e.Current.HasKeyboardFocus}
+    try {$item.range=$e.GetCurrentPattern([Windows.Automation.RangeValuePattern]::Pattern).Current.Value} catch {}
     try {$item.value=$e.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value} catch {}
     try {$item.selection=@($e.GetCurrentPattern([Windows.Automation.SelectionPattern]::Pattern).Current.GetSelection()|ForEach-Object {$_.Current.Name})} catch {}
     $rect=$c.BoundingRectangle
