@@ -8,9 +8,11 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
 use windows_sys::Win32::UI::HiDpi::GetDpiForSystem;
+use windows_sys::Win32::UI::Shell::{SetWindowSubclass, SUBCLASSPROC};
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 pub const CLASS: &str = "ClaudeUsageDashboard";
+pub const QUICK_CLASS: &str = "ClaudeUsageQuickPopup";
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_VALUE: &str = "ClaudeUsage";
 
@@ -95,9 +97,9 @@ pub fn terminate() -> ! {
 }
 
 /// An already open dashboard window (any process), for single-instance focus.
-pub fn find_existing() -> Option<isize> {
+pub fn find_existing(class: &str) -> Option<isize> {
     // SAFETY: NUL-terminated class name.
-    let w = unsafe { FindWindowW(wide(CLASS).as_ptr(), std::ptr::null()) };
+    let w = unsafe { FindWindowW(wide(class).as_ptr(), std::ptr::null()) };
     (!w.is_null()).then_some(w as isize)
 }
 
@@ -110,6 +112,33 @@ pub fn focus(hwnd: isize) {
             ShowWindow(h(hwnd), SW_SHOW);
         }
         SetForegroundWindow(h(hwnd));
+    }
+}
+
+pub fn install_quick_subclass(hwnd: isize, proc: SUBCLASSPROC, data: usize) -> bool {
+    unsafe { SetWindowSubclass(h(hwnd), proc, 1, data) != 0 }
+}
+
+pub fn send_quick(hwnd: isize, payload: &[u8]) -> bool {
+    if payload.len() > 32 * 1024 {
+        return false;
+    }
+    let mut cds = windows_sys::Win32::System::DataExchange::COPYDATASTRUCT {
+        dwData: 0x4b5442,
+        cbData: payload.len() as u32,
+        lpData: payload.as_ptr() as *mut _,
+    };
+    let mut out = 0usize;
+    unsafe {
+        SendMessageTimeoutW(
+            h(hwnd),
+            WM_COPYDATA,
+            0,
+            &mut cds as *mut _ as isize,
+            SMTO_ABORTIFHUNG,
+            1000,
+            &mut out,
+        ) != 0
     }
 }
 

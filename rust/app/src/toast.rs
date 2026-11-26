@@ -50,7 +50,7 @@ pub fn register(exe: &std::path::Path) -> bool {
         {
             return false;
         }
-        let mut ok = set_sz(key, "DisplayName", "Claude usage");
+        let mut ok = set_sz(key, "DisplayName", "Kane's Tool Box");
         let icon = exe.with_file_name("icon.png");
         if icon.exists() {
             ok &= set_sz(key, "IconUri", &icon.display().to_string());

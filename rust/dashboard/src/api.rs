@@ -23,6 +23,234 @@ use std::path::{Component, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const MAX_INPUT_BYTES: usize = 256 * 1024;
+const MAX_IMAGE_BASE64_BYTES: usize = 8 * 1024 * 1024;
+const MAX_RESPONSE_BYTES: u64 = 256 * 1024;
+
+fn local_endpoint(endpoint: &str) -> Result<String, String> {
+    let e = endpoint.trim();
+    let rest = e
+        .strip_prefix("http://")
+        .ok_or("Local AI chỉ cho phép HTTP loopback")?;
+    if rest.is_empty() || rest.contains(['/', '?', '#', '@']) {
+        return Err("Endpoint chỉ được gồm host loopback và port".into());
+    }
+    let (host, port) = if let Some(end) = rest
+        .strip_prefix('[')
+        .and_then(|s| s.find(']').map(|i| i + 1))
+    {
+        let host = &rest[..end + 1];
+        let port = rest[end + 1..].strip_prefix(':');
+        (host, port)
+    } else {
+        rest.split_once(':')
+            .map_or((rest, None), |(h, p)| (h, Some(p)))
+    };
+    if host != "127.0.0.1" && host != "localhost" && host != "[::1]" {
+        return Err("Endpoint phải là loopback (127.0.0.1/localhost)".into());
+    }
+    if let Some(port) = port {
+        if port.is_empty() || port.parse::<u16>().ok().filter(|p| *p != 0).is_none() {
+            return Err("Port không hợp lệ".into());
+        }
+    }
+    Ok(e.to_string())
+}
+
+fn image_base64(data_url: &str) -> Result<(&str, &str), String> {
+    let (header, data) = data_url
+        .split_once(',')
+        .ok_or("Ảnh phải là data URL base64")?;
+    let mime = header
+        .strip_prefix("data:image/")
+        .and_then(|s| s.strip_suffix(";base64"))
+        .ok_or("Ảnh phải là data URL image/*;base64")?;
+    if mime.is_empty()
+        || !matches!(mime, "png" | "jpeg" | "webp")
+        || !mime
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
+        || data.is_empty()
+        || data.len() > MAX_IMAGE_BASE64_BYTES
+    {
+        return Err("Ảnh không hợp lệ hoặc quá lớn".into());
+    }
+    let bytes = data.as_bytes();
+    if bytes.len() % 4 != 0
+        || bytes.iter().enumerate().any(|(i, b)| {
+            !matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'/' | b'=' )
+                || (*b == b'=' && i < bytes.len().saturating_sub(2))
+        })
+    {
+        return Err("Ảnh base64 không hợp lệ".into());
+    }
+    Ok((mime, data))
+}
+
+pub fn local_models(endpoint: &str, backend: &str) -> Value {
+    if !matches!(backend, "ollama" | "llama_cpp") {
+        return json!({"error":"backend không được hỗ trợ"});
+    }
+    let Ok(base) = local_endpoint(endpoint) else {
+        return json!({"error":"endpoint không hợp lệ"});
+    };
+    let path = if backend == "ollama" {
+        "/api/tags"
+    } else {
+        "/v1/models"
+    };
+    let url = format!("{base}{path}");
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(5)))
+        .proxy(None)
+        .max_redirects(0)
+        .build()
+        .new_agent();
+    let Ok(resp) = agent.get(&url).call() else {
+        return json!({"error":"không kết nối được local AI"});
+    };
+    let Ok(v) = resp
+        .into_body()
+        .into_with_config()
+        .limit(MAX_RESPONSE_BYTES)
+        .read_json::<Value>()
+    else {
+        return json!({"error":"phản hồi model không hợp lệ"});
+    };
+    let models = if backend == "ollama" {
+        v["models"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .filter_map(|m| {
+                let n = m["name"].as_str()?;
+                {
+                    let lower = n.to_ascii_lowercase();
+                    (!lower.ends_with(":cloud")
+                        && !lower.ends_with("-cloud")
+                        && m["remote_model"].is_null()
+                        && m["remote_host"].is_null())
+                    .then(|| n.to_string())
+                }
+            })
+            .collect::<Vec<_>>()
+    } else {
+        v["data"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .filter_map(|m| {
+                let n = m["id"].as_str()?;
+                let lower = n.to_ascii_lowercase();
+                (!lower.ends_with(":cloud") && !lower.ends_with("-cloud")).then(|| n.to_string())
+            })
+            .collect::<Vec<_>>()
+    };
+    json!({"models":models})
+}
+
+pub fn local_chat(
+    endpoint: &str,
+    backend: &str,
+    model: &str,
+    task: &str,
+    text: &str,
+    target: Option<&str>,
+    image: Option<&str>,
+) -> Value {
+    if !matches!(backend, "ollama" | "llama_cpp") {
+        return json!({"error":"backend không được hỗ trợ"});
+    }
+    if !matches!(task, "grammar" | "translation" | "ocr") {
+        return json!({"error":"task không được hỗ trợ"});
+    }
+    if text.len() > MAX_INPUT_BYTES {
+        return json!({"error":"Nội dung quá lớn"});
+    }
+    if model.is_empty()
+        || model.len() > 256
+        || model.chars().any(|c| c.is_control() || c.is_whitespace())
+        || model.contains("//")
+    {
+        return json!({"error":"model không hợp lệ"});
+    }
+    let model_lower = model.to_ascii_lowercase();
+    if model_lower.ends_with(":cloud") || model_lower.ends_with("-cloud") {
+        return json!({"error":"model cloud bị từ chối; hãy chọn model local"});
+    }
+    let Ok(base) = local_endpoint(endpoint) else {
+        return json!({"error":"endpoint không hợp lệ"});
+    };
+    let prompt = match task {
+        "grammar" => format!(
+            "Correct the English grammar. Return only the corrected English text; preserve the exact meaning, names, dates, numbers, and line breaks. Do not add notes or explanations.\n\n{text}"
+        ),
+        "translation" => format!(
+            "Translate to {}. Return only the translation; preserve exact names, dates, numbers, formatting, and line breaks.\n\n{text}",
+            if target == Some("en") { "English" } else { "Vietnamese" }
+        ),
+        "ocr" => format!("Transcribe the image exactly. Return only the text; preserve line breaks and do not invent or explain anything."),
+        _ => text.to_string(),
+    };
+    let image_data = match image {
+        Some(data) => match image_base64(data) {
+            Ok((mime, encoded)) => Some((mime, encoded)),
+            Err(error) => return json!({"error": error}),
+        },
+        None => None,
+    };
+    if task == "ocr" && image_data.is_none() {
+        return json!({"error":"OCR cần có ảnh"});
+    }
+    if task != "ocr" && image_data.is_some() {
+        return json!({"error":"Ảnh chỉ được dùng cho OCR"});
+    }
+    let content = if let Some((mime, data)) = image_data {
+        json!([{"type":"text","text":prompt},{"type":"image_url","image_url":{"url":format!("data:image/{mime};base64,{data}")}}])
+    } else {
+        json!(prompt)
+    };
+    let (path, body) = if backend == "ollama" {
+        (
+            "/api/chat",
+            json!({"model":model,"stream":false,"think":false,"options":{"num_ctx":4096,"temperature":0.2},"keep_alive":"1m","messages":[{"role":"user","content":prompt,"images":image_data.map(|(_, x)|vec![x])}]}),
+        )
+    } else {
+        (
+            "/v1/chat/completions",
+            json!({"model":model,"stream":false,"messages":[{"role":"user","content":content}]}),
+        )
+    };
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(30)))
+        .proxy(None)
+        .max_redirects(0)
+        .build()
+        .new_agent();
+    let Ok(resp) = agent.post(&format!("{base}{path}")).send_json(&body) else {
+        return json!({"error":"local AI request thất bại hoặc timeout"});
+    };
+    let Ok(v) = resp
+        .into_body()
+        .into_with_config()
+        .limit(MAX_RESPONSE_BYTES)
+        .read_json::<Value>()
+    else {
+        return json!({"error":"phản hồi local AI không hợp lệ"});
+    };
+    let text = if backend == "ollama" {
+        v["message"]["content"].as_str()
+    } else {
+        v["choices"][0]["message"]["content"].as_str()
+    };
+    match text {
+        Some(text) if !text.is_empty() => {
+            json!({"text":text.chars().take(64 * 1024).collect::<String>()})
+        }
+        _ => json!({"error":"local AI không trả về nội dung"}),
+    }
+}
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Vòng đời của một phiên dọn: chỉ `Done` mới cho phép `cleaner_clean`.
@@ -313,7 +541,8 @@ impl Core {
                 continue;
             }
             #[cfg(windows)]
-            if !matches!(prefix, Component::Prefix(p) if matches!(p.kind(), std::path::Prefix::Disk(_))) {
+            if !matches!(prefix, Component::Prefix(p) if matches!(p.kind(), std::path::Prefix::Disk(_)))
+            {
                 continue;
             }
             let drive: PathBuf = root.components().take(2).collect();
@@ -594,6 +823,80 @@ impl Core {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn local_endpoint_rejects_non_loopback_and_https() {
+        assert!(local_endpoint("https://127.0.0.1:11434").is_err());
+        assert!(local_endpoint("http://example.test:11434").is_err());
+        assert!(local_endpoint("http://127.0.0.1:11434/api").is_err());
+        assert!(local_endpoint("http://127.0.0.1:abc").is_err());
+        assert!(local_endpoint("http://[::1]:11434").is_ok());
+        assert!(local_endpoint("http://127.0.0.1:11434").is_ok());
+    }
+
+    #[test]
+    fn image_payload_requires_valid_data_url_and_returns_raw_base64() {
+        assert_eq!(
+            image_base64("https://example.test/x.png").unwrap_err(),
+            "Ảnh phải là data URL base64"
+        );
+        assert_eq!(
+            image_base64("data:image/png;base64,not?base64").unwrap_err(),
+            "Ảnh base64 không hợp lệ"
+        );
+        assert_eq!(
+            image_base64("data:image/jpeg;base64,YWJj").unwrap(),
+            ("jpeg", "YWJj")
+        );
+    }
+
+    #[test]
+    fn local_chat_rejects_cloud_models_before_network() {
+        assert_eq!(
+            local_chat(
+                "http://127.0.0.1:1",
+                "ollama",
+                "foo:120b-cloud",
+                "grammar",
+                "x",
+                None,
+                None
+            )["error"],
+            "model cloud bị từ chối; hãy chọn model local"
+        );
+    }
+
+    #[test]
+    fn local_chat_rejects_unknown_provider_task_and_missing_ocr_image() {
+        assert_eq!(
+            local_chat(
+                "http://127.0.0.1:1",
+                "other",
+                "m",
+                "grammar",
+                "x",
+                None,
+                None
+            )["error"],
+            "backend không được hỗ trợ"
+        );
+        assert_eq!(
+            local_chat(
+                "http://127.0.0.1:1",
+                "ollama",
+                "m",
+                "other",
+                "x",
+                None,
+                None
+            )["error"],
+            "task không được hỗ trợ"
+        );
+        assert_eq!(
+            local_chat("http://127.0.0.1:1", "ollama", "m", "ocr", "", None, None)["error"],
+            "OCR cần có ảnh"
+        );
+    }
 
     fn core(dir: &std::path::Path) -> Core {
         let home = dir.join("home");
@@ -942,7 +1245,10 @@ mod tests {
             // C:\Windows đã có trong danh sách cố định: không được nhân đôi.
             let win = PathBuf::from(r"C:\Windows");
             assert_eq!(
-                so.forbidden.iter().filter(|f| path_contains(f, &win)).count(),
+                so.forbidden
+                    .iter()
+                    .filter(|f| path_contains(f, &win))
+                    .count(),
                 1
             );
         }
@@ -977,7 +1283,12 @@ mod tests {
             .filter_map(Value::as_str)
             .collect();
         assert!(paths.len() >= 2, "{paths:?}");
-        assert!(paths.iter().all(|p| p.ends_with("a.dat") || p.ends_with("b.dat")), "{paths:?}");
+        assert!(
+            paths
+                .iter()
+                .all(|p| p.ends_with("a.dat") || p.ends_with("b.dat")),
+            "{paths:?}"
+        );
         assert_eq!(s["errors"], json!([]));
         // Không có API xoá cho duplicate: file vẫn nguyên trên đĩa.
         assert!(a.exists() && b.exists());

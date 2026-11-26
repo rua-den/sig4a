@@ -1,6 +1,7 @@
 // Port of tests/e2e_dashboard.py (pywebview, evaluate_js) to the real Rust dashboard. Runs in the page; the test
 // (dashboard_legacy.rs) answers the stage() calls by editing the sandbox like the Python driver thread did.
 const accs = () => [...document.querySelectorAll('.acc')];
+toolTab('usage'); await sleep(100); document.querySelector('.toolnav').style.display='none';
 const geo = () => { const m = document.querySelector('main'), d = document.documentElement; return { a: m.scrollHeight, b: m.clientHeight, c: d.scrollHeight, d: innerHeight, hs: d.scrollWidth > innerWidth }; };
 const noScroll = g => g.a <= g.b + 1 && g.c <= g.d + 1 && !g.hs;
 
@@ -144,9 +145,9 @@ check('hook status text shows 0/4 after uninstall', $('hookst').textContent.incl
 await stage('hook_uninstalled');
 
 // widget buttons
-document.querySelectorAll('button.b')[1].click(); await sleep(600);
+document.querySelector('#gen button[onclick*="widget_unlock"]').click(); await sleep(600);
 check('unlock widget button', (await cfgNow()).widget_locked === false);
-document.querySelectorAll('button.b')[2].click(); await sleep(600);
+document.querySelector('#gen button[onclick*="widget_reset"]').click(); await sleep(600);
 c = await cfgNow(); check('reset widget button', c.widget_locked === true && c.widget_cx === null && c.widget_size === 36);
 
 // title bar: a mousemove WITHOUT the primary button pressed must not start a window drag (the real drag is a native

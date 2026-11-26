@@ -70,6 +70,7 @@ fn run_script(local: &Path, home: &Path, dir: &Path, name: &str, body: &str) -> 
 
 const SCRIPT1: &str = r#"
 await new Promise(r => setTimeout(r, 700));
+toolTab('usage'); await new Promise(r => setTimeout(r, 100)); document.querySelector('.toolnav').style.display='none';
 const $ = id => document.getElementById(id);
 const out = {};
 out.init = !!window.__INIT__;

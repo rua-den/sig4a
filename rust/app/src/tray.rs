@@ -25,6 +25,9 @@ use windows_sys::Win32::Graphics::Gdi::{
     BI_RGB, DIB_RGB_COLORS,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+    RegisterHotKey, UnregisterHotKey, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
+};
 use windows_sys::Win32::UI::Shell::{
     Shell_NotifyIconW, NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE,
     NIM_MODIFY, NOTIFYICONDATAW,
@@ -38,6 +41,12 @@ const WM_TRAY: u32 = WM_APP + 10;
 const WM_ICON: u32 = WM_APP + 1;
 const WM_TOAST: u32 = WM_APP + 2;
 const WM_SHOW: u32 = WM_APP + 3;
+
+const HOTKEY_GRAMMAR: i32 = 1;
+const HOTKEY_TRANSLATION: i32 = 2;
+const HOTKEY_OCR: i32 = 3;
+const MOD_CTRL_ALT: u32 = MOD_CONTROL | MOD_ALT | MOD_NOREPEAT;
+const MAX_SELECTION_BYTES: usize = 12 * 1024;
 
 pub const ID_OPEN: usize = 1;
 pub const ID_REFRESH: usize = 2;
@@ -69,6 +78,7 @@ fn fill(dst: &mut [u16], s: &str) {
 struct Shared {
     view: Mutex<Option<TrayView>>,
     toasts: Mutex<VecDeque<Toast>>,
+    quick_busy: AtomicBool,
 }
 
 struct State {
@@ -78,6 +88,124 @@ struct State {
     taskbar_created: u32,
     /// WinRT toast with our own AUMID (release only); false = tray balloon.
     winrt: bool,
+}
+
+/// The optional managed Local AI child. It is deliberately owned by the tray: the job object
+/// cleans it up with the tray, while disable only terminates this exact child.
+struct ManagedLlama {
+    child: Option<std::process::Child>,
+    enabled: bool,
+    failed: bool,
+}
+
+impl ManagedLlama {
+    fn new() -> Self {
+        Self {
+            child: None,
+            enabled: false,
+            failed: false,
+        }
+    }
+
+    fn tick(&mut self, paths: &Paths) {
+        let cfg = config::load_config(paths, &home_dir());
+        let enabled = cfg
+            .get("local_ai_managed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !enabled {
+            if self.enabled {
+                self.stop(paths);
+            }
+            self.enabled = false;
+            self.failed = false;
+            return;
+        }
+        if !self.enabled {
+            self.enabled = true;
+            self.failed = false;
+            self.start(paths);
+        }
+        if let Some(child) = self.child.as_mut() {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    log(
+                        paths,
+                        &format!(
+                            "managed llama-server exited ({status}); retry disabled until toggled"
+                        ),
+                    );
+                    self.child = None;
+                    self.failed = true;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    log(paths, &format!("managed llama-server status failed: {e}"));
+                    self.failed = true;
+                }
+            }
+        }
+    }
+
+    fn start(&mut self, paths: &Paths) {
+        if self.failed || self.child.is_some() {
+            return;
+        }
+        use std::os::windows::process::CommandExt;
+        let sibling = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("llama-server.exe")));
+        let program = sibling
+            .filter(|p| p.exists())
+            .unwrap_or_else(|| std::path::PathBuf::from("llama-server.exe"));
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let result = std::process::Command::new(&program)
+            .args([
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "18080",
+                "-hf",
+                "LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0",
+                "--alias",
+                "lfm25-vl-q8",
+                "-c",
+                "4096",
+                "-np",
+                "1",
+                "-ngl",
+                "0",
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+        match result {
+            Ok(child) => {
+                log(
+                    paths,
+                    "managed llama-server started (first startup may download 482 MB)",
+                );
+                bind_to_job(&child);
+                self.child = Some(child);
+            }
+            Err(e) => {
+                log(
+                    paths,
+                    &format!(
+                        "managed llama-server unavailable ({e}); retry disabled until toggled"
+                    ),
+                );
+                self.failed = true;
+            }
+        }
+    }
+
+    fn stop(&mut self, paths: &Paths) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+            log(paths, "managed llama-server stopped");
+        }
+    }
 }
 
 fn nid(hwnd: HWND) -> NOTIFYICONDATAW {
@@ -145,7 +273,7 @@ fn add_or_update(hwnd: HWND, st: &mut State, add: bool) {
                 bar_right: None,
                 busy: false,
             }),
-            "Claude usage".to_string(),
+            "Kane's Tool Box".to_string(),
         ),
     };
     let h = make_hicon(&bytes);
@@ -292,10 +420,109 @@ fn bind_to_job(child: &std::process::Child) {
 }
 
 fn message_box(text: &str) {
-    let (t, c) = (wide(text), wide("claude-usage"));
+    let (t, c) = (wide(text), wide("Kane's Tool Box"));
     // SAFETY: NUL-terminated strings; runs on a short-lived thread so the tray loop keeps going.
     std::thread::spawn(move || unsafe {
         MessageBoxW(null_mut(), t.as_ptr(), c.as_ptr(), MB_OK | MB_ICONWARNING);
+    });
+}
+
+fn quick_tool_name(id: i32) -> Option<&'static str> {
+    match id {
+        HOTKEY_GRAMMAR => Some("grammar"),
+        HOTKEY_TRANSLATION => Some("translation"),
+        HOTKEY_OCR => Some("ocr"),
+        _ => None,
+    }
+}
+
+/// Read only the current selection from the focused UIA element. This runs on a COM worker because
+/// providers can make cross-process calls; no focus or clipboard state is changed.
+fn selected_text(hwnd: HWND) -> Option<String> {
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+        COINIT_MULTITHREADED,
+    };
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationTextPattern, UIA_TextPatternId,
+    };
+
+    unsafe {
+        if CoInitializeEx(None, COINIT_MULTITHREADED).is_err() {
+            return None;
+        }
+        let result = (|| {
+            let automation: IUIAutomation =
+                CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).ok()?;
+            let element = automation.GetFocusedElement().ok()?;
+            if GetForegroundWindow() != hwnd || element.CurrentIsPassword().ok()?.as_bool() {
+                return None;
+            }
+            let pattern: IUIAutomationTextPattern =
+                element.GetCurrentPatternAs(UIA_TextPatternId).ok()?;
+            let ranges = pattern.GetSelection().ok()?;
+            let count = ranges.Length().ok()?;
+            if count <= 0 {
+                return None;
+            }
+            let mut out = String::new();
+            for i in 0..count.min(4) {
+                let range = ranges.GetElement(i).ok()?;
+                let text = range.GetText((MAX_SELECTION_BYTES + 1) as i32).ok()?;
+                out.push_str(&text.to_string());
+                if out.len() > MAX_SELECTION_BYTES {
+                    break;
+                }
+            }
+            while out.len() > MAX_SELECTION_BYTES {
+                out.pop();
+            }
+            if GetForegroundWindow() != hwnd {
+                return None;
+            }
+            (!out.is_empty()).then_some(out)
+        })();
+        CoUninitialize();
+        result
+    }
+}
+
+fn launch_quick_tool(paths: &Paths, tool: &'static str, hwnd: usize, shared: Arc<Shared>) {
+    if shared.quick_busy.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let paths = paths.clone();
+    std::thread::spawn(move || {
+        let text = if tool == "ocr" {
+            String::new()
+        } else {
+            selected_text(hwnd as HWND).unwrap_or_default()
+        };
+        let exe = std::env::current_exe()
+            .unwrap_or_default()
+            .with_file_name("claude-usage-dashboard.exe");
+        let result = (|| {
+            use std::io::Write;
+            use std::os::windows::process::CommandExt;
+            use std::process::{Command, Stdio};
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            let mut child = Command::new(exe)
+                .arg("--quick-tool")
+                .arg(tool)
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdin(Stdio::piped())
+                .spawn()
+                .ok()?;
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(text.as_bytes());
+            }
+            bind_to_job(&child);
+            Some(())
+        })();
+        if result.is_none() {
+            log(&paths, "quick tool launch failed");
+        }
+        shared.quick_busy.store(false, Ordering::Release);
     });
 }
 
@@ -313,7 +540,7 @@ fn show_menu(hwnd: HWND, st: &State) {
                 SetMenuDefaultItem(m, id as u32, 0);
             }
         };
-        add(ID_OPEN, "Open dashboard", None, true);
+        add(ID_OPEN, "Open Kane's Tool Box", None, true);
         add(ID_REFRESH, "Refresh now", None, false);
         add(
             ID_WIDGET,
@@ -380,7 +607,21 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             open_dashboard(&st.paths);
             Some(0)
         }
+        WM_HOTKEY => {
+            if let Some(tool) = quick_tool_name(wp as i32) {
+                let foreground = GetForegroundWindow();
+                if !foreground.is_null() {
+                    launch_quick_tool(&st.paths, tool, foreground as usize, st.shared.clone());
+                }
+            }
+            Some(0)
+        }
         WM_DESTROY => {
+            if std::env::var_os("CU_NO_HOTKEYS").is_none() {
+                UnregisterHotKey(hwnd, HOTKEY_GRAMMAR);
+                UnregisterHotKey(hwnd, HOTKEY_TRANSLATION);
+                UnregisterHotKey(hwnd, HOTKEY_OCR);
+            }
             let n = nid(hwnd);
             Shell_NotifyIconW(NIM_DELETE, &n);
             if st.hicon != 0 {
@@ -429,6 +670,7 @@ fn worker(paths: Paths, hwnd_raw: usize, shared: Arc<Shared>, stop: Arc<AtomicBo
         });
     }
     let mut d = Daemon::new(env);
+    let mut managed_llama = ManagedLlama::new();
     // R1 policy: debug builds never touch settings.json; release only repairs a hook whose exe vanished.
     if std::env::var_os("CU_NO_REPAIR").is_none() {
         if let Ok(exe) = std::env::current_exe() {
@@ -449,17 +691,20 @@ fn worker(paths: Paths, hwnd_raw: usize, shared: Arc<Shared>, stop: Arc<AtomicBo
         }
     }
     while !stop.load(Ordering::SeqCst) {
+        managed_llama.tick(&paths);
         let _ = catch_unwind(AssertUnwindSafe(|| d.step()));
         if std::mem::take(&mut d.show_requested) {
             post(WM_SHOW);
         }
         for _ in 0..10 {
             if stop.load(Ordering::SeqCst) {
+                managed_llama.stop(&paths);
                 return;
             }
             std::thread::sleep(Duration::from_millis(100));
         }
     }
+    managed_llama.stop(&paths);
 }
 
 /// Run the tray app until Quit.
@@ -512,6 +757,17 @@ pub fn run(paths: Paths) -> i32 {
         }));
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, st as isize);
         add_or_update(hwnd, &mut *st, true);
+        if std::env::var_os("CU_NO_HOTKEYS").is_none() {
+            for (id, vk, name) in [
+                (HOTKEY_GRAMMAR, 0x47, "grammar"),
+                (HOTKEY_TRANSLATION, 0x54, "translation"),
+                (HOTKEY_OCR, 0x4f, "ocr"),
+            ] {
+                if RegisterHotKey(hwnd, id, MOD_CTRL_ALT, vk) == 0 {
+                    log(&paths, &format!("hotkey unavailable: Ctrl+Alt+{name}"));
+                }
+            }
+        }
         crate::widget::win::spawn(paths.clone(), hwnd as isize);
         let stop = Arc::new(AtomicBool::new(false));
         let (p2, s2, st2) = (paths.clone(), shared.clone(), stop.clone());

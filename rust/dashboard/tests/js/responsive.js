@@ -2,6 +2,7 @@
 // maximize / restore / double-click, remembered size. PHASE ('1' | '2') and N are defined by the test.
 const dpr = devicePixelRatio;
 const sh = screen.height * dpr;
+toolTab('usage'); await sleep(100); document.querySelector('.toolnav').style.display='none';
 const info = () => {
   const m = document.querySelector('main'), d = document.documentElement, a = [...document.querySelectorAll('.acc')];
   return { iw: innerWidth, ih: innerHeight, hs: d.scrollWidth > innerWidth + 1, ms: m.scrollHeight, mc: m.clientHeight,

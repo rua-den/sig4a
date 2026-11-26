@@ -5,18 +5,23 @@
 
 mod api;
 mod geom;
+mod region;
 mod win;
 
 use api::Core;
 use geom::{MIN_H, MIN_W};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tao::dpi::{LogicalSize, PhysicalSize};
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
 use tao::platform::windows::{WindowBuilderExtWindows, WindowExtWindows};
 use tao::window::{Window, WindowBuilder};
+use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
+use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass};
+use windows_sys::Win32::UI::WindowsAndMessaging::{WM_COPYDATA, WM_NCDESTROY};
 use wry::{WebContext, WebViewBuilder};
 
 const UI_HTML: &str = include_str!("../../../ui.html");
@@ -26,6 +31,49 @@ const READY_TIMEOUT: Duration = Duration::from_secs(4);
 
 enum Ev {
     Call(u64, String, Vec<Value>),
+    Done(u64, Result<Value, String>),
+    QuickTool(String, String),
+    OcrDone(u64, Result<Option<String>, String>),
+}
+
+fn bridge_result(id: u64, result: Result<Value, String>) -> String {
+    match result {
+        Ok(value) => format!("__cu_resolve({id},true,{value})"),
+        Err(error) => format!("__cu_resolve({id},false,{})", json!(error)),
+    }
+}
+static OCR_BUSY: AtomicBool = AtomicBool::new(false);
+static AI_BUSY: AtomicBool = AtomicBool::new(false);
+
+unsafe extern "system" fn quick_subclass(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    msg: u32,
+    wp: usize,
+    lp: isize,
+    _id: usize,
+    data: usize,
+) -> isize {
+    if msg == WM_COPYDATA && data != 0 && lp != 0 {
+        let cds = &*(lp as *const COPYDATASTRUCT);
+        if cds.dwData == 0x4b5442 && cds.cbData <= 32 * 1024 && !cds.lpData.is_null() {
+            let bytes = std::slice::from_raw_parts(cds.lpData as *const u8, cds.cbData as usize);
+            if let Ok(v) = serde_json::from_slice::<[String; 2]>(bytes) {
+                if v[0].len() <= 32
+                    && v[1].len() <= 32 * 1024
+                    && matches!(v[0].as_str(), "grammar" | "translation" | "ocr")
+                {
+                    let _ = (&*(data as *const EventLoopProxy<Ev>))
+                        .send_event(Ev::QuickTool(v[0].clone(), v[1].clone()));
+                    return 1;
+                }
+            }
+        }
+    }
+    if msg == WM_NCDESTROY {
+        let _ = RemoveWindowSubclass(hwnd, Some(quick_subclass), 1);
+        drop(Box::from_raw(data as *mut EventLoopProxy<Ev>));
+    }
+    DefSubclassProc(hwnd, msg, wp, lp)
 }
 
 struct Geo {
@@ -38,8 +86,10 @@ struct Geo {
 struct App {
     core: Core,
     hwnd: isize,
+    quick_mode: bool,
     geo: Geo,
     ready: bool,
+    quick_pending: Option<(String, String)>,
     /// `--e2e` result path: multi-stage scripts hand control to the test through `<out>.<stage>` files.
     #[cfg(any(debug_assertions, feature = "e2e"))]
     e2e_out: Option<String>,
@@ -69,7 +119,7 @@ impl App {
     /// `hide`: hide at once (feels instant), save the size, end the process.
     fn close(&mut self) -> ! {
         win::hide(self.hwnd);
-        self.persist_now();
+        if !self.quick_mode { self.persist_now(); }
         win::terminate()
     }
 
@@ -201,17 +251,59 @@ fn storage_dir(data: &Path) -> PathBuf {
     mine
 }
 
+fn storage_dir_named(data: &Path, name: &str) -> PathBuf {
+    let root = data.join(name);
+    let mine = root.join(std::process::id().to_string());
+    let keep = mine.clone();
+    std::thread::spawn(move || {
+        if let Ok(rd) = std::fs::read_dir(&root) {
+            for e in rd.flatten() {
+                if e.path() != keep && e.path().is_dir() {
+                    let _ = std::fs::remove_dir_all(e.path());
+                }
+            }
+        }
+    });
+    mine
+}
+
 fn arg_after(flag: &str) -> Option<(String, String)> {
     let v: Vec<String> = std::env::args().collect();
     let i = v.iter().position(|a| a == flag)?;
     Some((v.get(i + 1)?.clone(), v.get(i + 2)?.clone()))
 }
 
+fn quick_tool() -> Option<(String, String)> {
+    let mut it = std::env::args().skip(1);
+    if it.next()?.as_str() != "--quick-tool" {
+        return None;
+    }
+    let tool = it.next()?;
+    if !matches!(tool.as_str(), "grammar" | "translation" | "ocr") {
+        return None;
+    }
+    use std::io::Read;
+    let mut text = String::new();
+    std::io::stdin()
+        .take(32 * 1024)
+        .read_to_string(&mut text)
+        .ok()?;
+    Some((tool, text))
+}
+
 fn main() {
     let Ok(paths) = cu_core::paths::Paths::from_env() else {
         std::process::exit(1);
     };
-    if let Some(existing) = win::find_existing() {
+    let quick = quick_tool();
+    let quick_mode = quick.is_some();
+    let instance_class = if quick_mode { win::QUICK_CLASS } else { win::CLASS };
+    if let Some(existing) = win::find_existing(instance_class) {
+        if let Some((tool, text)) = quick.clone() {
+            if let Ok(payload) = serde_json::to_vec(&[tool, text]) {
+                let _ = win::send_quick(existing, &payload);
+            }
+        }
         win::focus(existing); // single instance: bring the open dashboard forward
         return;
     }
@@ -236,29 +328,44 @@ fn main() {
         .and_then(Value::as_array)
         .map_or(0, Vec::len);
     let scale = win::system_scale();
-    let width = geom::initial_width(n_profiles, f64::from(win::screen().0) / scale);
+    let width = if quick_mode { 420 } else { geom::initial_width(n_profiles, f64::from(win::screen().0) / scale) };
 
     let event_loop = EventLoopBuilder::<Ev>::with_user_event().build();
     let proxy: EventLoopProxy<Ev> = event_loop.create_proxy();
-    let window = match WindowBuilder::new()
-        .with_title("claude-usage")
+    let mut window_builder = WindowBuilder::new()
+        .with_title("Kane's Tool Box")
         .with_decorations(false)
         .with_undecorated_shadow(false)
         .with_visible(false)
-        .with_inner_size(LogicalSize::new(f64::from(width), 640.0))
-        .with_min_inner_size(PhysicalSize::new(MIN_W as u32, MIN_H as u32))
-        .with_window_classname(win::CLASS)
-        .build(&event_loop)
+        .with_inner_size(LogicalSize::new(f64::from(width), if quick_mode { 315.0 } else { 640.0 }))
+        .with_min_inner_size(PhysicalSize::new(if quick_mode { 360 } else { MIN_W as u32 }, if quick_mode { 220 } else { MIN_H as u32 }))
+        .with_window_classname(instance_class);
+    if quick_mode { window_builder = window_builder.with_skip_taskbar(true); }
+    let window = match window_builder.build(&event_loop)
     {
         Ok(w) => w,
         Err(e) => fail(&core, &format!("window: {e}")),
     };
+    let quick_proxy = Box::into_raw(Box::new(proxy.clone())) as usize;
+    if !win::install_quick_subclass(window.hwnd() as isize, Some(quick_subclass), quick_proxy) {
+        unsafe {
+            drop(Box::from_raw(quick_proxy as *mut EventLoopProxy<Ev>));
+        }
+    }
 
-    let mut ctx = WebContext::new(Some(storage_dir(&core.paths.data)));
+    if quick_mode {
+        let wa = win::work_area(window.hwnd() as isize);
+        let w = (420.0 * scale) as i32;
+        let h = (315.0 * scale) as i32;
+        win::place(window.hwnd() as isize, [wa[0] + (wa[2] - w).max(0) / 2, wa[1] + (wa[3] - h).max(0) / 3, w, h]);
+    }
+    let mut ctx = WebContext::new(Some(if quick_mode { storage_dir_named(&core.paths.data, "webview-quick") } else { storage_dir(&core.paths.data) }));
     let handler_proxy = proxy.clone();
+    let mode_script = format!("window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
     let built = WebViewBuilder::new_with_web_context(&mut ctx)
         .with_html(core.page(UI_HTML))
         .with_initialization_script(SHIM)
+        .with_initialization_script(&mode_script)
         .with_background_color((10, 10, 10, 255))
         .with_incognito(true)
         .with_ipc_handler(move |req| {
@@ -281,6 +388,7 @@ fn main() {
     let mut app = App {
         hwnd: window.hwnd() as isize,
         core,
+        quick_mode,
         geo: Geo {
             user_sized: false,
             maximized: false,
@@ -288,16 +396,34 @@ fn main() {
             persist_at: None,
         },
         ready: false,
+        quick_pending: quick.clone(),
         #[cfg(any(debug_assertions, feature = "e2e"))]
         e2e_out: e2e.as_ref().map(|(_, o)| o.clone()),
     };
-    app.restore_saved();
+    if !quick_mode { app.restore_saved(); }
     let started = Instant::now();
     let mut shown = false;
     let mut e2e_started = false;
 
     event_loop.run(move |event, _, flow| {
         match event {
+            Event::UserEvent(Ev::QuickTool(tool, text)) => {
+                if app.ready { let js = format!("openQuickTool({},{});", json!(tool), json!(text)); let _ = webview.evaluate_script(&js); }
+                else { app.quick_pending = Some((tool, text)); }
+            }
+            Event::UserEvent(Ev::OcrDone(id, result)) => {
+                OCR_BUSY.store(false, Ordering::Release);
+                window.set_visible(true); window.set_focus();
+                let js = match result { Ok(v) => format!("__cu_resolve({id},true,{})", json!(v)), Err(e) => format!("__cu_resolve({id},false,{})", json!(e)) };
+                let _ = webview.evaluate_script(&js);
+            }
+            Event::UserEvent(Ev::Done(id, r)) => {
+                AI_BUSY.store(false, Ordering::Release);
+                if id != 0 {
+                    let js = bridge_result(id, r);
+                    let _ = webview.evaluate_script(&js);
+                }
+            }
             Event::UserEvent(Ev::Call(id, m, a)) => {
                 if m == "__drag" {
                     if !app.geo.maximized {
@@ -311,12 +437,38 @@ fn main() {
                         let _ = std::fs::write(out, a.first().map_or("null".into(), Value::to_string));
                     }
                 } else {
+                    if m == "ocr_capture" {
+                        if OCR_BUSY.swap(true, Ordering::AcqRel) { if id != 0 { let _=webview.evaluate_script(&format!("__cu_resolve({id},false,{} )", json!("OCR đang chạy"))); } }
+                        else { window.set_visible(false); let p=proxy.clone(); std::thread::spawn(move || { let r=region::capture(); let _=p.send_event(Ev::OcrDone(id, r)); }); }
+                        return;
+                    }
+                    if matches!(m.as_str(), "local_models" | "local_chat") {
+                        if m == "local_chat" {
+                            let o = a.first().and_then(Value::as_object);
+                            let too_big = o.and_then(|x| x.get("text")).and_then(Value::as_str).is_some_and(|s| s.len() > 32 * 1024)
+                                || o.and_then(|x| x.get("image")).and_then(Value::as_str).is_some_and(|s| s.len() > 8 * 1024 * 1024);
+                            if too_big { if id != 0 { let _ = webview.evaluate_script(&format!("__cu_resolve({id},false,{})", json!("Yêu cầu quá lớn"))); } return; }
+                        }
+                        if AI_BUSY.swap(true, Ordering::AcqRel) {
+                            if id != 0 { let _ = webview.evaluate_script(&format!("__cu_resolve({id},false,{})", json!("Local AI đang xử lý yêu cầu khác"))); }
+                            return;
+                        }
+                        let p = proxy.clone();
+                        std::thread::spawn(move || {
+                            let r = match m.as_str() {
+                                "local_models" => Ok(api::local_models(a.first().and_then(Value::as_str).unwrap_or("http://127.0.0.1:11434"), a.get(1).and_then(Value::as_str).unwrap_or("ollama"))),
+                                _ => {
+                                    let o = a.first().and_then(Value::as_object);
+                                    Ok(api::local_chat(o.and_then(|x| x.get("endpoint")).and_then(Value::as_str).unwrap_or("http://127.0.0.1:11434"), o.and_then(|x| x.get("backend")).and_then(Value::as_str).unwrap_or("ollama"), o.and_then(|x| x.get("model")).and_then(Value::as_str).unwrap_or("hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0"), o.and_then(|x| x.get("task")).and_then(Value::as_str).unwrap_or("grammar"), o.and_then(|x| x.get("text")).and_then(Value::as_str).unwrap_or(""), o.and_then(|x| x.get("target")).and_then(Value::as_str), o.and_then(|x| x.get("image")).and_then(Value::as_str)))
+                                }
+                            };
+                            let _ = p.send_event(Ev::Done(id, r));
+                        });
+                        return;
+                    }
                     let r = app.call(&window, &m, &a);
                     if id != 0 {
-                        let js = match r {
-                            Ok(v) => format!("__cu_resolve({id},true,{v})"),
-                            Err(e) => format!("__cu_resolve({id},false,{})", json!(e)),
-                        };
+                        let js = bridge_result(id, r);
                         let _ = webview.evaluate_script(&js);
                     }
                 }
@@ -335,6 +487,12 @@ fn main() {
                 window.set_focus();
             }
         }
+        if app.ready {
+            if let Some((tool, text)) = app.quick_pending.take() {
+                let js = format!("openQuickTool({},{});", json!(tool), json!(text));
+                let _ = webview.evaluate_script(&js);
+            }
+        }
         if let Some((script, _)) = &e2e {
             if shown && !e2e_started {
                 e2e_started = true;
@@ -344,7 +502,7 @@ fn main() {
                 ));
             }
         }
-        if app.geo.persist_at.is_some_and(|t| Instant::now() >= t) {
+        if !app.quick_mode && app.geo.persist_at.is_some_and(|t| Instant::now() >= t) {
             app.persist_now();
         }
         let mut next: Option<Instant> = app.geo.persist_at;

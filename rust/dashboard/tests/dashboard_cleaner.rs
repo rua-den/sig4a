@@ -23,6 +23,8 @@ const waitClean = async (f, ms) => { const t = performance.now();
   while (performance.now() - t < ms) { const s = await api.cleaner_status(); if (f(s)) return s; await sleep(50); } return null; };
 
 check('3 tabs trong hộp settings', document.querySelectorAll('.tabs .tab').length === 3, document.querySelectorAll('.tabs .tab').length);
+check('Toolbox Overview is the default panel', $('tool-overview').classList.contains('on') && !$('tool-usage').classList.contains('on'));
+toolTab('usage'); await sleep(100); document.querySelector('.toolnav').style.display='none';
 check('panel Dọn ổ ẩn lúc đầu, tab Chung hiện', $('clean').hidden === true && $('gen').hidden === false && !$('t-clean').classList.contains('on'));
 
 // cấu hình từ UI (root đã được test override trong config.json trước khi spawn)
