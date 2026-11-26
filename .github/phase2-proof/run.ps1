@@ -65,6 +65,7 @@ function Close-Escape($hwnd,$name){
  Front $hwnd;Keys @(27)
  [void](Wait-For "$name to close on Escape" {[Win]::Find($name) -eq [IntPtr]::Zero})
 }
+rustc +stable --edition=2021 "$PSScriptRoot/launcher.rs" -o "$dir/launcher.exe"
 $env:LOCALAPPDATA=Join-Path $dir 'local'
 $env:USERPROFILE=Join-Path $dir 'home'
 $env:CU_NO_AUTOSTART='1';$env:CU_NO_REPAIR='1'
@@ -74,7 +75,7 @@ $env:SIG4A_PROOF_SOURCE=$PSScriptRoot
 $bin=New-Item -ItemType Directory -Force (Join-Path $dir 'bin')
 Copy-Item "$root/rust/target/debug/claude-usage.exe" $bin.FullName
 Copy-Item "$root/rust/target/debug/claude-usage-dashboard.exe" "$($bin.FullName)/dashboard-product.exe"
-rustc --edition=2021 "$PSScriptRoot/launcher.rs" -o "$($bin.FullName)/claude-usage-dashboard.exe"
+Copy-Item "$dir/launcher.exe" "$($bin.FullName)/claude-usage-dashboard.exe"
 $dashResult="$dir/dashboard.result"
 $quickResult="$dir/quick.result" 
 $data=Join-Path $env:LOCALAPPDATA 'claude-usage'
