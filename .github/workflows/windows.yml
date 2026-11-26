@@ -1,0 +1,31 @@
+name: Windows validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    name: Windows build and dashboard smoke
+    runs-on: windows-2025
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: rust
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify locked workspace on Windows
+        run: cargo check --locked --workspace --all-targets
+      - name: Test dashboard API
+        run: cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard
+      - name: Exercise the real dashboard WebView2
+        run: cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1
