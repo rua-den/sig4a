@@ -17,6 +17,40 @@ async function untilAsync(name) {
   }
   throw new Error('Driver did not complete '+name);
 }
+const setupButton = document.getElementById('ai-test');
+if(!setupButton)throw Error('Phase 3 Test button missing');
+{
+ toolTab('grammar');
+ const grammar = document.getElementById('grammar-in');
+ grammar.value = 'Synthetic recovery input';
+ grammar.dispatchEvent(new Event('input',{bubbles:true}));
+ toolTab('localai');
+ const endpoint = document.getElementById('ai-endpoint');
+ const status = document.getElementById('ai-status');
+ const check = document.getElementById('ai-check');
+ const model = document.getElementById('ai-model');
+ const base = endpoint.value;
+ if(base!=='http://127.0.0.1:18080'||model.value!=='qwen3-vl-2b')throw Error('Unexpected scratch configuration: '+base+' '+model.value);
+ function edit(el,v){el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));}
+ edit(endpoint, 'http://127.0.0.1:18290');
+ check.click();
+ await until(()=>!check.disabled&&status.dataset.state==='unreachable','Unavailable loopback endpoint was not diagnosed: '+status.dataset.state+' '+status.textContent);
+ const unavailable=status.textContent.trim();
+ if(!unavailable)throw Error('Unavailable diagnosis missing a readable message');
+ edit(endpoint,base);
+ check.click();
+ await until(()=>!check.disabled&&(status.dataset.state==='connected'||status.dataset.state==='ready'),'Live model list connection not observed: '+status.dataset.state+' '+status.textContent);
+ setupButton.click();
+ await until(()=>!setupButton.disabled&&status.dataset.state==='ready','Real embedded vision test did not mark Ready: '+status.dataset.state+' '+status.textContent);
+ const ready=status.textContent.trim();
+ document.getElementById('ai-save').click();
+ await until(()=>!document.getElementById('ai-save').disabled,'Save did not settle');
+ const cfg=(await api.state()).cfg;
+ if(cfg.local_ai_endpoint!==base||cfg.local_ai_model!=='qwen3-vl-2b')throw Error('Successful Local AI settings did not save');
+ toolTab('grammar');
+ if(grammar.value!=='Synthetic recovery input')throw Error('Recovery navigation discarded unsent input');
+ await api.e2e_stage('recovery_verified',{unavailable,ready,sessionInputPreserved:true,loopbackSaved:cfg.local_ai_endpoint});
+}
 toolTab('ocr');
 await stage('capture', {});
 const captureButton = document.querySelector('#tool-ocr button[onclick="captureOcr()"]');

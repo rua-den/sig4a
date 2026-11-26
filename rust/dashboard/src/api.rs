@@ -24,7 +24,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_INPUT_BYTES: usize = 256 * 1024;
-const MAX_IMAGE_BASE64_BYTES: usize = 8 * 1024 * 1024;
+const MAX_IMAGE_BYTES: usize = 6 * 1024 * 1024;
+const MAX_IMAGE_BASE64_BYTES: usize = MAX_IMAGE_BYTES.div_ceil(3) * 4;
+pub const MAX_IMAGE_DATA_URL_BYTES: usize = MAX_IMAGE_BASE64_BYTES + "data:image/jpeg;base64,".len();
 const MAX_RESPONSE_BYTES: u64 = 256 * 1024;
 
 fn local_endpoint(endpoint: &str) -> Result<String, String> {
@@ -40,7 +42,12 @@ fn local_endpoint(endpoint: &str) -> Result<String, String> {
         .and_then(|s| s.find(']').map(|i| i + 1))
     {
         let host = &rest[..end + 1];
-        let port = rest[end + 1..].strip_prefix(':');
+        let suffix = &rest[end + 1..];
+        let port = if suffix.is_empty() {
+            None
+        } else {
+            Some(suffix.strip_prefix(':').ok_or("Port không hợp lệ")?)
+        };
         (host, port)
     } else {
         rest.split_once(':')
@@ -75,24 +82,50 @@ fn image_base64(data_url: &str) -> Result<(&str, &str), String> {
     {
         return Err("Ảnh không hợp lệ hoặc quá lớn".into());
     }
-    let bytes = data.as_bytes();
-    if bytes.len() % 4 != 0
-        || bytes.iter().enumerate().any(|(i, b)| {
-            !matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'/' | b'=' )
-                || (*b == b'=' && i < bytes.len().saturating_sub(2))
-        })
+    let payload = data.trim_end_matches('=');
+    let padding = data.len() - payload.len();
+    if data.len() % 4 != 0
+        || padding > 2
+        || !payload.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/'))
     {
         return Err("Ảnh base64 không hợp lệ".into());
+    }
+    if data.len() / 4 * 3 - padding > MAX_IMAGE_BYTES {
+        return Err("Ảnh không hợp lệ hoặc quá lớn".into());
     }
     Ok((mime, data))
 }
 
+fn ai_error(code: &str, error: &str) -> Value {
+    json!({"code":code,"error":error})
+}
+
+fn request_error(error: ureq::Error, chat: bool) -> Value {
+    match error {
+        ureq::Error::Timeout(_) => ai_error("timeout", "Local AI hết thời gian chờ"),
+        ureq::Error::StatusCode(503) => ai_error("not_ready", "Local AI báo chưa sẵn sàng (HTTP 503)"),
+        ureq::Error::StatusCode(404) if chat => ai_error("model_missing", "Không tìm thấy model hoặc đường dẫn chat"),
+        ureq::Error::StatusCode(400 | 415 | 422) if chat => ai_error("request_rejected", "Server từ chối yêu cầu chat"),
+        ureq::Error::StatusCode(_) => ai_error("server_error", "Server từ chối yêu cầu"),
+        _ => ai_error("unreachable", "Không kết nối được Local AI"),
+    }
+}
+
+fn read_ai_response(response: ureq::http::Response<ureq::Body>) -> Result<Value, Value> {
+    response.into_body().into_with_config().limit(MAX_RESPONSE_BYTES)
+        .read_json::<Value>()
+        .map_err(|error| match error {
+            ureq::Error::Timeout(_) => ai_error("timeout", "Local AI hết thời gian chờ"),
+            _ => ai_error("invalid_response", "Phản hồi Local AI không hợp lệ"),
+        })
+}
+
 pub fn local_models(endpoint: &str, backend: &str) -> Value {
     if !matches!(backend, "ollama" | "llama_cpp") {
-        return json!({"error":"backend không được hỗ trợ"});
+        return ai_error("invalid_backend", "backend không được hỗ trợ");
     }
     let Ok(base) = local_endpoint(endpoint) else {
-        return json!({"error":"endpoint không hợp lệ"});
+        return ai_error("invalid_endpoint", "endpoint không hợp lệ");
     };
     let path = if backend == "ollama" {
         "/api/tags"
@@ -106,21 +139,20 @@ pub fn local_models(endpoint: &str, backend: &str) -> Value {
         .max_redirects(0)
         .build()
         .new_agent();
-    let Ok(resp) = agent.get(&url).call() else {
-        return json!({"error":"không kết nối được local AI"});
+    let resp = match agent.get(&url).call() {
+        Ok(resp) => resp,
+        Err(error) => return request_error(error, false),
     };
-    let Ok(v) = resp
-        .into_body()
-        .into_with_config()
-        .limit(MAX_RESPONSE_BYTES)
-        .read_json::<Value>()
-    else {
-        return json!({"error":"phản hồi model không hợp lệ"});
+    let v = match read_ai_response(resp) {
+        Ok(v) => v,
+        Err(error) => return error,
+    };
+    let key = if backend == "ollama" { "models" } else { "data" };
+    let Some(entries) = v[key].as_array() else {
+        return ai_error("invalid_response", "Phản hồi danh sách model không hợp lệ");
     };
     let models = if backend == "ollama" {
-        v["models"]
-            .as_array()
-            .unwrap_or(&vec![])
+        entries
             .iter()
             .filter_map(|m| {
                 let n = m["name"].as_str()?;
@@ -135,9 +167,7 @@ pub fn local_models(endpoint: &str, backend: &str) -> Value {
             })
             .collect::<Vec<_>>()
     } else {
-        v["data"]
-            .as_array()
-            .unwrap_or(&vec![])
+        entries
             .iter()
             .filter_map(|m| {
                 let n = m["id"].as_str()?;
@@ -159,27 +189,27 @@ pub fn local_chat(
     image: Option<&str>,
 ) -> Value {
     if !matches!(backend, "ollama" | "llama_cpp") {
-        return json!({"error":"backend không được hỗ trợ"});
+        return ai_error("invalid_backend", "backend không được hỗ trợ");
     }
     if !matches!(task, "grammar" | "translation" | "ocr") {
         return json!({"error":"task không được hỗ trợ"});
     }
     if text.len() > MAX_INPUT_BYTES {
-        return json!({"error":"Nội dung quá lớn"});
+        return ai_error("request_too_large", "Nội dung quá lớn");
     }
     if model.is_empty()
         || model.len() > 256
         || model.chars().any(|c| c.is_control() || c.is_whitespace())
         || model.contains("//")
     {
-        return json!({"error":"model không hợp lệ"});
+        return ai_error("invalid_model", "model không hợp lệ");
     }
     let model_lower = model.to_ascii_lowercase();
     if model_lower.ends_with(":cloud") || model_lower.ends_with("-cloud") {
-        return json!({"error":"model cloud bị từ chối; hãy chọn model local"});
+        return ai_error("invalid_model", "model cloud bị từ chối; hãy chọn model local");
     }
     let Ok(base) = local_endpoint(endpoint) else {
-        return json!({"error":"endpoint không hợp lệ"});
+        return ai_error("invalid_endpoint", "endpoint không hợp lệ");
     };
     let prompt = match task {
         "grammar" => format!(
@@ -195,12 +225,12 @@ pub fn local_chat(
     let image_data = match image {
         Some(data) => match image_base64(data) {
             Ok((mime, encoded)) => Some((mime, encoded)),
-            Err(error) => return json!({"error": error}),
+            Err(error) => return ai_error("invalid_image", &error),
         },
         None => None,
     };
     if task == "ocr" && image_data.is_none() {
-        return json!({"error":"OCR cần có ảnh"});
+        return ai_error("invalid_image", "OCR cần có ảnh");
     }
     if task != "ocr" && image_data.is_some() {
         return json!({"error":"Ảnh chỉ được dùng cho OCR"});
@@ -227,16 +257,13 @@ pub fn local_chat(
         .max_redirects(0)
         .build()
         .new_agent();
-    let Ok(resp) = agent.post(&format!("{base}{path}")).send_json(&body) else {
-        return json!({"error":"local AI request thất bại hoặc timeout"});
+    let resp = match agent.post(&format!("{base}{path}")).send_json(&body) {
+        Ok(resp) => resp,
+        Err(error) => return request_error(error, true),
     };
-    let Ok(v) = resp
-        .into_body()
-        .into_with_config()
-        .limit(MAX_RESPONSE_BYTES)
-        .read_json::<Value>()
-    else {
-        return json!({"error":"phản hồi local AI không hợp lệ"});
+    let v = match read_ai_response(resp) {
+        Ok(v) => v,
+        Err(error) => return error,
     };
     let text = if backend == "ollama" {
         v["message"]["content"].as_str()
@@ -247,7 +274,7 @@ pub fn local_chat(
         Some(text) if !text.is_empty() => {
             json!({"text":text.chars().take(64 * 1024).collect::<String>()})
         }
-        _ => json!({"error":"local AI không trả về nội dung"}),
+        _ => ai_error("empty_response", "Local AI không trả về nội dung"),
     }
 }
 
@@ -848,6 +875,93 @@ mod tests {
             image_base64("data:image/jpeg;base64,YWJj").unwrap(),
             ("jpeg", "YWJj")
         );
+    }
+
+    #[test]
+    fn image_size_limit_accepts_exactly_six_mib() {
+        let encoded = "A".repeat(MAX_IMAGE_BASE64_BYTES);
+        let url = format!("data:image/jpeg;base64,{encoded}");
+        assert_eq!(url.len(), MAX_IMAGE_DATA_URL_BYTES);
+        assert!(image_base64(&url).is_ok());
+        assert!(image_base64(&format!("{url}AAAA")).is_err());
+        assert!(image_base64("data:image/gif;base64,YWJj").is_err());
+        assert!(image_base64("data:image/png;base64,AA=A").is_err());
+    }
+
+    fn fixture_request(
+        response: Value,
+    ) -> (String, std::thread::JoinHandle<(String, Value)>) {
+        use std::io::{BufRead, BufReader, Read, Write};
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let worker = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock
+                        && std::time::Instant::now() < deadline =>
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                    }
+                    Err(e) => panic!("fixture accept: {e}"),
+                }
+            };
+            stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+            let mut reader = BufReader::new(&mut stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let request = line.trim_end().to_owned();
+            let mut len = 0;
+            loop {
+                line.clear();
+                if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    len = value.trim().parse::<usize>().unwrap();
+                }
+            }
+            let mut bytes = vec![0; len];
+            reader.read_exact(&mut bytes).unwrap();
+            let body = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+            let response = response.to_string();
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{}", response.len(), response).unwrap();
+            (request, body)
+        });
+        (format!("http://{addr}"), worker)
+    }
+
+    #[test]
+    fn loopback_provider_contracts_text_and_image() {
+        let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XfuoAAAAASUVORK5CYII=";
+        for (provider, path, response) in [
+            ("ollama", "/api/chat", json!({"message":{"content":"fixture"}})),
+            ("llama_cpp", "/v1/chat/completions", json!({"choices":[{"message":{"content":"fixture"}}]})),
+        ] {
+            for (task, image) in [("translation", None), ("ocr", Some(png))] {
+                let (address, worker) = fixture_request(response.clone());
+                let result = local_chat(&address, provider, "vision-fixture", task, "hello", Some("vi"), image);
+                let (line, body) = worker.join().unwrap();
+                assert_eq!(line, format!("POST {path} HTTP/1.1"));
+                assert_eq!(body["model"], "vision-fixture");
+                assert_eq!(result["text"], "fixture", "{result}");
+                let message = &body["messages"][0];
+                if let Some(image) = image {
+                    if provider == "ollama" {
+                        assert!(message["content"].as_str().unwrap().contains("Transcribe"));
+                        assert_eq!(message["images"][0], image.split_once(',').unwrap().1);
+                    } else {
+                        assert_eq!(message["content"][0]["type"], "text");
+                        assert_eq!(message["content"][1]["image_url"]["url"], image);
+                    }
+                } else {
+                    assert!(message["content"].as_str().unwrap().contains("Translate to Vietnamese"));
+                    assert!(message["images"].is_null());
+                }
+            }
+        }
     }
 
     #[test]
