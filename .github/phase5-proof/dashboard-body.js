@@ -30,7 +30,7 @@ await stage('alerts-tab',point(el('t-alerts')));
 await stage('hooks-tab',point(el('t-hooks')));
 await stage('appearance-tab',point(el('t-look')));
 const legacyLabel=el('wlabel')?.value;
-assert(legacyLabel==='Legacy fixture badge','Legacy widget preference was not rendered');
+assert(legacyLabel==='short'&&el('wfont').value==='124'&&el('wopac').value==='81','Legacy widget preferences were not rendered');
 await stage('change-accent',point(el('accent')));
 await until(()=>el('accent').value==='purple','native accent change');
 return {tenProfiles:true,actualHook:true,grammar,translation,legacyLabel,accent:el('accent').value};

@@ -117,8 +117,9 @@ $entries['near-5h'].five=84;$entries['stale-quota'].fetched_at=$now-1300;$entrie
 $entries['login-needed'].err='HTTP 401 (login required)';$entries['login-needed'].status=401;$entries['login-needed'].Remove('five');$entries['login-needed'].Remove('week')
 $entries['ordinary-b'].week=$null;$entries['ordinary-b'].week_reset=$null
 $configPath=Join-Path $data 'config.json'
-@{profiles=$profiles;autostart=$false;interval_sec=180;warn_pct=80;block_pct=95;block_enabled=$true;widget_enabled=$false;notify_enabled=$false;widget_label='Legacy fixture badge';widget_font=124;widget_opacity=81;widget_locked=$true;dashboard_accent='orange';compat_sentinel='preserve me';local_ai_backend='ollama';local_ai_endpoint='http://127.0.0.1:18229';local_ai_model='sig4a-fixture';local_ai_managed=$false} | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $configPath
-@{ts=$now;block_enabled=$true;warn_pct=80;block_pct=95;busy=@('refreshing');refresh=$null;profiles=$entries}|ConvertTo-Json -Depth 8|Set-Content -Encoding utf8 "$data/usage_cache.json"
+@{profiles=$profiles;autostart=$false;interval_sec=180;warn_pct=80;block_pct=95;block_enabled=$true;widget_enabled=$false;notify_enabled=$false;widget_label='short';widget_font=124;widget_opacity=81;widget_locked=$true;dashboard_accent='orange';compat_sentinel='preserve me';local_ai_backend='ollama';local_ai_endpoint='http://127.0.0.1:18229';local_ai_model='sig4a-fixture';local_ai_managed=$false} | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $configPath
+$fixtureCache=@{ts=$now;block_enabled=$true;warn_pct=80;block_pct=95;busy=@('refreshing');refresh=$null;profiles=$entries}|ConvertTo-Json -Depth 8
+$fixtureCache|Set-Content -Encoding utf8 "$data/usage_cache.json"
 $ep='ClaudeUsageDashboard';$qp='ClaudeUsageQuickPopup';$trayProc=$fixture=$provider=$null
 function NativePoint($point,[IntPtr]$h){
  $client=[Win+Pt]::new($point.x,$point.y)
@@ -172,6 +173,10 @@ try{
  $trayProc=Start-Process $exe -ArgumentList '--hidden' -PassThru
  $tray=Wait-For 'real isolated tray' {$w=[Win]::Find('ClaudeUsageTray');if($w -ne [IntPtr]::Zero){$w}}
  [uint32]$owner=0;[void][Win]::GetWindowThreadProcessId($tray,[ref]$owner);Check ($owner -eq $trayProc.Id) 'Wrong tray owner'
+ # The tray's first startup can normalize old cache data before entering its interval.
+ # Rehydrate the exact synthetic snapshot after startup for the independent UI test.
+ Start-Sleep -Milliseconds 800
+ $fixtureCache|Set-Content -Encoding utf8 "$data/usage_cache.json"
  $launch=[Diagnostics.Stopwatch]::StartNew()
  [void][Win]::PostMessage($tray,0x111,[UIntPtr]1,[IntPtr]::Zero)
  $dash=Wait-For 'native visible dashboard' {Visible $ep}
@@ -192,7 +197,7 @@ try{
  Keys @(35);Keys @(13)
  Release $dashResult 'change-accent'
  $dashEvidence=Result $dashResult
- Check ($dashEvidence.legacyLabel -eq 'Legacy fixture badge') 'Legacy appearance not rendered'
+ Check ($dashEvidence.legacyLabel -eq 'short') 'Legacy appearance not rendered'
  [void](Wait-For 'unrelated accent save persisted' {(Get-Content -Raw $configPath|ConvertFrom-Json).dashboard_accent -eq 'purple'})
  Close-Escape $dash $ep
  Remove-Item "$dashResult*" -Force
@@ -201,7 +206,7 @@ try{
  $dash=Wait-For 'reopened real dashboard' {Visible $ep}
  $again=Result $dashResult
  $after=Get-Content -Raw $configPath|ConvertFrom-Json
- Check ($again.savedAccent -eq 'purple' -and $after.widget_label -eq 'Legacy fixture badge' -and $after.widget_font -eq 124 -and $after.widget_opacity -eq 81 -and $after.widget_locked -and $after.compat_sentinel -eq 'preserve me') 'Unrelated save did not preserve legacy config'
+ Check ($again.savedAccent -eq 'purple' -and $after.widget_label -eq 'short' -and $after.widget_font -eq 124 -and $after.widget_opacity -eq 81 -and $after.widget_locked -and $after.compat_sentinel -eq 'preserve me') 'Unrelated save did not preserve legacy config'
  foreach($item in $realSettings.GetEnumerator()){Check ((Get-FileHash -LiteralPath $item.Key -Algorithm SHA256).Hash -ceq $item.Value) 'A hook settings fixture was changed'}
  Close-Escape $dash $ep
  Write-Host 'P5-UI-003: Synthetic legacy widget and hook preferences survived unrelated native setting change and reopen; profile settings SHA-256 unchanged.'
