@@ -1,0 +1,30 @@
+name: SIG4A Phase 6 ordinary release desktop and migration
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/phase6-desktop-proof.yml', '.github/phase6-desktop-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: 41868363ed07a64aaecc8b1f0c6fa13e3c84ff5c
+jobs:
+  release-desktop:
+    runs-on: windows-2025
+    timeout-minutes: 38
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - working-directory: product/rust
+        name: Build ordinary colocated release executables
+        run: cargo build --locked --release --workspace
+      - name: Release tray, restart, fresh and legacy data, narrow keyboard Cleaner and screenshots
+        shell: pwsh
+        run: ./proof/.github/phase6-desktop-proof/release-desktop.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA
