@@ -230,6 +230,39 @@ pub fn status(profiles: &[HookProfile]) -> Vec<(String, Option<bool>)> {
         .collect()
 }
 
+/// Inspection for the dashboard only. Never runs hooks or alters settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookExecution {
+    Missing,
+    Unreadable,
+    Disabled,
+    Unusable,
+    Ready,
+}
+
+pub fn execution(profile: &HookProfile) -> HookExecution {
+    let Loaded::Doc(Value::Object(doc)) = load(&profile.settings()) else {
+        return HookExecution::Unreadable;
+    };
+    let Ok(installed) = ours(&doc) else { return HookExecution::Unreadable; };
+    if installed.is_empty() { return HookExecution::Missing; }
+    if doc.get("disableAllHooks").and_then(Value::as_bool) == Some(true) {
+        return HookExecution::Disabled;
+    }
+    let usable = installed.iter().any(|h| {
+        if h.get("type").and_then(Value::as_str) != Some("command")
+            || h.get("async").and_then(Value::as_bool) == Some(true)
+            || h.get("asyncRewake").and_then(Value::as_bool) == Some(true)
+        { return false; }
+        let Some(cmd) = h.get("command").and_then(Value::as_str) else { return false; };
+        let Some(exe) = command_exe(cmd) else { return false; };
+        let path = Path::new(exe);
+        path.is_absolute() && path.is_file() &&
+            (cmd.trim_end() == command(path) || cmd.trim_end().strip_suffix(" hook") == Some(exe))
+    });
+    if usable { HookExecution::Ready } else { HookExecution::Unusable }
+}
+
 /// Lazy `any(_is_ours(h) ...)`: an error after the first hit is never reached (as in Python).
 fn scan_installed(data: &Map<String, Value>) -> Result<bool, Shape> {
     for g in groups_of(data)?.map_or(&[][..], |v| v) {

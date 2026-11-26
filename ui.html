@@ -27,7 +27,7 @@ main{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;padding:16px 1
 .pb{flex:1;min-width:30px;height:9px;background:repeating-linear-gradient(90deg,#2b2b2b 0 6px,transparent 6px 8px)}
 .pb i{display:block;height:100%;background:repeating-linear-gradient(90deg,var(--c) 0 6px,transparent 6px 8px)}
 .pct{display:inline-block;min-width:38px;text-align:right}
-.err{grid-column:2/4;color:var(--bad)}.warn{grid-column:2/4;color:var(--warn);font-size:11px}.stale .pb{opacity:.55}
+.usage-actions{margin:2px 0 5px}.usage-meta{grid-column:1/-1;min-width:0;overflow-wrap:anywhere;color:var(--dim);font-size:11px}.usage-state[data-kind=blocking],.usage-state[data-kind=login],.usage-hook[data-kind=blocking]{color:var(--bad)}.usage-state[data-kind=threshold],.usage-state[data-kind=stale],.usage-state[data-kind=near]{color:var(--warn)}.usage-reset{display:block;margin-top:2px;line-height:1.25;overflow-wrap:anywhere}.acc .name{overflow-wrap:anywhere}.err{grid-column:2/4;color:var(--bad)}.warn{grid-column:2/4;color:var(--warn);font-size:11px}.stale .pb{opacity:.55}
 .hdr{color:var(--dim);font-size:11px;padding-bottom:4px;border-bottom:1px solid var(--line)}
 .spin{width:11px;height:11px;border:2px solid #2a3b4d;border-top-color:var(--busy);border-radius:50%;animation:sp .7s linear infinite;flex:none}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -50,9 +50,9 @@ button.b:disabled{opacity:.5;cursor:default}
 footer{flex:none;margin-top:auto;display:flex;gap:18px;padding:6px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:11px;align-items:center}
 footer b{color:var(--fg);font-weight:500}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--ok)}
 footer .spin{display:inline-block;margin-right:6px;vertical-align:-1px}
-.tabs{display:flex;gap:4px;margin:-2px 0 10px}.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);font:inherit;padding:2px 10px;cursor:pointer}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin:-2px 0 10px}.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);font:inherit;padding:2px 10px;cursor:pointer}
 .tab:hover{color:var(--fg)}.tab.on{color:var(--accent);border-bottom-color:var(--accent)}[hidden]{display:none!important}
-.compact .tabs{margin-bottom:6px}.compact .m br,.compact .m br+small{display:none}.compact .acc{padding:4px 0}
+.compact .tabs{margin-bottom:6px}.compact .acc{padding:4px 0}
 .look>summary{cursor:pointer;color:var(--accent);font-size:12px;list-style:none;padding:2px 0}.look>summary::-webkit-details-marker{display:none}
 .look>summary::before{content:'▸ ';color:var(--dim)}.look[open]>summary::before{content:'▾ '}
 .al{display:grid;grid-template-columns:1fr 92px auto;gap:8px;align-items:center}.al span{color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -102,12 +102,12 @@ textarea:focus{outline:0;border-color:var(--accent)}
 .ai-subnav{display:flex;gap:4px;flex-wrap:wrap;margin:-4px 0 10px}.ai-subnav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);font:inherit;padding:2px 10px;cursor:pointer}.ai-subnav button:hover,.ai-subnav button.on,.ai-subnav button:focus-visible{color:var(--fg);border-bottom-color:var(--accent)}#ai-subnav-wrap{display:none}.route-ai #ai-subnav-wrap{display:block}
 .quick #ai-subnav-wrap{display:none}
 .route-cleaner #usage-accounts,.route-cleaner #settings-box,.route-settings #usage-accounts,.route-settings #clean{display:none}.route-usage #settings-box,.route-usage #clean,.route-overview #tool-usage{display:none}.route-settings #tool-usage,.route-cleaner #tool-usage{display:block}
-.route-cleaner #settings-box{display:block}.route-cleaner #settings-box>.tabs,.route-cleaner #settings-box>#gen,.route-cleaner #settings-box>#look,.route-cleaner #settings-box>.row{display:none}.route-cleaner #settings-label{display:none}.route-cleaner #clean-label{display:block}#clean-label{display:none}
+.route-cleaner #settings-box{display:block}.route-cleaner #settings-box>.tabs,.route-cleaner #settings-box>#gen,.route-cleaner #settings-box>#look,.route-cleaner #settings-box>#alerts,.route-cleaner #settings-box>#hooks,.route-cleaner #settings-box>.row{display:none}.route-cleaner #settings-label{display:none}.route-cleaner #clean-label{display:block}#clean-label{display:none}
 .localai-route #settings-box,.localai-route #tool-usage{display:none}
 .quick .toolnav,.quick .wb:not(.x),.quick footer,.quick #tool-overview,.quick #tool-usage,.quick #tool-localai{display:none}.quick main{padding:10px 12px}.quick .title{height:30px}.quick .toolpanel.on{display:block}.quick .box{padding:8px 10px}.quick .result{max-height:118px;overflow:auto}.quick textarea{min-height:58px}.quick #ocr-preview{max-height:82px}.quick .toolactions{margin-top:7px}
 .quick.localai-route #tool-localai.on{display:block}.quick #ocr-preview,.quick #ocr-in{display:none}.quick #ocr-status{display:block}.quick #tool-ocr .hint{display:none}.quick #tool-ocr .result{min-height:122px;max-height:156px}.quick .accent-picker{display:none}
 .ocr-popup .rz,.ocr-popup #ocr-remove{display:none}.ocr-popup #tool-ocr .result{min-height:44px;max-height:111px;overflow:auto;overflow-wrap:anywhere}.ocr-popup #ocr-out{margin-top:6px}.ocr-inline{margin-top:8px}.ocr-inline .toolactions{margin-top:5px}.ocr-popup #tool-ocr .toolactions{gap:5px}.ocr-popup #ocr-out:focus-visible,.ocr-popup #ocr-translation-out:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.quota-row{overflow-wrap:anywhere}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable=true]{cursor:text}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
+.toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.quota-row{overflow-wrap:anywhere}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable]{cursor:text}.result[data-placeholder]:empty::before{content:attr(data-placeholder);color:var(--dim);pointer-events:none}.text-status{margin:7px 0 4px;overflow-wrap:anywhere}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
 </style></head><body>
 <div class="title"><div class="drag pywebview-drag-region" ondblclick="toggleMax()"><b>Kane's Tool Box</b><span id="sub"></span></div><label class="accent-picker" title="Màu giao diện">Màu giao diện<select id="accent" aria-label="Màu giao diện"><option value="orange">Cam</option><option value="blue">Xanh</option><option value="purple">Tím</option></select></label>
 <button class="wb" title="thu nhỏ" onclick="api.minimize()">–</button><button class="wb" id="maxb" title="phóng to / khôi phục (nhấp đúp thanh tiêu đề)" onclick="toggleMax()">▢</button><button class="wb x" title="đóng" onclick="closeDash()">✕</button></div>
@@ -124,39 +124,38 @@ textarea:focus{outline:0;border-color:var(--accent)}
   <button class="tile" onclick="toolTab('localai')"><b>Local AI</b><span>Kiểm tra cấu hình model cục bộ trong Cài đặt.</span></button>
  </div></div></section>
  <div id="ai-subnav-wrap"><nav class="ai-subnav" aria-label="Công cụ AI"><button class="on" data-ai="grammar" aria-current="page" onclick="toolTab('grammar')">Grammar</button><button data-ai="translation" onclick="toolTab('translation')">Translation</button><button data-ai="ocr" onclick="toolTab('ocr')">OCR</button></nav></div>
-<section class="toolpanel" id="tool-grammar"><div class="box"><div class="lbl">GRAMMAR</div><label>Văn bản tiếng Anh<textarea id="grammar-in" placeholder="Dán văn bản cần kiểm tra..." spellcheck="true"></textarea></label><div class="toolactions"><button class="b p" id="grammar-run" onclick="runTool('grammar')">Kiểm tra</button><button class="b" onclick="copyResult('grammar-out')">Sao chép</button></div><button hidden class="b" id="grammar-recovery" onclick="openAiRecovery('grammar')">Cài đặt Local AI</button><div class="result" id="grammar-out" contenteditable="true" role="textbox" aria-label="Kết quả Grammar">Kết quả sẽ hiển thị ở đây.</div></div></section>
- <section class="toolpanel" id="tool-translation"><div class="box"><div class="lbl">TRANSLATION</div><label>Văn bản<textarea id="translation-in" placeholder="Dán văn bản cần dịch..."></textarea></label><label style="max-width:240px;margin-top:8px">Ngôn ngữ đích<select id="translation-lang"><option value="vi">Tiếng Việt (mặc định)</option><option value="en">English</option></select></label><div class="toolactions"><button class="b p" id="translation-run" onclick="runTool('translation')">Dịch</button><button class="b" onclick="copyResult('translation-out')">Sao chép</button></div><button hidden class="b" id="translation-recovery" onclick="openAiRecovery('translation')">Cài đặt Local AI</button><div class="result" id="translation-out" contenteditable="true" role="textbox" aria-label="Kết quả Translation">Kết quả sẽ hiển thị ở đây.</div></div></section>
+<section class="toolpanel" id="tool-grammar"><div class="box"><div class="lbl">GRAMMAR</div><label>Văn bản tiếng Anh<textarea id="grammar-in" placeholder="Dán văn bản cần kiểm tra..." spellcheck="true"></textarea></label><div class="toolactions"><button class="b p" id="grammar-run" onclick="runTool('grammar')">Kiểm tra</button><button class="b" id="grammar-copy" onclick="copyResult('grammar-out')" disabled>Sao chép</button></div><p id="grammar-status" class="hint text-status" role="status" data-state="idle">Nhập hoặc dán nội dung để bắt đầu.</p><button hidden class="b" id="grammar-recovery" onclick="openAiRecovery('grammar')">Cài đặt Local AI</button><div class="result" id="grammar-out" contenteditable="plaintext-only" data-valid="false" data-placeholder="Kết quả sẽ hiển thị ở đây." role="textbox" aria-label="Kết quả Grammar"></div></div></section>
+ <section class="toolpanel" id="tool-translation"><div class="box"><div class="lbl">TRANSLATION</div><label>Văn bản<textarea id="translation-in" placeholder="Dán văn bản cần dịch..."></textarea></label><label style="max-width:240px;margin-top:8px">Ngôn ngữ đích<select id="translation-lang"><option value="vi">Tiếng Việt (mặc định)</option><option value="en">English</option></select></label><div class="toolactions"><button class="b p" id="translation-run" onclick="runTool('translation')">Dịch</button><button class="b" id="translation-copy" onclick="copyResult('translation-out')" disabled>Sao chép</button></div><p id="translation-status" class="hint text-status" role="status" data-state="idle">Nhập hoặc dán nội dung để bắt đầu.</p><button hidden class="b" id="translation-recovery" onclick="openAiRecovery('translation')">Cài đặt Local AI</button><div class="result" id="translation-out" contenteditable="plaintext-only" data-valid="false" data-placeholder="Kết quả sẽ hiển thị ở đây." role="textbox" aria-label="Kết quả Translation"></div></div></section>
  <section class="toolpanel" id="tool-ocr"><div class="box"><div class="lbl">OCR</div><p class="hint">Dán ảnh trực tiếp hoặc chụp vùng bằng nút bên dưới. Chỉ nhận PNG, JPEG, WebP (tối đa 6 MB).</p><textarea id="ocr-in" readonly placeholder="Chưa có ảnh — hãy dán ảnh hoặc chụp một vùng màn hình..." style="min-height:56px;margin-top:8px"></textarea><img id="ocr-preview" class="ocr-preview" alt="Xem trước ảnh OCR"><div class="toolactions"><button class="b" id="ocr-capture" onclick="captureOcr()">Chụp vùng màn hình</button><button class="b" id="ocr-remove" onclick="removeOcr()" disabled>Xoá ảnh</button><button class="b p" id="ocr-run" onclick="runTool('ocr')" disabled>Nhận chữ</button><button class="b" id="ocr-copy" onclick="copyResult('ocr-out')" disabled>Sao chép</button><button class="b" data-quick-translate onclick="translateOcr()" disabled>Dịch</button></div><span class="hint" id="ocr-status" role="status">Chưa có ảnh.</span><button hidden class="b" id="ocr-recovery" onclick="openAiRecovery('ocr')">Cài đặt Local AI</button><div class="result" id="ocr-out" contenteditable="true" role="textbox" aria-label="Kết quả OCR">Kết quả OCR sẽ hiển thị ở đây.</div><section class="ocr-inline" id="ocr-inline" aria-label="Bản dịch tiếng Việt" hidden><div class="lbl">Bản dịch tiếng Việt</div><div class="result" id="ocr-translation-out" tabindex="0" role="status"></div><div class="toolactions"><button class="b" id="ocr-translation-copy" onclick="copyResult('ocr-translation-out')" disabled>Sao chép bản dịch</button></div></section></div></section>
  <section class="toolpanel" id="tool-localai"><div class="box"><div class="lbl">LOCAL AI</div><label>Endpoint loopback<input id="ai-endpoint" type="text" value="http://127.0.0.1:11434"></label><label style="max-width:240px;margin-top:8px">Backend<select id="ai-backend"><option value="ollama">Ollama</option><option value="llama_cpp">llama.cpp server</option></select></label><label style="max-width:420px;margin-top:8px">Model<input id="ai-model" list="ai-models" value="hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0" autocomplete="off"><datalist id="ai-models"></datalist></label><div class="modelcard"><b>LiquidAI LFM2.5-VL-450M-GGUF</b><br><span class="hint">Ollama HF pattern Q4: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q4_K_M</code>; Q8: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0</code>.<br>llama.cpp chọn ID thực từ <code>/v1/models</code>; khởi chạy server ngoài với listen loopback và model path phù hợp.</span></div><div class="toolactions"><button class="b" id="ai-check" onclick="checkAi()">Kiểm tra kết nối</button><button class="b" id="model-list" onclick="listModels()">Lấy model</button><button class="b" id="ai-test" onclick="testAi()">Thử model với ảnh mẫu</button><button class="b p" id="ai-save" onclick="saveAi()">Lưu Local AI</button></div><div class="result" id="ai-status" role="status" data-state="unchecked">Chưa kiểm tra. Chọn backend, endpoint và model rồi kiểm tra.</div><div id="ai-save-status" role="status" class="hint"></div><button hidden class="b" id="ai-back" onclick="returnToAi()">Quay lại công cụ</button></div></section>
  <section class="toolpanel" id="tool-usage">
- <div class="box" id="usage-accounts"><div class="lbl">ACCOUNTS</div><div id="accs"></div></div>
+ <div class="box" id="usage-accounts"><div class="lbl">CLAUDE USAGE</div><div class="usage-actions"><button class="b" id="rbtn" onclick="refresh()">refresh</button></div><div id="accs"></div></div>
  <div class="box" id="settings-box"><div class="lbl" id="settings-label">SETTINGS</div><div class="lbl" id="clean-label">DỌN Ổ</div>
-  <div class="tabs"><button class="tab on" id="t-gen" onclick="tab('gen')">Chung</button><button class="tab" id="t-look" onclick="tab('look')">Giao diện widget</button><button class="b" id="settings-ai" onclick="toolTab('localai')">Local AI readiness</button></div>
+  <div class="tabs"><button class="tab on" id="t-gen" onclick="tab('gen')">Chung</button><button class="tab" id="t-look" onclick="tab('look')">Widget</button><button class="tab" id="t-alerts" onclick="tab('alerts')">Cảnh báo</button><button class="tab" id="t-hooks" onclick="tab('hooks')">Hook CLI</button><button class="b" id="settings-ai" onclick="toolTab('localai')">Local AI readiness</button></div>
   <div class="set" id="gen">
    <label>Refresh (giây, tối thiểu 90)<input type="number" id="interval" min="90"></label>
+   <label class="chk"><input type="checkbox" id="autosw">Chạy cùng Windows (ẩn ở tray)</label>
+   <label class="chk" title="Tự làm mới phiên đăng nhập bằng refresh token đã lưu"><input type="checkbox" id="trefsw">Tự làm mới token hết hạn</label>
+  </div>
+  <div class="set" id="alerts" hidden>
    <label>Cảnh báo ở %<input type="number" id="warn" min="1" max="100"></label>
-   <label>Chặn ở %<input type="number" id="block" min="1" max="100"></label>
-
-   <div class="sep"></div>
+   <label>Ngưỡng chặn ở % (chỉ áp dụng khi hook hoạt động)<input type="number" id="block" min="1" max="100"></label>
    <label class="chk"><input type="checkbox" id="nen">Hiện thông báo (toast)</label>
    <label class="chk"><input type="checkbox" id="nwarn">…khi gần hết (cảnh báo)</label>
-   <label class="chk"><input type="checkbox" id="nblock">…khi vượt ngưỡng chặn</label>
-   <div class="grp"><button class="b" onclick="testNotify()">gửi thử thông báo</button><span>mỗi lần chỉ báo 1 lần cho mỗi chu kỳ 5h / 7d, không lặp lại</span></div>
-
-   <div class="sep"></div>
+   <label class="chk"><input type="checkbox" id="nblock">…khi chạm ngưỡng chặn</label>
+   <div class="grp"><button class="b" onclick="testNotify()">Gửi thử thông báo</button><span>Mỗi chu kỳ 5h / 7d chỉ báo một lần, không lặp lại.</span></div>
+  </div>
+  <div class="set" id="hooks" hidden>
+   <label class="chk"><input type="checkbox" id="blocksw">Bật chính sách chặn prompt CLI</label>
+   <div class="grp">Chạm ngưỡng không đồng nghĩa với đang chặn. Chính sách cần hook dùng được và cache còn hiệu lực.</div>
+   <div class="grp"><button class="b" onclick="hook('install')">Cài hook vào các profile</button><button class="b" onclick="hook('uninstall')">Gỡ hook</button><span id="hookst" role="status"></span></div>
+  </div>
+  <div class="set" id="look" hidden>
    <label class="chk"><input type="checkbox" id="wen">Hiện widget trên taskbar</label>
    <label>Widget: cỡ vòng (px)<input type="number" id="wsize" min="24" max="64"></label>
    <label style="grid-column:span 4">Kiểu widget (hoặc chuột phải widget → Next style)<select id="wstyle"><option value="rings">Vòng tròn</option><option value="bars">Thanh ngang</option><option value="cards">Thẻ số lớn</option><option value="segments">Ô vuông (terminal)</option><option value="arc">Đồng hồ bán nguyệt</option></select></label>
-   <div class="grp"><button class="b" onclick="api.widget_unlock().then(()=>toast('widget đã mở khoá: kéo để di chuyển, ổ khoá để khoá lại'))">mở khoá widget (kéo / resize / xoay)</button>
-    <button class="b" onclick="api.widget_reset().then(()=>toast('đã reset widget'))">reset widget</button></div>
-
-   <div class="sep"></div>
-   <label class="chk"><input type="checkbox" id="blocksw">Chặn prompt CLI khi vượt ngưỡng</label>
-   <label class="chk"><input type="checkbox" id="autosw">Chạy cùng Windows (ẩn ở tray)</label>
-   <label class="chk" title="Khi token của một profile hết hạn, app tự làm mới bằng refresh token và ghi lại vào .credentials.json, giống claude CLI"><input type="checkbox" id="trefsw">Tự làm mới token hết hạn</label>
-   <div class="grp"><button class="b" onclick="hook('install')">cài hook vào các profile</button><button class="b" onclick="hook('uninstall')">gỡ hook</button><span id="hookst"></span></div>
-  </div>
-  <div class="set" id="look" hidden>
+   <div class="grp"><button class="b" onclick="api.widget_unlock().then(()=>toast('widget đã mở khoá: kéo để di chuyển, ổ khoá để khoá lại'))">Mở khoá widget (kéo / resize / xoay)</button>
+    <button class="b" onclick="api.widget_reset().then(()=>toast('đã reset widget'))">Reset widget</button></div>
     <div class="grp" style="grid-column:span 6">Áp dụng ngay khi chỉnh, không cần bấm save.</div>
     <div class="grp" style="grid-column:span 6;color:var(--fg)">Hiển thị trên widget (bỏ tick để ẩn cho gọn):</div>
     <label class="chk" style="grid-column:span 2"><input type="checkbox" id="sl">Tên account</label>
@@ -212,7 +211,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
     <p id="dups-scope" class="hint"></p><div id="dlist"></div>
    </section>
   </div>
-  <div class="row"><button class="b" id="rbtn" onclick="refresh()">refresh</button><button class="b p" onclick="save()">save</button></div>
+  <div class="row"><button class="b p" id="settings-save" onclick="save()">Lưu cài đặt</button></div>
  </div>
 </div>
 </section>
@@ -225,7 +224,19 @@ textarea:focus{outline:0;border-color:var(--accent)}
 // that gap used to throw and be lost. Every call goes through api.X(...), which waits for the bridge when needed.
 const bridge=new Promise(r=>{if(window.pywebview&&window.pywebview.api&&window.pywebview.api.state)r();else window.addEventListener('pywebviewready',()=>r(),{once:true})});
 const api=new Proxy({},{get:(_,n)=>async(...a)=>{if(!(window.pywebview&&pywebview.api&&pywebview.api[n]))await bridge;return pywebview.api[n](...a)}});
-window.openQuickTool=function(tool,text){if(!['grammar','translation','ocr'].includes(tool))return;document.body.classList.remove('ocr-popup');document.body.classList.toggle('quick',!!window.__QUICK_MODE__);toolTab(tool);const input=$(tool+'-in');if(tool==='ocr'){if(text)toast('Quick tool OCR cần ảnh; hãy dán hoặc chụp vùng màn hình');else captureOcr();return}if(text){input.value=text;input.focus();runTool(tool);}else {input.focus();toast('Chưa có văn bản được chọn — hãy dán hoặc nhập nội dung');}};
+window.openQuickTool=function(tool,text){
+ if(!['grammar','translation','ocr'].includes(tool))return;
+ document.body.classList.remove('ocr-popup');
+ document.body.classList.toggle('quick',!!window.__QUICK_MODE__);
+ toolTab(tool);
+ if(tool==='ocr'){if(text)toast('Quick tool OCR cần ảnh; hãy dán hoặc chụp vùng màn hình');else captureOcr();return}
+ const input=$(tool+'-in');
+ if(typeof text==='string'&&text.trim()){
+  setTextDraft(tool,text);input.focus();void runTextTool(tool,true);
+ }else{
+  changeTextDraft(tool);input.focus();showTextState(tool,'paste','Chưa có văn bản được chọn. Dán bằng Ctrl+V hoặc nhập nội dung.');
+ }
+};
 const $=id=>document.getElementById(id);let cfg=null,loaded=false,waitingRefresh=0,seenRefresh=0,timer=null;
 function applyAccent(value){const name=['orange','blue','purple'].includes(value)?value:'orange';const colors={orange:['#0a0a0a','#141414','#303030','#fab283','#2a201b','#f6c8a8'],blue:['#0a0a0a','#141414','#303030','#8bb8ff','#182532','#b8d0ff'],purple:['#0a0a0a','#141414','#303030','#c7a0ff','#271b32','#dcc7ff']}[name];const root=document.documentElement;['--bg','--panel','--line','--accent','--sel','--busy'].forEach((k,i)=>root.style.setProperty(k,colors[i]));if($('accent'))$('accent').value=name;return name}
 const endpointDefaults={ollama:'http://127.0.0.1:11434',llama_cpp:'http://127.0.0.1:8080'},managedAi={endpoint:'http://127.0.0.1:18080',backend:'llama_cpp',model:'lfm25-vl-q8'};let endpointTouched=false,lastBackend='ollama',aiManual={endpoint:endpointDefaults.ollama,backend:'ollama',model:'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0'},aiCheckGeneration=0,aiCheckBusy=false,aiSaveBusy=false,aiManagedSaved=false,aiReturn=null;
@@ -235,7 +246,7 @@ function renderAiMode(){if(!$('ai-managed'))return;const on=$('ai-managed').chec
 initManagedAi();
 function bar(p,c){const col=p>=c.block_pct?'var(--bad)':p>=c.warn_pct?'var(--warn)':'var(--ok)';
  return `<span class="pbw"><span class="pb"><i style="width:${Math.min(100,Math.max(0,p))}%;--c:${col}"></i></span><span class="pct" style="color:${col}">${p.toFixed(0)}%</span></span>`}
-function reset(iso){if(!iso)return'-';let s=(new Date(iso)-Date.now())/1000;if(s<=0)return'reset';
+function reset(iso){if(!iso)return'—';let s=(new Date(iso)-Date.now())/1000;if(!Number.isFinite(s))return'—';if(s<=0)return'đến giờ';
  let m=Math.floor(s/60),h=Math.floor(m/60);m%=60;const d=Math.floor(h/24);h%=24;return d?`${d}d${h}h`:`${h}h${String(m).padStart(2,'0')}m`}
 function ago(ts){if(!ts)return'?';const s=Math.max(0,Date.now()/1000-ts);return s<90?Math.round(s)+'s trước':s<5400?Math.round(s/60)+'m trước':Math.round(s/3600)+'h trước'}
 function until(ts){const s=(ts||0)-Date.now()/1000;return s<=0?'sắp tới':s<90?Math.round(s)+'s':Math.round(s/60)+'m'}
@@ -280,43 +291,68 @@ function tipText(n,p){if(p.five===undefined)return n+'\n'+(p.err||'chưa có d�
 function toast(t,ms){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),ms||2200)}
 async function poll(){let delay=2000;try{delay=apply(await api.state())}catch(e){}schedule(delay)}
 function schedule(d){clearTimeout(timer);timer=setTimeout(poll,d)}
-function overviewQuota(cache,cfg){
- const warn=cache.warn_pct??cfg.warn_pct??80;
- const block=cache.block_pct??cfg.block_pct??95;
- function quota(label,value){
-  if(!Number.isFinite(value))return label+' —';
-  const state=value>=block?' · chạm ngưỡng chặn':value>=warn?' · gần giới hạn':'';
-  return label+' '+value.toFixed(0)+'%'+state;
+const ATTENTION={blocking:0,login:1,threshold:2,stale:3,error:3,near:4,refreshing:5,normal:6,waiting:7};
+const HOOK_LABELS={blocking:'Hook sẽ chặn theo cache',ready:'Hook dùng được · không chặn',policy_off:'Hook: chính sách chặn tắt',missing:'Chưa cài hook',unreadable:'Không đọc được cấu hình hook',disabled:'Hook đã tắt trong profile',unusable:'Hook không chạy được',unknown:'Chưa xác minh hook'};
+function usageRows(cache,cfg,hooks,now=Date.now()/1000){
+ const warn=cache.warn_pct??cfg.warn_pct??80,block=cache.block_pct??cfg.block_pct??95;
+ const staleAfter=Math.max(90,cfg.interval_sec||180)*2+30,busy=new Set(cache.busy||[]);
+ return Object.entries(cache.profiles||{}).map(([name,p])=>{
+  const hook=Object.hasOwn(hooks,name)?hooks[name]:'unknown';
+  const max=Math.max(...[p.five,p.week].filter(Number.isFinite));
+  const has=Number.isFinite(max),seen=Number.isFinite(p.fetched_at)&&p.fetched_at>0;
+  const login=Number(p.status)===401||/credentials|\/login|đăng nhập|token hết hạn/i.test(p.err||'');
+  const refreshing=busy.has(name),stale=has&&(!!p.err||!seen||now-p.fetched_at>staleAfter);
+  const attention=hook==='blocking'?'blocking':login?'login':!stale&&max>=block?'threshold'
+   :stale?'stale':p.err?'error':max>=warn?'near':refreshing?'refreshing':has?'normal':'waiting';
+  return {name,p,max,login,stale,refreshing,hook,attention,warn,block};
+ }).sort((a,b)=>ATTENTION[a.attention]-ATTENTION[b.attention]||
+  (a.max===b.max?0:a.max>b.max?-1:1)||(a.name<b.name?-1:a.name>b.name?1:0));
+}
+const usageValue=(k,t)=>`<span class="v" data-k="${k}" data-t="${esc(t??'')}"></span>`;
+function usageState(row){
+ const a=row.attention;
+ const main={blocking:'Chính sách hook đang áp dụng',login:'Cần đăng nhập lại',threshold:'Chạm ngưỡng chặn',
+  stale:'Dữ liệu cũ',error:'Lỗi cập nhật',near:'Gần giới hạn',refreshing:'Đang cập nhật',normal:'Bình thường',waiting:'Chờ dữ liệu'}[a];
+ const more=[];
+ if(row.login&&a!=='login')more.push('Cần đăng nhập lại');
+ if(row.stale&&a!=='stale')more.push('dữ liệu cũ');
+ if(row.refreshing&&a!=='refreshing')more.push('đang cập nhật');
+ return `<span class="usage-state" data-kind="${a}">${main}</span>${more.length?' · '+more.join(' · '):''}`;
+}
+function usageHook(row){return `<span class="usage-hook" data-kind="${esc(row.hook)}">${HOOK_LABELS[row.hook]||HOOK_LABELS.unknown}</span>`}
+function overviewQuota(rows){
+ function quota(label,value,resetAt,row){
+  const state=value>=row.block?' · chạm ngưỡng chặn':value>=row.warn?' · gần giới hạn':'';
+  return Number.isFinite(value)?label+' '+value.toFixed(0)+'%'+state+' · reset '+usageValue('reset',resetAt):label+' — · reset —';
  }
- const profiles=Object.entries(cache.profiles),busy=new Set(cache.busy||[]);
- const priority=([,p])=>p.err||[p.five,p.week].some(v=>Number.isFinite(v)&&v>=warn)?1:0;
- return profiles.sort((a,b)=>priority(b)-priority(a)).map(([name,p])=>{
-  const status=p.err?(Number.isFinite(p.five)||Number.isFinite(p.week)?' · dữ liệu cũ: ':' · chưa có dữ liệu: ')+esc(p.err)
-   :busy.has(name)?' · đang cập nhật':'';
-  return `<div class="quota-row"><b>${esc(name)}</b> · ${quota('5h',p.five)} · ${quota('7d',p.week)}${status}</div>`;
+ return rows.map(row=>{const {p,name,attention}=row;
+  return `<div class="quota-row" data-n="${esc(name)}" data-attention="${attention}"><b>${esc(name)}</b> · ${quota('5h',p.five,p.five_reset,row)} · ${quota('7d',p.week,p.week_reset,row)} · ${usageState(row)} · ${usageHook(row)}</div>`;
  }).join('')||'<div class="hdr">chưa có profile</div>';
+}
+function usageAccount(row){
+ const {name,p,refreshing,stale,attention}=row;
+ const sp=refreshing?'<span class="spin" title="đang gọi API"></span>':'';
+ const m=(label,pct,at)=>`<div class="m" data-window="${label}"><div class="mr"><small>${label}</small>${Number.isFinite(pct)?bar(pct,{warn_pct:row.warn,block_pct:row.block}):'<span>—</span>'}</div><small class="usage-reset" title="${esc(at||'')}">Reset ${usageValue('reset',at)}</small></div>`;
+ const err=p.err?`<span class="usage-error" title="${esc(p.err)}"> · ${esc(p.err)}</span>`:'';
+ const retry=p.retry_at?' · thử lại sau '+usageValue('until',p.retry_at):'';
+ return `<div class="acc ${stale?'stale':''} ${refreshing?'busy':''}" data-n="${esc(name)}" data-attention="${attention}">
+  <div class="name">${esc(name)}${sp}</div>${m('5h',p.five,p.five_reset)}${m('7d',p.week,p.week_reset)}
+  <div class="usage-meta">${usageState(row)} · ${usageHook(row)} · lần tải gần nhất: ${usageValue('ago',p.fetched_at)}${err}${retry}</div></div>`;
 }
 function apply(s){if(!s)return 2000;
  if(!loaded){cfg=s.cfg;applyAccent(cfg.dashboard_accent);const backend=cfg.local_ai_backend||'ollama';lastBackend=backend;$('ai-backend').value=backend;$('ai-endpoint').value=cfg.local_ai_endpoint||endpointDefaults[backend];$('ai-model').value=cfg.local_ai_model||'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0';aiManual={endpoint:$('ai-endpoint').value,backend,model:$('ai-model').value};$('ai-managed').checked=aiManagedSaved=cfg.local_ai_managed===true;renderAiMode();$('interval').value=cfg.interval_sec;$('warn').value=cfg.warn_pct;$('block').value=cfg.block_pct;
   $('blocksw').checked=cfg.block_enabled;$('wsize').value=cfg.widget_size;$('wstyle').value=cfg.widget_style||'rings';$('wen').checked=cfg.widget_enabled;$('autosw').checked=cfg.autostart;$('trefsw').checked=cfg.token_refresh!==false;
-  $('wlabel').value=cfg.widget_label||'alias';$('wfont').value=cfg.widget_font||100;$('wopac').value=cfg.widget_opacity||100;$('wtheme').value=cfg.widget_theme||'auto';$('wplate').checked=!!cfg.widget_plate;const on=(k,d)=>cfg[k]===undefined?d:!!cfg[k];$('sl').checked=on('widget_show_label',true);$('s5').checked=on('widget_show_5h',true);$('s7').checked=on('widget_show_7d',true);const rm=on('widget_reset',true);$('r5').checked=rm&&on('widget_show_reset5',true);$('r7').checked=rm&&on('widget_show_reset7',true);$('wtip').checked=on('widget_tooltip',true);$('wsort').value=cfg.widget_sort||'config';$('wmax').value=cfg.widget_max_cells||0;$('nen').checked=cfg.notify_enabled;$('nwarn').checked=cfg.notify_warn;$('nblock').checked=cfg.notify_block;loaded=true;loadCleanConfig(cfg)}
+  $('wlabel').value=cfg.widget_label||'alias';$('wfont').value=cfg.widget_font||100;$('wopac').value=cfg.widget_opacity||100;$('wtheme').value=cfg.widget_theme||'auto';$('wplate').checked=!!cfg.widget_plate;const on=(k,d)=>cfg[k]===undefined?d:!!cfg[k];$('sl').checked=on('widget_show_label',true);$('s5').checked=on('widget_show_5h',true);$('s7').checked=on('widget_show_7d',true);const rm=on('widget_reset',true);$('r5').checked=rm&&on('widget_show_reset5',true);$('r7').checked=rm&&on('widget_show_reset7',true);$('wtip').checked=on('widget_tooltip',true);$('wsort').value=cfg.widget_sort||'config';$('wmax').value=cfg.widget_max_cells||0;$('nen').checked=cfg.notify_enabled;$('nwarn').checked=cfg.notify_warn;$('nblock').checked=cfg.notify_block;loaded=true;loadCleanConfig(cfg);settingsBaseline=collectSettings()}
  $('ver').textContent='v'+(s.version||'');
  const c=s.cache;if(!c){lastAccs='';setHTML('overview-quota','<div class="hdr">đang poll lần đầu...</div>');$('accs').innerHTML='<div class="hdr">đang poll lần đầu...</div>';return 700}
- if(!labelsBuilt){buildLabels(Object.keys(c.profiles),s.cfg);labelsBuilt=true}
+ if(!labelsBuilt){buildLabels(Object.keys(c.profiles),s.cfg);labelsBuilt=true;Object.assign(settingsBaseline,collectWidgetProfiles())}
  const busy=new Set(c.busy||[]);
- // The list is rebuilt ONLY when its structure changes. Rebuilding every poll restarted the spinner / pulse animations
- // (visible flicker). Countdown texts and tooltips are <span class="v"> / title, filled in place by fillLive().
- const V=(k,t)=>`<span class="v" data-k="${k}" data-t="${esc(t||'')}"></span>`;
- let h='';for(const[n,p]of Object.entries(c.profiles)){
-  const sp=busy.has(n)?'<span class="spin" title="đang gọi API"></span>':'';
-  if(p.five===undefined){h+=`<div class="acc ${busy.has(n)?'busy':''}" data-n="${esc(n)}"><div class="name">${esc(n)}${sp}</div><div class="err" style="${busy.has(n)?'color:var(--busy)':''}">${busy.has(n)?'đang lấy dữ liệu...':esc(p.err||'đang chờ dữ liệu...')+(p.retry_at?' · thử lại sau '+V('until',p.retry_at):'')}</div></div>`;continue}
-  const warn=p.err?`<div class="warn">⚠ ${esc(p.err)} · đang hiện dữ liệu cũ (${V('ago',p.fetched_at)}) · thử lại sau ${V('until',p.retry_at)}</div>`:'';
-  h+=`<div class="acc ${p.err?'stale':''} ${busy.has(n)?'busy':''}" data-n="${esc(n)}"><div class="name">${esc(n)}${sp}</div>
-   <div class="m"><div class="mr"><small>5h</small>${bar(p.five,c)}</div><br><small>reset ${V('reset',p.five_reset)}</small></div>
-   <div class="m"><div class="mr"><small>7d</small>${bar(p.week,c)}</div><br><small>reset ${V('reset',p.week_reset)}</small></div>${warn}</div>`}
+ // Keep the DOM stable across polls; only times update in place.
+ const rows=usageRows(c,s.cfg,s.usage_hooks||{});
+ const h=rows.map(usageAccount).join('');
  const changed=h!==lastAccs;
  if(changed){$('accs').innerHTML=h;lastAccs=h}
- setHTML('overview-quota',overviewQuota(c,s.cfg));
+ setHTML('overview-quota',overviewQuota(rows));
  fillLive(c.profiles);
  const age=Math.round(Date.now()/1000-c.ts), inflight=busy.size>0||waitingRefresh>Date.now()/1000;
  setHTML('stat',inflight?`<span class="spin"></span><span style="color:var(--busy)">đang cập nhật${busy.size?' '+busy.size+' account':''}...</span>`
@@ -331,13 +367,13 @@ function apply(s){if(!s)return 2000;
 let waitingRefreshStart=Date.now()/1000,lastAccs='';
 // replace an element's HTML only when it really changed (a rewrite restarts the CSS animations inside it)
 function setHTML(id,html){const e=$(id);if(e._h!==html){e.innerHTML=html;e._h=html}}
-const LIVE={ago:t=>ago(+t),until:t=>until(+t),reset:t=>reset(t)};
+const LIVE={ago:t=>+t?ago(+t):'chưa có',until:t=>until(+t),reset:t=>reset(t)};
 function fillLive(profiles){
- document.querySelectorAll('#accs .v').forEach(e=>{const t=LIVE[e.dataset.k](e.dataset.t);if(e.textContent!==t)e.textContent=t});
+ document.querySelectorAll('#accs .v,#overview-quota .v').forEach(e=>{const t=LIVE[e.dataset.k](e.dataset.t);if(e.textContent!==t)e.textContent=t});
  document.querySelectorAll('#accs .acc[data-n]').forEach(e=>{const p=profiles[e.dataset.n];if(p&&p.five!==undefined){const t=tipText(e.dataset.n,p);if(e.title!==t)e.title=t}})}
 let labelsBuilt=false,autoT=null;
 const esc=t=>String(t).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-function buildLabels(names,cfg){const al=cfg.aliases||{},hid=cfg.widget_hidden||[];
+function buildLabels(names,cfg){const al=cfg.aliases||{},hid=cfg.widget_hidden||[];widgetProfilesSeed={aliases:al,hidden:hid};
  $('acclabels').innerHTML=names.map(n=>`<div class="al"><span title="${esc(n)}">${esc(n)}</span><input type="text" maxlength="10" data-n="${esc(n)}" placeholder="tự động" value="${esc(al[n]||'')}"><label class="chk" style="grid-column:auto"><input type="checkbox" data-show="${esc(n)}" ${hid.includes(n)?'':'checked'}>hiện</label></div>`).join('')}
 let cleanTimer=null,cleanPolling=false,cleanPhase='',cleanStatus=null,cleanScanned=false,cleanSelection=null;
 let cleanTab='artifacts',cleanReview=null,cleanConfig=null,cleanConfigBusy=false,cleanSubmitting=false,cleanScanStarting=false,dupsScanStarting=false;
@@ -543,7 +579,9 @@ function toolTab(t){
  }
  fit(true)
 }
-async function copyResult(id){const el=$(id),text=(el.value!==undefined?el.value:el.innerText||'').trim();if(id!=='ocr-out'&&el.dataset.valid!=='true')return toast('Chưa có kết quả để sao chép');if(id==='ocr-out'&&!ocrResultValid)return toast('Chưa có kết quả OCR để sao chép');if(!text||text==='Kết quả sẽ hiển thị ở đây.'||text==='Đang xử lý…'||text.startsWith('Local AI chưa sẵn sàng'))return toast('Chưa có kết quả để sao chép');try{await navigator.clipboard.writeText(text);toast('Đã sao chép');return true}catch(e){const tmp=document.createElement('textarea');tmp.value=text;tmp.style.cssText='position:fixed;opacity:0';document.body.appendChild(tmp);tmp.select();const ok=document.execCommand('copy');tmp.remove();toast(ok?'Đã sao chép':'Không sao chép được');return ok}}
+function textResultValue(out){return out.childElementCount?out.innerText:out.textContent}
+async function copyResult(id){const el=$(id);
+ const text=id==='grammar-out'||id==='translation-out'?textResultValue(el):(el.value!==undefined?el.value:el.innerText||'').trim();if(id!=='ocr-out'&&el.dataset.valid!=='true')return toast('Chưa có kết quả để sao chép');if(id==='ocr-out'&&!ocrResultValid)return toast('Chưa có kết quả OCR để sao chép');if(!text.trim())return toast('Chưa có kết quả để sao chép');try{await navigator.clipboard.writeText(text);toast('Đã sao chép');return true}catch(e){const tmp=document.createElement('textarea');tmp.value=text;tmp.style.cssText='position:fixed;opacity:0';document.body.appendChild(tmp);tmp.select();const ok=document.execCommand('copy');tmp.remove();toast(ok?'Đã sao chép':'Không sao chép được');return ok}}
 const OCR_PLACEHOLDER='Kết quả OCR sẽ hiển thị ở đây.';
 let ocrImage=null,ocrImageVersion=0,ocrInputVersion=0,ocrBusy=false,ocrResultValid=false;
 let queuedOcr=null,ocrInlineBusy=false,ocrTextVersion=0,regularAiRequests=0;
@@ -585,10 +623,10 @@ window.showQuickCapture=function(data,error,token){
 $('ocr-out').addEventListener('input',()=>{if(ocrResultValid){resetOcrTranslation();syncOcrButtons()}});
 
 function syncOcrButtons(){
- $('ocr-run').disabled=!ocrImage||ocrBusy||ocrInlineBusy||queuedOcr!==null;
+ $('ocr-run').disabled=!ocrImage||ocrBusy||ocrInlineBusy||queuedOcr!==null||regularAiRequests>0||aiCheckBusy;
  $('ocr-remove').disabled=!ocrImage;
  $('ocr-copy').disabled=!ocrResultValid;
- document.querySelector('#tool-ocr [data-quick-translate]').disabled=!ocrResultValid||ocrInlineBusy;
+ document.querySelector('#tool-ocr [data-quick-translate]').disabled=!ocrResultValid||ocrInlineBusy||regularAiRequests>0||aiCheckBusy;
 }
 function setOcrImage(data){
  ocrImage=data;
@@ -639,21 +677,103 @@ function translateOcr(){
  const text=($('ocr-out').innerText||'').trim();
  if(!ocrResultValid||!text)return toast('Chưa có kết quả OCR để dịch');
  if(document.body.classList.contains('ocr-popup'))return runTool('translation',true);
- $('translation-in').value=text;
+ setTextDraft('translation',text);
  toolTab('translation');
- runTool('translation');
+ void runTextTool('translation',true);
+}
+const textTools={grammar:{rev:0,edit:0,phase:'idle',request:0,busy:false},translation:{rev:0,edit:0,phase:'idle',request:0,busy:false}};
+let queuedText=null;
+function syncTextControls(){
+ for(const [kind,st] of Object.entries(textTools)){
+  const out=$(kind+'-out'),valid=!!textResultValue(out).trim();
+  out.dataset.valid=String(valid);
+  $(kind+'-copy').disabled=!valid;
+  $(kind+'-run').disabled=!$(kind+'-in').value.trim()||regularAiRequests>0||ocrBusy||ocrInlineBusy||aiCheckBusy;
+  setText(kind+'-run',st.busy?'Đang xử lý…':st.phase==='error'?'Thử lại':kind==='grammar'?'Kiểm tra':'Dịch');
+ }
+}
+function showTextState(kind,state,text){
+ const st=textTools[kind],status=$(kind+'-status');
+ st.phase=state;status.dataset.state=state;setText(kind+'-status',text);syncTextControls();
+}
+function changeTextDraft(kind){
+ const st=textTools[kind];
+ st.rev++;
+ if(queuedText?.kind===kind)queuedText=null;
+ $(kind+'-recovery').hidden=true;
+ const hasOutput=!!textResultValue($(kind+'-out')).trim();
+ showTextState(kind,hasOutput?'stale':'draft',hasOutput?'Đầu vào đã đổi. Kết quả trước vẫn có thể sao chép.':'Nội dung đã sẵn sàng.');
+}
+function setTextDraft(kind,value){$(kind+'-in').value=value;changeTextDraft(kind)}
+for(const kind of Object.keys(textTools)){
+ $(kind+'-in').addEventListener('input',()=>changeTextDraft(kind));
+ $(kind+'-out').addEventListener('input',()=>{
+  textTools[kind].edit++;
+  showTextState(kind,'edited','Đã sửa kết quả. Có thể sao chép nội dung hiện tại.');
+ });
+}
+$('translation-lang').addEventListener('change',()=>changeTextDraft('translation'));
+function drainText(){
+ if(!queuedText||regularAiRequests||ocrBusy||ocrInlineBusy||aiCheckBusy)return;
+ const next=queuedText;queuedText=null;
+ const state=textTools[next.kind];
+ if(state.rev===next.rev&&state.edit===next.edit&&$(next.kind+'-in').value===next.input&&
+  document.querySelector('#tool-'+next.kind+'.on'))void runTextTool(next.kind);
+ else if(state.phase==='queued')showTextState(next.kind,'draft','Yêu cầu chưa chạy. Nhấn nút xử lý để thử lại.');
+}
+function settleAiWork(){drainOcr();drainText();syncTextControls();syncOcrButtons()}
+async function runTextTool(kind,queueIfBusy=false){
+ const state=textTools[kind],box=$(kind+'-in'),out=$(kind+'-out'),draft=box.value;
+ if(!draft.trim()){showTextState(kind,'idle','Hãy nhập hoặc dán nội dung.');box.focus();return}
+ if(regularAiRequests||ocrBusy||ocrInlineBusy||aiCheckBusy){
+  if(queueIfBusy){
+   if(queuedText&&queuedText.kind!==kind)
+    showTextState(queuedText.kind,'draft','Yêu cầu chưa chạy. Nhấn nút xử lý để thử lại.');
+   queuedText={kind,rev:state.rev,edit:state.edit,input:draft};
+   showTextState(kind,'queued','Đang đợi Local AI xử lý yêu cầu trước…');
+  }
+  return;
+ }
+ const target=kind==='translation'?$('translation-lang').value:null,original=textResultValue(out);
+ const ai=aiSnapshot(),configGen=aiCheckGeneration,rev=state.rev,edit=state.edit,request=++state.request;
+ const recovery=$(kind+'-recovery');
+ const stillCurrent=()=>request===state.request&&rev===state.rev&&edit===state.edit&&box.value===draft&&textResultValue(out)===original&&
+  (kind!=='translation'||$('translation-lang').value===target);
+ function failure(code){
+  if(!stillCurrent())return;
+  recovery.hidden=['request_too_large','busy'].includes(code);
+  showTextState(kind,'error',aiError(code,ai,kind)+' Có thể thử lại mà không mất nội dung.');
+ }
+ state.busy=true;regularAiRequests++;recovery.hidden=true;syncOcrButtons();
+ showTextState(kind,'processing','Đang xử lý… Bạn vẫn có thể sửa hoặc sao chép kết quả hiện tại.');
+ try{
+  const missing=aiConfigError(ai,true);
+  if(missing){failure(missing);return}
+  const r=await api.local_chat({endpoint:ai.endpoint,backend:ai.backend,model:ai.model,task:kind,text:draft,target,image:null});
+  if(!stillCurrent())return;
+  if(configGen!==aiCheckGeneration||!aiSame(ai,aiSnapshot())){failure('configuration_changed');return}
+  if(typeof r?.text!=='string'||!r.text.trim()){failure(r?.code||'empty_response');return}
+  out.textContent=r.text;
+  showTextState(kind,'ready','Xong. Có thể sửa hoặc sao chép kết quả.');
+ }catch(e){failure('bridge_error')}
+ finally{
+  state.busy=false;regularAiRequests--;
+  if(state.phase==='processing')showTextState(kind,'stale','Nội dung đã đổi. Chạy lại để lấy kết quả mới.');
+  settleAiWork();fit();
+ }
 }
 async function runTool(kind,inline=false){
- const isOcr=kind==='ocr',input=isOcr?'':inline?$('ocr-out').innerText.trim():$(kind+'-in').value.trim();
- if(!isOcr&&!input){toast('Hãy nhập nội dung trước');$(kind+'-in').focus();return}
- if((isOcr&&(ocrBusy||ocrInlineBusy))||(inline&&(!ocrResultValid||ocrInlineBusy)))return;
+ if(kind!=='ocr'&&!inline)return runTextTool(kind);
+ const isOcr=kind==='ocr',input=isOcr?'':$('ocr-out').innerText.trim();
+ if(!isOcr&&!input){toast('Chưa có kết quả OCR để dịch');return}
+ if(regularAiRequests||aiCheckBusy||(isOcr&&(ocrBusy||ocrInlineBusy))||(inline&&(!ocrResultValid||ocrInlineBusy)))return;
  if(isOcr&&!ocrImage){toast('Hãy dán hoặc chụp ảnh trước');return}
- const out=$(inline?'ocr-translation-out':kind+'-out'),button=$(kind+'-run'),ai=aiSnapshot(),generation=aiCheckGeneration;
- const imageVersion=ocrImageVersion,textVersion=ocrTextVersion,recovery=$(inline?'ocr-recovery':kind+'-recovery');
- const stillCurrent=()=>inline?imageVersion===ocrImageVersion&&textVersion===ocrTextVersion:!isOcr||imageVersion===ocrImageVersion;
+ const out=$(inline?'ocr-translation-out':'ocr-out'),ai=aiSnapshot(),generation=aiCheckGeneration;
+ const imageVersion=ocrImageVersion,textVersion=ocrTextVersion,recovery=$('ocr-recovery');
+ const stillCurrent=()=>imageVersion===ocrImageVersion&&(!inline||textVersion===ocrTextVersion);
  if(isOcr){resetOcrTranslation();ocrBusy=true;ocrResultValid=false;setText('ocr-status','Đang nhận chữ…');syncOcrButtons()}
- else if(inline){ocrInlineBusy=true;$('ocr-inline').hidden=false;$('ocr-translation-copy').disabled=true;syncOcrButtons()}
- else {regularAiRequests++;button.disabled=true}
+ else {ocrInlineBusy=true;$('ocr-inline').hidden=false;$('ocr-translation-copy').disabled=true;syncOcrButtons()}
+ syncTextControls();
  recovery.hidden=true;out.dataset.valid='false';out.textContent='Đang xử lý…';
  const failure=(code)=>{
   if(!stillCurrent())return;
@@ -664,17 +784,15 @@ async function runTool(kind,inline=false){
  try{
   const missing=aiConfigError(ai,true);
   if(missing){failure(missing);return}
-  const r=await api.local_chat({endpoint:ai.endpoint,backend:ai.backend,model:ai.model,task:kind,text:input,target:kind==='translation'?(inline?'vi':$('translation-lang').value):null,image:isOcr?ocrImage:null});
+  const r=await api.local_chat({endpoint:ai.endpoint,backend:ai.backend,model:ai.model,task:kind,text:input,target:inline?'vi':null,image:isOcr?ocrImage:null});
   if(!stillCurrent())return;
   if(generation!==aiCheckGeneration||!aiSame(ai,aiSnapshot())){failure('configuration_changed');return}
   if(typeof r?.text!=='string'||!r.text.trim()){failure(r?.code||'empty_response');return}
   out.textContent=r.text;out.dataset.valid='true';if(isOcr){ocrResultValid=true;setText('ocr-status','Đã nhận chữ.')}if(inline)$('ocr-translation-copy').disabled=false;
  }catch(e){failure('bridge_error')}
  finally{
-  if(isOcr){ocrBusy=false;syncOcrButtons();drainOcr()}
-  else if(inline){ocrInlineBusy=false;syncOcrButtons();drainOcr()}
-  else {regularAiRequests--;button.disabled=false;drainOcr()}
-  fit();
+  if(isOcr)ocrBusy=false;else ocrInlineBusy=false;
+  syncOcrButtons();settleAiWork();fit();
  }
 }
 function aiSnapshot(){const a=effectiveAi();return {endpoint:a.endpoint.trim(),backend:a.backend,model:a.model.trim(),managed:$('ai-managed').checked}}
@@ -734,7 +852,7 @@ async function inspectAi(test){
  const fail=code=>{if(current())setAiStatus(code,aiError(code,ai,test?'ocr':null))};
  const missing=aiConfigError(ai,test);
  if(missing){fail(missing);return}
- aiCheckBusy=true;syncAiControls();
+ aiCheckBusy=true;syncAiControls();syncTextControls();syncOcrButtons();
  setAiStatus('checking','Đang kiểm tra kết nối…');
  try{
   const r=await api.local_models(ai.endpoint,ai.backend);
@@ -754,7 +872,7 @@ async function inspectAi(test){
   }
   setAiStatus('ready','Sẵn sàng: model đã đọc đúng ảnh mẫu. Bấm Lưu Local AI để giữ cấu hình.');
  }catch(e){fail('bridge_error')}
- finally{aiCheckBusy=false;syncAiControls();drainOcr()}
+ finally{aiCheckBusy=false;syncAiControls();settleAiWork()}
 }
 function checkAi(){return inspectAi(false)}
 function listModels(){return inspectAi(false)}
@@ -780,22 +898,41 @@ $('ai-backend').addEventListener('change',()=>{const next=$('ai-backend').value;
 $('ai-model').addEventListener('input',()=>{if(!$('ai-managed').checked)aiManual.model=$('ai-model').value;resetAiCheck(false)});
 $('ai-managed').addEventListener('change',()=>{if($('ai-managed').checked){aiManual={endpoint:$('ai-endpoint').value,backend:$('ai-backend').value,model:$('ai-model').value}}renderAiMode();resetAiCheck(true)});
 function tab(t){
- $('gen').hidden=t!=='gen';$('look').hidden=t!=='look';$('clean').hidden=t!=='clean';
- $('t-gen').classList.toggle('on',t==='gen');$('t-look').classList.toggle('on',t==='look');$('t-clean')?.classList.toggle('on',t==='clean');
+ for(const key of ['gen','look','alerts','hooks','clean']){ $(key).hidden=key!==t;const button=$('t-'+key);if(button){button.classList.toggle('on',key===t);button.setAttribute('aria-pressed',String(key===t))} }
+ if(t==='hooks')void hookStatus().catch(()=>{});
  if(t==='clean'){const epoch=cleanEpoch;api.cleaner_status().then(s=>{if(epoch!==cleanEpoch)return;applyClean(s);if(s&&(s.phase==='scanning'||s.phase==='cleaning'))startCleanPoll()}).catch(()=>{});api.cleaner_dups_status().then(s=>{applyDups(s);if(s&&s.phase==='scanning')startDupsPoll()}).catch(()=>{})}
  else {cancelCleanReview();stopCleanPoll();stopDupsPoll()}
  fit(true)
 }
 function autoSave(){clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;save(true)},450)}
-let saving=Promise.resolve();   // the save call still on its way to Python: closing waits for it, or the change could be lost
+let saving=Promise.resolve(),settingsBaseline=null,widgetProfilesSeed=null;
 async function closeDash(){if(autoT){clearTimeout(autoT);autoT=null;try{await save(true)}catch(e){}}try{await saving;await accentSaving}catch(e){}api.hide()}
-async function save(quiet){const n=x=>parseInt($(x).value);
- const look={widget_label:$('wlabel').value,widget_font:Math.min(150,Math.max(80,n('wfont')||100)),widget_opacity:Math.min(100,Math.max(30,n('wopac')||100)),widget_theme:$('wtheme').value,widget_plate:$('wplate').checked,widget_show_label:$('sl').checked,widget_show_5h:$('s5').checked,widget_show_7d:$('s7').checked,widget_show_reset5:$('r5').checked,widget_show_reset7:$('r7').checked,widget_reset:$('r5').checked||$('r7').checked,widget_tooltip:$('wtip').checked,widget_sort:$('wsort').value,widget_max_cells:Math.max(0,Math.min(60,n('wmax')||0))};
- if(labelsBuilt){look.aliases={};document.querySelectorAll('#acclabels input[data-n]').forEach(i=>{if(i.value.trim())look.aliases[i.dataset.n]=i.value.trim()});
-  look.widget_hidden=[...document.querySelectorAll('#acclabels input[data-show]')].filter(i=>!i.checked).map(i=>i.dataset.show)}
- const r=await (saving=api.save({interval_sec:Math.max(90,n('interval')||180),warn_pct:n('warn')||80,block_pct:n('block')||95,
-  ...look,block_enabled:$('blocksw').checked,widget_size:Math.min(64,Math.max(24,n('wsize')||36)),widget_style:$('wstyle').value,widget_enabled:$('wen').checked,autostart:$('autosw').checked,token_refresh:$('trefsw').checked,
-  notify_enabled:$('nen').checked,notify_warn:$('nwarn').checked,notify_block:$('nblock').checked}));if(!quiet)toast(r?'đã lưu':'lỗi')}
+function collectWidgetProfiles(){
+ if(!labelsBuilt)return {};
+ const aliases={...(widgetProfilesSeed?.aliases||{})},hidden=new Set(widgetProfilesSeed?.hidden||[]);
+ document.querySelectorAll('#acclabels input[data-n]').forEach(i=>{if(i.value.trim())aliases[i.dataset.n]=i.value.trim();else delete aliases[i.dataset.n]});
+ document.querySelectorAll('#acclabels input[data-show]').forEach(i=>{if(i.checked)hidden.delete(i.dataset.show);else hidden.add(i.dataset.show)});
+ return {aliases,widget_hidden:[...hidden]};
+}
+function collectSettings(){const n=x=>parseInt($(x).value);
+ return {interval_sec:Math.max(90,n('interval')||180),warn_pct:n('warn')||80,block_pct:n('block')||95,
+  widget_label:$('wlabel').value,widget_font:Math.min(150,Math.max(80,n('wfont')||100)),widget_opacity:Math.min(100,Math.max(30,n('wopac')||100)),widget_theme:$('wtheme').value,widget_plate:$('wplate').checked,widget_show_label:$('sl').checked,widget_show_5h:$('s5').checked,widget_show_7d:$('s7').checked,widget_show_reset5:$('r5').checked,widget_show_reset7:$('r7').checked,widget_reset:$('r5').checked||$('r7').checked,widget_tooltip:$('wtip').checked,widget_sort:$('wsort').value,widget_max_cells:Math.max(0,Math.min(60,n('wmax')||0)),
+  ...collectWidgetProfiles(),block_enabled:$('blocksw').checked,widget_size:Math.min(64,Math.max(24,n('wsize')||36)),widget_style:$('wstyle').value,widget_enabled:$('wen').checked,autostart:$('autosw').checked,token_refresh:$('trefsw').checked,
+  notify_enabled:$('nen').checked,notify_warn:$('nwarn').checked,notify_block:$('nblock').checked};
+}
+function save(quiet){
+ const current=collectSettings();
+ const job=saving.catch(()=>{}).then(async()=>{
+  const patch=Object.fromEntries(Object.entries(current).filter(([k,v])=>JSON.stringify(v)!==JSON.stringify(settingsBaseline?.[k])));
+  let ok=true;
+  try{if(Object.keys(patch).length)ok=!!(await api.save(patch))}catch(e){ok=false}
+  if(ok)Object.assign(settingsBaseline??={},patch);
+  if(!quiet||!ok)toast(ok?'Đã lưu cài đặt':'Không lưu được cài đặt');
+  return ok;
+ });
+ saving=job;
+ return job;
+}
 async function refresh(){if($('rbtn').disabled)return;waitingRefreshStart=Date.now()/1000;waitingRefresh=waitingRefreshStart+8;
  $('rbtn').disabled=true;$('rbtn').textContent='đang refresh…';setHTML('stat','<span class="spin"></span><span style="color:var(--busy)">đang gửi yêu cầu...</span>');
  await api.refresh();schedule(400)}
@@ -808,6 +945,7 @@ document.addEventListener('keydown',e=>{const t=e.target;if(!(t instanceof Eleme
 $('look').addEventListener('input',autoSave);$('look').addEventListener('change',autoSave);
 let accentSaving=Promise.resolve();$('accent').addEventListener('change',()=>{const value=applyAccent($('accent').value);accentSaving=api.save({dashboard_accent:value}).then(ok=>{if(!ok)toast('Không lưu được màu giao diện')}).catch(()=>toast('Không lưu được màu giao diện'))});
 if(window.__INIT__)apply(window.__INIT__);
+syncTextControls();
 // Quick popup keeps the same tool panels/bridge but skips dashboard polling and navigation.
 if(window.__QUICK_MODE__){
  document.body.classList.add('quick');

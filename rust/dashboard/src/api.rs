@@ -481,18 +481,52 @@ impl Core {
         config::save_config(&self.paths, cfg).is_ok()
     }
 
+    /// Decide against the actual configured profile and the same live cache as hook CLI.
+    /// A threshold alone never implies a hook is installed or could block.
+    fn usage_hooks(cfg: &Config, cache: Option<&Value>, now: f64) -> Value {
+        use hookinstall::HookExecution;
+        let mut statuses = serde_json::Map::new();
+        let policies_on = cfg.get("block_enabled").is_some_and(truthy);
+        for p in config::profiles(cfg) {
+            let profile = HookProfile::new(&p.name, &p.path);
+            let status = match hookinstall::execution(&profile) {
+                HookExecution::Missing => "missing",
+                HookExecution::Unreadable => "unreadable",
+                HookExecution::Disabled => "disabled",
+                HookExecution::Unusable => "unusable",
+                HookExecution::Ready => {
+                    let me = cu_core::hook::norm_path(&p.path);
+                    // The CLI uses the first matching path in cache order; don't attribute
+                    // that policy to a second profile alias pointing at the same path.
+                    let matches_profile = cache.and_then(|c| c.get("profiles")?.as_object())
+                        .and_then(|profiles| profiles.iter().find_map(|(name, entry)| {
+                            let path = cu_core::hook::norm_path(entry.get("path")?.as_str()?)?;
+                            (Some(&path) == me.as_ref()).then_some(name)
+                        }))
+                        .is_some_and(|name| name == &p.name);
+                    if !policies_on { "policy_off" }
+                    else if matches_profile && cu_core::hook::evaluate(cache, now, &profile.path).code == 2 { "blocking" }
+                    else { "ready" }
+                }
+            };
+            statuses.insert(p.name, json!(status));
+        }
+        Value::Object(statuses)
+    }
+
     /// `Api.state()`
     pub fn state(&self) -> Value {
         let cfg = self.cfg();
         let interval = effective_interval(&cfg);
-        json!({"cfg": cfg, "cache": load_cache(&self.paths), "version": VERSION, "interval": interval})
+        let cache = load_cache(&self.paths);
+        let usage_hooks = Self::usage_hooks(&cfg, cache.as_ref(), cu_core::cache::now_ts());
+        json!({"cfg": cfg, "cache": cache, "usage_hooks": usage_hooks, "version": VERSION, "interval": interval})
     }
 
-    /// `page()`: ui.html with the current state inlined so the numbers show the instant the window appears.
-    pub fn page(&self, html: &str) -> String {
-        let init = json!({"cfg": self.cfg(), "cache": load_cache(&self.paths), "version": VERSION})
-            .to_string()
-            .replace("</", "<\\/");
+    /// Inline the dashboard state. Quick tools do not need usage or hook reads.
+    pub fn page(&self, html: &str, quick_mode: bool) -> String {
+        let init = if quick_mode { json!({"cfg": self.cfg(), "cache": null, "version": VERSION}) } else { self.state() };
+        let init = init.to_string().replace("</", "<\\/");
         html.replacen("/*__INIT__*/null", &init, 1)
     }
 
@@ -1217,7 +1251,7 @@ mod tests {
         let t = tempfile::tempdir().unwrap();
         let c = core(t.path());
         c.save(&json!({"aliases": {"a": "</script>"}}));
-        let p = c.page("x=/*__INIT__*/null; y=/*__INIT__*/null;");
+        let p = c.page("x=/*__INIT__*/null; y=/*__INIT__*/null;", false);
         assert!(p.starts_with("x={\"cfg\":"), "{p}");
         assert!(p.contains(&format!("\"version\":\"{VERSION}\"")), "{p}");
         assert!(!p.contains("</script>") && p.contains("<\\/script>"));
@@ -1400,6 +1434,50 @@ mod tests {
         assert_eq!(done["last_run"]["mode"], "recycle");
         assert!(std::path::Path::new(a.as_str().unwrap()).is_dir());
         assert!(std::path::Path::new(b.as_str().unwrap()).is_dir());
+    }
+
+    #[test]
+    fn profile_hook_badge_requires_a_usable_hook_and_actual_cli_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let executable = tmp.path().join("claude-usage.exe");
+        fs::write(&executable, b"fixture only, never executed").unwrap();
+        let missing_exe = tmp.path().join("old").join("claude-usage.exe");
+        let mut profiles = Vec::new();
+        let mut cached = serde_json::Map::new();
+        for (name, state) in [
+            ("active", "ready"),
+            ("alias", "ready"),
+            ("off", "disabled"),
+            ("removed", "missing"),
+            ("broken", "unusable"),
+            ("bad", "unreadable"),
+            ("past", "under"),
+        ] {
+            let path = if name == "alias" { tmp.path().join("active") } else { tmp.path().join(name) };
+            fs::create_dir_all(&path).unwrap();
+            let settings = path.join("settings.json");
+            if !matches!(state, "missing" | "unreadable") {
+                let exe = if state == "unusable" { &missing_exe } else { &executable };
+                let doc = json!({"disableAllHooks": state == "disabled",
+                    "hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":hookinstall::command(exe)}]}]}});
+                fs::write(&settings, doc.to_string()).unwrap();
+            } else if state == "unreadable" {
+                fs::write(&settings, "{not json").unwrap();
+            }
+            profiles.push(json!({"name":name,"path":&path}));
+            cached.insert(name.into(), json!({"path":path,"five":if state=="under"{45}else{97},"week":10}));
+        }
+        let mut cfg: Config = serde_json::from_value(json!({"profiles":profiles,"block_enabled":true})).unwrap();
+        let mut cache = json!({"ts":2000,"block_enabled":true,"block_pct":95,"profiles":cached});
+        let got = Core::usage_hooks(&cfg, Some(&cache), 2010.0);
+        assert_eq!(got, json!({"active":"blocking","alias":"ready","off":"disabled","removed":"missing",
+            "broken":"unusable","bad":"unreadable","past":"ready"}));
+        assert_eq!(Core::usage_hooks(&cfg, Some(&cache), 2901.0)["active"], "ready");
+        cache["block_enabled"] = json!(false);
+        assert_eq!(Core::usage_hooks(&cfg, Some(&cache), 2010.0)["active"], "ready");
+        cfg.insert("block_enabled".into(), json!(false));
+        cache["block_enabled"] = json!(true);
+        assert_eq!(Core::usage_hooks(&cfg, Some(&cache), 2010.0)["active"], "policy_off");
     }
 
     #[test]

@@ -54,7 +54,32 @@ const covered = [...document.querySelectorAll('button')].filter(b => b.offsetPar
 check('no button covered by toast / overlay (clicks land first time)', covered.length === 0, JSON.stringify(covered));
 check('toast has pointer-events:none', getComputedStyle($('toast')).pointerEvents === 'none');
 
+// Ten synthetic profiles exercise the exact dashboard render, without modifying
+// the filesystem fixture or calling a credentialed provider.
+const actual = await api.state();
+const now = Date.now()/1000;
+const quota = (five,week,more={}) => ({five,week,five_reset:'2035-01-01Z',week_reset:'2035-02-01Z',fetched_at:now,...more});
+const ten = {normal:quota(22,24), refresh:{}, near:quota(84,13), stale:quota(10,98,{err:'HTTP 429',retry_at:now+99}),
+ 'tie-z':quota(95,21),'tie-a':quota(21,95), login:{status:401,err:'token hết hạn'}, urgent:quota(96,96),
+ waiting:{}, error:{err:'Timeout'}};
+apply({...actual,cache:{...actual.cache,profiles:ten,busy:['refresh']},usage_hooks:{urgent:'blocking','tie-a':'missing','tie-z':'unusable'}});
+const ordered=accs().map(n=>n.dataset.n);
+check('ten profiles ordered with deterministic attention then max usage and IDs', ordered.join() === 'urgent,login,tie-a,tie-z,stale,error,near,refresh,normal,waiting',ordered.join());
+check('overview and account list have identical urgency order', [...document.querySelectorAll('#overview-quota .quota-row')].map(e=>e.dataset.n).join()===ordered.join());
+const row = id=>accs().find(e=>e.dataset.n===id);
+check('threshold without usable hook only signals threshold', row('tie-a').dataset.attention==='threshold'&&
+ row('tie-a').querySelector('.usage-hook').dataset.kind==='missing'&&row('tie-z').querySelector('.usage-hook').dataset.kind==='unusable');
+check('last load and separate 5h/7d reset values remain inspectable', row('urgent').querySelectorAll('.usage-reset').length===2&&
+ row('urgent').querySelector('[data-window="5h"] [data-k=reset]').dataset.t!==row('urgent').querySelector('[data-window="7d"] [data-k=reset]').dataset.t&&
+ row('urgent').textContent.includes('lần tải gần nhất'));
+check('refreshing, login, stale and active hook labels distinct',row('refresh').querySelector('.spin')&&
+ row('login').querySelector('.usage-state').dataset.kind==='login'&&row('stale').classList.contains('stale')&&
+ row('urgent').querySelector('.usage-hook').dataset.kind==='blocking');
+apply(actual);
+
 // notification settings persist
+toolTab('settings');tab('alerts');await sleep(150);
+check('alerts are independent of accounts, widget and hooks', !$('alerts').hidden && $('look').hidden && $('hooks').hidden && !$('usage-accounts').getClientRects().length);
 $('nen').checked = false; $('nwarn').checked = false; $('nblock').checked = true; await save(); await sleep(400);
 let c = await cfgNow();
 check('notification toggles saved (master off, warn off, block on)', c.notify_enabled === false && c.notify_warn === false && c.notify_block === true);
@@ -68,8 +93,9 @@ check('widget style selector saved', (await cfgNow()).widget_style === 'cards');
 $('wstyle').value = 'rings'; await save(); await sleep(400);
 
 // appearance tab: hidden by default, auto-applies, per-account names + visibility
+tab('gen');await sleep(500);
 check('appearance tab is not shown by default (general tab is)', $('look').hidden === true && $('gen').hidden === false);
-check('settings box keeps only general + widget look tabs', document.querySelectorAll('.tabs .tab').length === 2);
+check('settings has separate general, widget, alerts and hooks tabs', document.querySelectorAll('.tabs .tab').length === 4);
 const hClosed = document.documentElement.scrollHeight;
 tab('look'); await sleep(1200);
 g = geo(); const rows = document.querySelectorAll('#acclabels .al').length;
@@ -136,6 +162,8 @@ check("'r' key refreshes (button shows the request)", $('rbtn').disabled === tru
 await stage('r_key');                                   // test: refresh.flag exists
 
 // hook buttons (sandbox profiles only)
+toolTab('settings');tab('hooks');
+check('hook controls are visible separately', !$('hooks').hidden && $('alerts').hidden && $('look').hidden);
 await hook('install'); await sleep(1400);
 check('hook status text shows 4/4', $('hookst').textContent.includes('4/4'), $('hookst').textContent);
 await stage('hook_installed');
@@ -144,7 +172,7 @@ check('hook status text shows 0/4 after uninstall', $('hookst').textContent.incl
 await stage('hook_uninstalled');
 
 // widget buttons
-document.querySelector('#gen button[onclick*="widget_unlock"]').click(); await sleep(600);
+tab('look');document.querySelector('#look button[onclick*="widget_unlock"]').click(); await sleep(600);
 check('unlock widget button', (await cfgNow()).widget_locked === false);
 document.querySelector('#gen button[onclick*="widget_reset"]').click(); await sleep(600);
 c = await cfgNow(); check('reset widget button', c.widget_locked === true && c.widget_cx === null && c.widget_size === 36);

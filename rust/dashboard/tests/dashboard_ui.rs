@@ -327,7 +327,7 @@ fn dashboard_process_end_to_end() {
     wait_for("quick window gone", 5, || window().is_null());
 
     // ---- run 3: result actions follow the active OCR image (mock model, real WebView) ----
-    let (_ocr, result) = run_script(
+    let (ocr, result) = run_script(
         &local,
         &home,
         tmp.path(),
@@ -335,6 +335,13 @@ fn dashboard_process_end_to_end() {
         include_str!("js/ocr_result.js"),
     );
     assert_eq!(result, json!({"ocr_result_lifecycle": true}), "{result}");
+    drop(ocr);
+    wait_for("OCR test window gone", 5, || window().is_null());
+
+    let (_text, result) = run_script(
+        &local, &home, tmp.path(), "text_tools", include_str!("js/text_tools.js"),
+    );
+    assert_eq!(result, json!({"text_tools": true}), "{result}");
 
     let log = fs::read_to_string(data.join("events.log")).unwrap_or_default();
     assert!(
