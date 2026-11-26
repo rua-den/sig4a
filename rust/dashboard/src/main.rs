@@ -85,6 +85,14 @@ impl QuickPresentation {
     }
 }
 
+fn anchor_capture(hwnd: isize, bounds: [i32; 4]) {
+    let area = win::capture_work_area(bounds, hwnd);
+    // Move the hidden HWND to its destination before measuring that monitor's DPI.
+    win::place(hwnd, geom::capture_popup(bounds, area, 1.0));
+    let scale = win::window_scale(hwnd);
+    win::place(hwnd, geom::capture_popup(bounds, area, scale));
+}
+
 fn start_capture(id: Option<u64>, window: &Window, proxy: &EventLoopProxy<Ev>) -> bool {
     if OCR_BUSY.swap(true, Ordering::AcqRel) {
         return false;
@@ -359,7 +367,9 @@ fn main() {
                 if win::send_quick(existing, &payload) { return; }
             }
         }
-        if !startup_ocr { win::focus(existing); } // Do not bring a popup into the captured pixels
+        // A quick process owns its visibility. In particular a timeout sending
+        // WM_COPYDATA while the first picker is active must not unhide that HWND.
+        if !quick_mode { win::focus(existing); }
         return;
     }
     let exe = std::env::current_exe().unwrap_or_default();
@@ -414,8 +424,22 @@ fn main() {
         let h = (315.0 * scale) as i32;
         win::place(window.hwnd() as isize, [wa[0] + (wa[2] - w).max(0) / 2, wa[1] + (wa[3] - h).max(0) / 3, w, h]);
     }
-    // Show the native picker while WebView2 initializes, not after a visible popup.
-    if startup_ocr { start_capture(None, &window, &proxy); }
+    // Cold Ctrl+Alt+O presents the picker immediately, before any WebView2 setup.
+    // The picker already has its own Win32 thread/message loop; wait for its result
+    // directly instead of posting a Tao event that could be pumped during WebView
+    // construction. A first Escape never constructs WebView or leaves a hidden app.
+    let initial_capture = if startup_ocr {
+        match region::capture() {
+            Ok(None) => win::terminate(),
+            Ok(Some(capture)) => {
+                anchor_capture(window.hwnd() as isize, capture.bounds);
+                Some(Ok(capture.image))
+            }
+            Err(error) => Some(Err(error)),
+        }
+    } else {
+        None
+    };
     let mut ctx = WebContext::new(Some(if quick_mode { storage_dir_named(&core.paths.data, "webview-quick") } else { storage_dir(&core.paths.data) }));
     let handler_proxy = proxy.clone();
     let mode_script = format!("window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
@@ -467,7 +491,10 @@ fn main() {
     let mut hidden_for_picker = startup_ocr;
     let mut want_reveal = false;
     let mut present = QuickPresentation::default();
-    let mut hotkey_result: Option<Result<String, String>> = None;
+    let mut hotkey_result = initial_capture;
+    if hotkey_result.is_some() {
+        present.await_render(started);
+    }
 
     event_loop.run(move |event, _, flow| {
         match event {
@@ -497,12 +524,8 @@ fn main() {
                     match result {
                         Ok(Some(capture)) => {
                             present.await_render(Instant::now());
-                            let area = win::capture_work_area(capture.bounds, app.hwnd);
                             app.anchored = true;
-                            // Move the hidden HWND to the destination before measuring its DPI.
-                            win::place(app.hwnd, geom::capture_popup(capture.bounds, area, 1.0));
-                            let scale = win::window_scale(app.hwnd);
-                            win::place(app.hwnd, geom::capture_popup(capture.bounds, area, scale));
+                            anchor_capture(app.hwnd, capture.bounds);
                             hotkey_result = Some(Ok(capture.image));
                             if let Some(id) = id {
                                 // Button and hotkey use the same guarded presentation path.
