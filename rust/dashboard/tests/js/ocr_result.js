@@ -56,7 +56,7 @@ try {
   node('translation-in').value = 'Preserve this draft.';
   assign('ai-endpoint', '');
   await runTool('translation');
-  check(!node('translation-recovery').hidden && node('translation-out').textContent.includes('Chưa có endpoint'), 'missing endpoint did not offer recovery');
+  check(!node('translation-recovery').hidden && node('translation-status').textContent.includes('Chưa có endpoint'), 'missing endpoint did not offer recovery');
   node('translation-recovery').click();
   check(node('tool-localai').classList.contains('on'), 'recovery did not open Local AI settings');
   assign('ai-endpoint', 'http://127.0.0.1:11434');

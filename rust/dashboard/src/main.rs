@@ -454,7 +454,7 @@ fn main() {
     let handler_proxy = proxy.clone();
     let mode_script = format!("window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
     let built = WebViewBuilder::new_with_web_context(&mut ctx)
-        .with_html(core.page(UI_HTML))
+        .with_html(core.page(UI_HTML, quick_mode))
         .with_initialization_script(SHIM)
         .with_initialization_script(&mode_script)
         .with_background_color((10, 10, 10, 255))

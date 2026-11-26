@@ -230,6 +230,61 @@ pub fn status(profiles: &[HookProfile]) -> Vec<(String, Option<bool>)> {
         .collect()
 }
 
+/// Inspection for the dashboard only. Never runs hooks or alters settings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookExecution {
+    Missing,
+    Unreadable,
+    Disabled,
+    Unusable,
+    Ready,
+}
+
+fn expected_executable(path: &Path) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    if !path.is_absolute() || !path.is_file() {
+        return false;
+    }
+    (|| -> std::io::Result<bool> {
+        let mut file = fs::File::open(path)?;
+        let mut dos = [0u8; 64];
+        file.read_exact(&mut dos)?;
+        if dos[..2] != *b"MZ" {
+            return Ok(false);
+        }
+        let offset = u64::from(u32::from_le_bytes(dos[60..64].try_into().unwrap()));
+        if offset < 64 || offset + 24 > file.metadata()?.len() {
+            return Ok(false);
+        }
+        file.seek(SeekFrom::Start(offset))?;
+        let mut pe = [0u8;24];
+        file.read_exact(&mut pe)?;
+        let characteristics = u16::from_le_bytes(pe[22..24].try_into().unwrap());
+        Ok(pe[..4] == *b"PE\0\0" && characteristics & 0x0002 != 0 && characteristics & 0x2000 == 0)
+    })().unwrap_or(false)
+}
+
+/// Only the exact quoted command this installation writes can be marked ready.
+/// This checks the configured executable offline, not whether any CLI session ran it.
+pub fn execution(profile: &HookProfile, expected_tray: &Path) -> HookExecution {
+    let Loaded::Doc(Value::Object(doc)) = load(&profile.settings()) else {
+        return HookExecution::Unreadable;
+    };
+    let Ok(installed) = ours(&doc) else { return HookExecution::Unreadable; };
+    if installed.is_empty() { return HookExecution::Missing; }
+    if doc.get("disableAllHooks").and_then(Value::as_bool) == Some(true) {
+        return HookExecution::Disabled;
+    }
+    let expected = command(expected_tray);
+    let usable = installed.iter().any(|h| {
+        h.get("type").and_then(Value::as_str) == Some("command")
+            && h.get("async").and_then(Value::as_bool) != Some(true)
+            && h.get("asyncRewake").and_then(Value::as_bool) != Some(true)
+            && h.get("command").and_then(Value::as_str) == Some(expected.as_str())
+    }) && expected_executable(expected_tray);
+    if usable { HookExecution::Ready } else { HookExecution::Unusable }
+}
+
 /// Lazy `any(_is_ours(h) ...)`: an error after the first hit is never reached (as in Python).
 fn scan_installed(data: &Map<String, Value>) -> Result<bool, Shape> {
     for g in groups_of(data)?.map_or(&[][..], |v| v) {
