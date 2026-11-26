@@ -1,7 +1,7 @@
 {
   "phase": 4,
   "title": "Safe disk cleaner",
-  "status": "pending",
+  "status": "in_progress",
   "goal": "Make selection and deletion consequences inspectable, with duplicate detection remaining report-only.",
   "dependencies": [
     "Phase 3 has gate.status = passed and all required evidence recorded"
@@ -16,6 +16,7 @@
     "Show explicit root selection for fresh setup and display saved roots before scanning. Show scope and any truncated or interrupted results.",
     "Show a review table with full path, artifact type, size and selection summary. Clear selection on each new scan.",
     "Make Recycle Bin the primary deletion mode and require a review confirmation with count and size. Make permanent removal a secondary action with its own explicit confirmation.",
+    "Bind the review to the exact selected artifact IDs, delete mode, and reviewed scan. Selection changes (including same-count swaps), a new or invalidated manifest, or navigation out of review invalidate approval.",
     "Disable action for zero selection, stale manifest or interrupted operation until safe revalidation. Report successes and failures distinctly.",
     "Separate duplicate reports into a read-only view. They must not populate artifact selection or enable any deletion."
   ],
@@ -25,7 +26,7 @@
         "id": "P4-AUTO-001",
         "case": "Safe review, selection and confirmation",
         "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_cleaner -- --test-threads=1",
-        "expected": "Zero selection at scan completion. Wrong or cancelled confirmation preserves all files. Correct confirmation affects only selected eligible artifacts.",
+        "expected": "Zero selection at scan completion. Wrong or cancelled confirmation preserves all files. Correct confirmation affects only selected eligible artifacts. Same-count A-to-B swaps, mode changes, cancellation, and new/stale manifests cannot submit under an earlier confirmation.",
         "status": "pending",
         "evidence": null
       },
@@ -96,9 +97,17 @@
     }
   ],
   "test_notes": [
-    "Do not test deletion against user folders. The live independent check can open and cancel confirmations, while the automated suite verifies deletion in temporary fixture data."
+    "Do not test deletion against user folders. The live independent check can open and cancel confirmations, while the automated suite verifies deletion in temporary fixture data.",
+    "Native acceptance opens and cancels confirmation on isolated synthetic data. Actual deletion tests use only temporary fixtures; verify duplicate file pre/post checksums and report any skipped or unavailable test."
   ],
-  "findings": [],
+  "findings": [
+    {
+      "status": "open",
+      "title": "A confirmation can silently apply to a different artifact",
+      "evidence": "Mocked the existing handler using two synthetic IDs; in both modes a same-count swap between the first and second click submitted the replacement. No actual deletion was performed.",
+      "required_fix": "Review exact IDs and scan; invalidate the old confirmation and add regressions for both modes."
+    }
+  ],
   "gate": {
     "status": "pending",
     "closed_at": null,
@@ -111,5 +120,7 @@
       "affected tests re-passed after any fix"
     ],
     "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
-  }
+  },
+  "started_at": "2026-11-26T18:29:50.806Z",
+  "baseline": "ed8601b10bbefe2b5a880f788ac7be2eced57a21"
 }
