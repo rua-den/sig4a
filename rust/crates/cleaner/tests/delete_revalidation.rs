@@ -278,3 +278,37 @@ fn valid_item_is_deleted_through_the_injected_view() {
         &[(item.id.clone(), Mode::Permanent)]
     );
 }
+
+#[test]
+fn recursive_target_containing_a_protected_descendant_is_never_called() {
+    let root = r"D:\rv";
+    let target = r"D:\rv\app\bin";
+    let protected = r"D:\rv\app\bin\personal";
+    let mut fs = MemoryFs::new();
+    fs.dir(r"D:\rv\app")
+        .file(r"D:\rv\app\app.csproj")
+        .dir(target)
+        .dir(protected)
+        .file(r"D:\rv\app\bin\personal\keep.txt");
+    let item = Item::new(target.into(), 1, RuleKind::Bin);
+    let mut options = opts(root);
+    options.forbidden.push(PathBuf::from(protected));
+    let deleter = RecordingDeleter::new();
+    let out = clean_with(&manifest_of(&item), &[item.id.clone()], Mode::Permanent, &options, &fs, &deleter, &MemoryJournal::default());
+    assert!(!out[0].ok);
+    assert!(out[0].err.as_deref().unwrap().contains("contains forbidden path"));
+    assert!(deleter.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn original_ancestor_that_became_reparse_is_rejected() {
+    let mut fs = MemoryFs::new();
+    fs.dir(r"D:\rv\app")
+        .file(r"D:\rv\app\p.csproj")
+        .dir(r"D:\rv\app\bin");
+    let item = Item::new(r"D:\rv\app\bin".into(), 1, RuleKind::Bin);
+    let options = opts(r"D:\rv");
+    assert!(validate_target_with(&item, &options, &fs).is_ok());
+    fs.set_reparse(r"D:\rv\app");
+    assert!(validate_target_with(&item, &options, &fs).unwrap_err().contains("reparse"));
+}

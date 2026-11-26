@@ -82,11 +82,19 @@ textarea:focus{outline:0;border-color:var(--accent)}
 .cbar i{display:block;height:7px;border-radius:2px;background:var(--c,var(--accent))}
 .cbar>b{color:var(--dim);font-weight:500;font-size:11px;text-align:right;white-space:nowrap}
 .cbar .track{height:7px;background:#2b2b2b;border-radius:2px;overflow:hidden}
-@media (max-width:640px){.charts{grid-template-columns:1fr;gap:0}.chart{max-height:90px}.charts .box{padding:2px 8px}.cbar{font-size:11px;line-height:1.25}#clean{gap:0 10px}#croots{height:40px}#dlist{max-height:30px}.dgrp{padding:1px 0}#dstatus{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}main{padding:4px 10px}.box{padding:3px 10px}.set{gap:3px 10px}.sep{display:none}}
-.cl-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:2px 0;cursor:pointer}
-.cl-row span{color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.cl-row b{color:var(--accent);font-weight:500;white-space:nowrap}
-.cl-row small{color:var(--dim);white-space:nowrap}
+@media (max-width:640px){.charts{grid-template-columns:1fr;gap:0}.chart{max-height:90px}.charts .box{padding:2px 8px}.cbar{font-size:11px;line-height:1.25}#clean{gap:0 10px}#croots{height:40px}#dlist{max-height:190px}.dgrp{padding:1px 0}main{padding:4px 10px}.box{padding:3px 10px}.set{gap:3px 10px}.sep{display:none}}
+.clean-wide{grid-column:1/-1!important;min-width:0}
+.clean-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+#clean-saved-roots,#clean-review-paths{padding-left:18px;margin:4px 0;overflow-wrap:anywhere;user-select:text}
+#clean-review h3,#clean-review p{margin:6px 0}
+#clean-review{margin:8px 0}
+#clean-review-paths{max-height:135px;overflow-y:auto}
+#cleanlist table{width:100%;border-collapse:collapse;text-align:left}
+#cleanlist th,#cleanlist td{padding:3px 5px;border-bottom:1px solid var(--line);vertical-align:top}
+#cleanlist .clean-path,.dgrp .dp,#clean-scope,#dups-scope,#cresult{overflow-wrap:anywhere;white-space:normal;user-select:text}
+#cleanlist td:not(.clean-path){white-space:nowrap}
+#cleanlist th{position:sticky;top:0;background:var(--panel);z-index:1}
+#cleanlist:empty,#dlist:empty{display:none}
 #autofit{cursor:pointer}#autofit:hover{color:var(--accent)}
 #toast{position:fixed;right:16px;bottom:40px;background:var(--panel);border:1px solid var(--accent);color:var(--accent);padding:6px 12px;border-radius:4px;opacity:0;transition:.2s;max-width:420px;pointer-events:none}
 #toast.on{opacity:1}
@@ -168,23 +176,41 @@ textarea:focus{outline:0;border-color:var(--accent)}
     <div id="acclabels"></div>
   </div>
   <div class="set" id="clean" hidden>
-   <label style="grid-column:1/-1!important">Thư mục cần quét (mỗi dòng một đường dẫn — sửa xong bấm lưu rồi Quét)<textarea id="croots" rows="3" spellcheck="false"></textarea></label>
-   <label>Bỏ qua project vừa build trong N ngày (0 = không bỏ qua)<input type="number" id="cdays" min="0" max="365" title="Bỏ qua project vừa build trong N ngày; 0 = không bỏ qua"></label>
-   <div class="grp" style="grid-column:span 6"><button class="b" id="csave" onclick="saveCleanConfig()">lưu cấu hình dọn ổ</button></div>
-   <div class="sep"></div>
-   <div class="grp" style="grid-column:span 6"><button class="b p" id="cscan" onclick="scanClean()">Quét</button><span id="cstatus">chưa quét</span></div>
-   <div id="cleanlist"></div>
-   <div class="charts">
-    <div class="box"><div class="lbl">THƯ MỤC NẶNG</div><div class="chart" id="chartFolders"></div></div>
-    <div class="box"><div class="lbl">FILE NẶNG (trong artefact đã quét)</div><div class="chart" id="chartFiles"></div></div>
-   </div>
-   <div class="sep"></div>
-    <div class="grp" id="drootwarn" style="grid-column:span 3;color:var(--warn);font-size:11px" hidden>⚠ Đang quét gốc ổ: có thể chậm và kết quả bị cắt (xem số file đã quét).</div>
-    <div class="grp" style="grid-column:span 6"><label style="flex-direction:row;color:var(--fg)">File trùng <small style="color:var(--dim)"> · chỉ phát hiện, không xoá</small></label><label style="flex-direction:row;align-items:center;gap:6px;color:var(--dim);font-size:11px">Bỏ qua file nhỏ hơn (KB, 0 = mọi file)<input type="number" id="dmin" min="0" style="width:58px;padding:2px 6px"></label><button class="b" id="dscan" onclick="scanDups()">Tìm file trùng</button><span id="dstatus">chưa quét</span></div>
-    <div id="dlist"></div>
-    <div class="grp" id="ctotal" style="grid-column:span 6"></div>
-   <div class="grp" id="cresult" style="grid-column:span 6"></div>
-   <div class="grp" style="grid-column:span 6"><button class="b" id="cperm" onclick="armClean('permanent')" disabled>xoá vĩnh viễn</button><button class="b" id="crecyc" onclick="armClean('recycle')" disabled>cho vào Thùng rác</button></div>
+   <label class="clean-wide">Thư mục cần quét (mỗi dòng một đường dẫn)<textarea id="croots" rows="3" spellcheck="false" placeholder="Nhập đường dẫn thư mục muốn quét"></textarea></label>
+   <div class="clean-wide"><b>Phạm vi đã lưu</b><ul id="clean-saved-roots"></ul><span id="clean-config-status" class="hint" role="status"></span></div>
+   <label class="clean-wide">Bỏ qua project vừa build trong N ngày (0 = không bỏ qua)<input type="number" id="cdays" min="0" max="365"></label>
+   <label class="clean-wide">File trùng: bỏ qua file nhỏ hơn (KB, 0 = mọi file)<input type="number" id="dmin" min="0"></label>
+   <div class="clean-wide"><button class="b" id="csave" onclick="saveCleanConfig()">Lưu cấu hình dọn ổ</button></div>
+   <nav class="clean-wide clean-actions" aria-label="Chế độ dọn ổ">
+    <button class="b" id="clean-view-artifacts" aria-pressed="true" onclick="cleanView('artifacts')">Artefact có thể dọn</button>
+    <button class="b" id="clean-view-dups" aria-pressed="false" onclick="cleanView('dups')">File trùng (chỉ đọc)</button>
+   </nav>
+   <section id="clean-artifacts" class="clean-wide" aria-label="Kiểm tra artefact trước khi dọn">
+    <div class="clean-actions"><button class="b p" id="cscan" onclick="scanClean()">Quét artefact</button><span id="cstatus" role="status">Chưa quét</span></div>
+    <p id="clean-scope" class="hint"></p>
+    <div id="cleanlist"></div>
+    <div id="ctotal" role="status">Đã chọn 0 mục · 0 B</div>
+    <div class="clean-actions">
+     <button class="b p" id="crecyc" onclick="armClean('recycle')" disabled>Đưa vào Thùng rác…</button>
+     <button class="b" id="cperm" onclick="armClean('permanent')" disabled>Xoá vĩnh viễn…</button>
+    </div>
+    <section id="clean-review" class="box" aria-labelledby="clean-review-title" hidden>
+     <h3 id="clean-review-title"></h3><p id="clean-review-summary"></p><ul id="clean-review-paths"></ul>
+     <div class="clean-actions"><button class="b" id="clean-cancel" onclick="cancelCleanReview(true)">Huỷ xác nhận</button>
+     <button class="b p" id="clean-confirm" onclick="confirmCleanReview()" disabled></button></div>
+    </section>
+    <div id="cresult" role="status"></div>
+    <details><summary>Thống kê dung lượng</summary><div class="charts">
+     <div class="box"><div class="lbl">THƯ MỤC NẶNG</div><div class="chart" id="chartFolders"></div></div>
+     <div class="box"><div class="lbl">FILE NẶNG (trong artefact đã quét)</div><div class="chart" id="chartFiles"></div></div>
+    </div></details>
+   </section>
+   <section id="clean-dups" class="clean-wide" aria-label="Báo cáo file trùng chỉ đọc" hidden>
+    <p>File trùng · chỉ phát hiện, không xoá.</p>
+    <p id="drootwarn" class="hint" hidden>⚠ Quét gốc ổ có thể chậm và kết quả có thể bị cắt.</p>
+    <div class="clean-actions"><button class="b p" id="dscan" onclick="scanDups()">Tìm file trùng</button><span id="dstatus" role="status">Chưa quét</span></div>
+    <p id="dups-scope" class="hint"></p><div id="dlist"></div>
+   </section>
   </div>
   <div class="row"><button class="b" id="rbtn" onclick="refresh()">refresh</button><button class="b p" onclick="save()">save</button></div>
  </div>
@@ -273,7 +299,7 @@ function overviewQuota(cache,cfg){
 function apply(s){if(!s)return 2000;
  if(!loaded){cfg=s.cfg;applyAccent(cfg.dashboard_accent);const backend=cfg.local_ai_backend||'ollama';lastBackend=backend;$('ai-backend').value=backend;$('ai-endpoint').value=cfg.local_ai_endpoint||endpointDefaults[backend];$('ai-model').value=cfg.local_ai_model||'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0';aiManual={endpoint:$('ai-endpoint').value,backend,model:$('ai-model').value};$('ai-managed').checked=aiManagedSaved=cfg.local_ai_managed===true;renderAiMode();$('interval').value=cfg.interval_sec;$('warn').value=cfg.warn_pct;$('block').value=cfg.block_pct;
   $('blocksw').checked=cfg.block_enabled;$('wsize').value=cfg.widget_size;$('wstyle').value=cfg.widget_style||'rings';$('wen').checked=cfg.widget_enabled;$('autosw').checked=cfg.autostart;$('trefsw').checked=cfg.token_refresh!==false;
-  $('wlabel').value=cfg.widget_label||'alias';$('wfont').value=cfg.widget_font||100;$('wopac').value=cfg.widget_opacity||100;$('wtheme').value=cfg.widget_theme||'auto';$('wplate').checked=!!cfg.widget_plate;const on=(k,d)=>cfg[k]===undefined?d:!!cfg[k];$('sl').checked=on('widget_show_label',true);$('s5').checked=on('widget_show_5h',true);$('s7').checked=on('widget_show_7d',true);const rm=on('widget_reset',true);$('r5').checked=rm&&on('widget_show_reset5',true);$('r7').checked=rm&&on('widget_show_reset7',true);$('wtip').checked=on('widget_tooltip',true);$('wsort').value=cfg.widget_sort||'config';$('wmax').value=cfg.widget_max_cells||0;$('nen').checked=cfg.notify_enabled;$('nwarn').checked=cfg.notify_warn;$('nblock').checked=cfg.notify_block;loaded=true;$('croots').value=(cfg.cleaner_roots||['D:\\stu']).join(String.fromCharCode(10));$('dmin').value=cfg.cleaner_dups_min_kb||0;updateDupsRootWarn();$('cdays').value=cfg.cleaner_skip_recent_days||0}
+  $('wlabel').value=cfg.widget_label||'alias';$('wfont').value=cfg.widget_font||100;$('wopac').value=cfg.widget_opacity||100;$('wtheme').value=cfg.widget_theme||'auto';$('wplate').checked=!!cfg.widget_plate;const on=(k,d)=>cfg[k]===undefined?d:!!cfg[k];$('sl').checked=on('widget_show_label',true);$('s5').checked=on('widget_show_5h',true);$('s7').checked=on('widget_show_7d',true);const rm=on('widget_reset',true);$('r5').checked=rm&&on('widget_show_reset5',true);$('r7').checked=rm&&on('widget_show_reset7',true);$('wtip').checked=on('widget_tooltip',true);$('wsort').value=cfg.widget_sort||'config';$('wmax').value=cfg.widget_max_cells||0;$('nen').checked=cfg.notify_enabled;$('nwarn').checked=cfg.notify_warn;$('nblock').checked=cfg.notify_block;loaded=true;loadCleanConfig(cfg)}
  $('ver').textContent='v'+(s.version||'');
  const c=s.cache;if(!c){lastAccs='';setHTML('overview-quota','<div class="hdr">đang poll lần đầu...</div>');$('accs').innerHTML='<div class="hdr">đang poll lần đầu...</div>';return 700}
  if(!labelsBuilt){buildLabels(Object.keys(c.profiles),s.cfg);labelsBuilt=true}
@@ -313,16 +339,65 @@ let labelsBuilt=false,autoT=null;
 const esc=t=>String(t).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function buildLabels(names,cfg){const al=cfg.aliases||{},hid=cfg.widget_hidden||[];
  $('acclabels').innerHTML=names.map(n=>`<div class="al"><span title="${esc(n)}">${esc(n)}</span><input type="text" maxlength="10" data-n="${esc(n)}" placeholder="tự động" value="${esc(al[n]||'')}"><label class="chk" style="grid-column:auto"><input type="checkbox" data-show="${esc(n)}" ${hid.includes(n)?'':'checked'}>hiện</label></div>`).join('')}
-let cleanTimer=null,cleanPolling=false,cleanArm=null,cleanArmT=null,cleanPhase='',cleanScanned=false,cleanTotal=0;
+let cleanTimer=null,cleanPolling=false,cleanPhase='',cleanStatus=null,cleanScanned=false,cleanSelection=null;
+let cleanTab='artifacts',cleanReview=null,cleanConfig=null,cleanConfigBusy=false,cleanSubmitting=false,cleanScanStarting=false,dupsScanStarting=false;
+let cleanFailedScan=null,cleanEpoch=0;
 function fmtSize(n){n=+n||0;return n>=1073741824?(n/1073741824).toFixed(2)+' GB':n>=1048576?(n/1048576).toFixed(1)+' MB':n>=1024?(n/1024).toFixed(0)+' KB':n+' B'}
 function shortPath(p){p=String(p||'');const a=p.split(/[\\/]/).filter(Boolean);return a.length>3?'…\\'+a.slice(-3).join('\\'):p}
 function setText(id,t){const e=$(id);if(e.textContent!==t)e.textContent=t}
-function selectedIds(){return [...document.querySelectorAll('#cleanlist input[data-id]:checked')].map(i=>i.dataset.id)}
-function updateCleanCount(){const has=!!$('cleanlist').querySelector('input[data-id]');setText('ctotal',has?`Tổng: ${fmtSize(cleanTotal)} · đã chọn ${selectedIds().length} mục`:'')}
+function cleanDraft(){return {
+ roots:$('croots').value.split('\n').map(p=>p.trim()).filter(Boolean),
+ days:Math.max(0,Math.min(365,parseInt($('cdays').value,10)||0)),
+ min:Math.max(0,parseInt($('dmin').value,10)||0),
+}}
+const sameClean=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+function loadCleanConfig(cfg){
+ cleanConfig={roots:(Array.isArray(cfg.cleaner_roots)?cfg.cleaner_roots:[]).filter(p=>typeof p==='string').map(x=>x.trim()).filter(Boolean),days:cfg.cleaner_skip_recent_days||0,min:cfg.cleaner_dups_min_kb||0};
+ $('croots').value=cleanConfig.roots.join('\n');$('cdays').value=cleanConfig.days;$('dmin').value=cleanConfig.min;
+ renderCleanConfig();
+}
+function renderCleanConfig(){
+ const roots=cleanConfig?.roots||[],dirty=!sameClean(cleanDraft(),cleanConfig);
+ setHTML('clean-saved-roots',roots.map(p=>`<li>${esc(p)}</li>`).join('')||'<li>Chưa chọn thư mục. Nhập và lưu trước khi quét.</li>');
+ setText('clean-config-status',dirty?'Có thay đổi chưa lưu. Lưu cấu hình trước khi quét hoặc dọn.':'');
+ $('drootwarn').hidden=!roots.some(p=>/^[A-Za-z]:\\$/.test(p));
+ syncCleanControls();
+}
+function selectedIds(){return [...document.querySelectorAll('#cleanlist input[data-id]:checked')].map(i=>i.dataset.id).sort()}
+function selectedCleanItems(){const selected=new Set(selectedIds());return (cleanStatus?.items||[]).filter(i=>selected.has(i.id))}
+function cleanScopeValid(s){
+ return !!(s?.scan_id&&s.phase==='done'&&!s.interrupted&&s.scan_id!==cleanFailedScan&&cleanConfig&&
+  sameClean(s.scope,cleanConfig.roots)&&s.skip_recent_days===cleanConfig.days&&sameClean(cleanDraft(),cleanConfig));
+}
+function syncCleanControls(){
+ const busy=cleanConfigBusy||cleanScanStarting||cleanSubmitting||cleanPhase==='scanning'||cleanPhase==='cleaning';
+ const cleanReady=!!cleanConfig?.roots.length&&sameClean(cleanDraft(),cleanConfig);
+ $('csave').disabled=busy||dupsScanStarting;
+ $('cscan').disabled=busy||!cleanReady;$('dscan').disabled=dupsScanStarting||dupsPhase==='scanning'||!cleanReady||cleanConfigBusy;
+ const can=cleanScopeValid(cleanStatus)&&!busy&&cleanTab==='artifacts';
+ const items=selectedCleanItems();
+ $('cperm').disabled=!can||!items.length;$('crecyc').disabled=!can||!items.length;
+ $('clean-confirm').disabled=!can||!cleanReview?.ticket;
+ for(const el of $('cleanlist').querySelectorAll('input[data-id]'))el.disabled=!can;
+ const bytes=items.reduce((n,it)=>n+it.size,0);
+ setText('ctotal',`Đã chọn ${items.length} mục · ${fmtSize(bytes)}${bytes>=1024?` (${bytes} B)`:''}`);
+}
 function stopCleanPoll(){if(cleanTimer){clearInterval(cleanTimer);cleanTimer=null}}
-function startCleanPoll(){if(cleanTimer)return;cleanTimer=setInterval(async()=>{if(cleanPolling)return;cleanPolling=true;
- try{const s=await api.cleaner_status();applyClean(s);if(s&&(s.phase==='idle'||s.phase==='done'))stopCleanPoll()}catch(e){}finally{cleanPolling=false}},300)}
-function disarmClean(){clearTimeout(cleanArmT);cleanArmT=null;cleanArm=null;setText('cperm','xoá vĩnh viễn');setText('crecyc','cho vào Thùng rác')}
+function startCleanPoll(){if(cleanTimer)return;cleanTimer=setInterval(async()=>{if(cleanPolling)return;cleanPolling=true;const epoch=cleanEpoch;
+ try{const s=await api.cleaner_status();if(epoch!==cleanEpoch)return;applyClean(s);if(s&&(s.phase==='idle'||s.phase==='done'))stopCleanPoll()}catch(e){}finally{cleanPolling=false}},300)}
+function cancelCleanReview(focus=false){
+ const old=cleanReview;cleanReview=null;$('clean-review').hidden=true;
+ if(old?.ticket)void api.cleaner_cancel_review(old.ticket).catch(()=>{});
+ syncCleanControls();
+ if(focus&&old)$(old.mode==='permanent'?'cperm':'crecyc').focus();
+}
+function cleanView(view){
+ if(view!==cleanTab)cancelCleanReview();
+ cleanTab=view;$('clean-artifacts').hidden=view!=='artifacts';$('clean-dups').hidden=view!=='dups';
+ $('clean-view-artifacts').setAttribute('aria-pressed',String(view==='artifacts'));
+ $('clean-view-dups').setAttribute('aria-pressed',String(view==='dups'));
+ syncCleanControls();fit(true);
+}
 // CSS bar charts — rebuilt only through setHTML (signature guard), never calls fit()/apply() here.
 function renderCharts(s){
  const draw=(id,list,color)=>{const arr=Array.isArray(list)?list:[];
@@ -335,79 +410,127 @@ function renderCharts(s){
  draw('chartFiles',s.top_files,'var(--warn)')}
 function applyClean(s){
  if(!s)return;
- const prev=cleanPhase;cleanPhase=s.phase;
- if(s.phase==='done')cleanScanned=true;
- const running=s.phase==='scanning'||s.phase==='cleaning';
- $('cscan').disabled=running;setText('cscan',running?'đang quét…':(cleanScanned?'Quét lại':'Quét'));
- const errs=(s.errors||[]).filter(Boolean);
- let line=s.phase==='scanning'?'đang quét…':s.phase==='cleaning'?'đang dọn…':s.phase==='idle'?'chưa quét':'xong';
- if(s.interrupted)line='lần trước bị ngắt, hãy quét lại';
- else line+=` · đã quét ${s.scanned} · khớp ${s.matched} · tổng ${fmtSize(s.total)} · ${s.elapsed_ms} ms`+((s.outcomes||[]).length?` · đã dọn ${s.cleaned}`:'')+(errs.length?' · lỗi: '+errs.join('; '):'');
- setText('cstatus',line);
- const blocked=!!s.interrupted||s.phase!=='done';
- $('cperm').hidden=!!s.interrupted;$('crecyc').hidden=!!s.interrupted;
- $('cperm').disabled=blocked||!s.items.length;$('crecyc').disabled=blocked||!s.items.length;
- if(blocked)disarmClean();
- if(s.phase==='scanning')setHTML('cresult','');
- cleanTotal=s.total||0;
- const sig=JSON.stringify(s.items);
- if($('cleanlist')._sig!==sig){$('cleanlist')._sig=sig;
-  $('cleanlist').innerHTML=(s.items||[]).map(it=>`<label class="chk cl-row"><input type="checkbox" data-id="${esc(it.id)}"><span title="${esc(it.path)}">${esc(shortPath(it.path))}</span><b>${fmtSize(it.size)}</b><small>${esc(it.kind)}</small></label>`).join('')||'<div class="hdr">không tìm thấy thư mục cần dọn</div>'}
- updateCleanCount();
+ const prev=cleanPhase;cleanPhase=s.phase;cleanStatus=s;
+ if(s.scan_id)cleanScanned=true;
+ const errs=(s.errors||[]).filter(Boolean),scanErrors=(s.manifest_errors||[]).filter(Boolean);
+ const phase=s.phase==='scanning'?'Đang quét…':s.phase==='cleaning'?'Đang dọn…':s.phase==='done'?'Quét xong':'Chưa quét';
+ setText('cscan',s.phase==='scanning'?'Đang quét…':(cleanScanned?'Quét lại':'Quét artefact'));
+ const summary=s.scope?` · đã quét ${s.scanned} · khớp ${s.matched} · tổng ${fmtSize(s.total)} · ${s.elapsed_ms} ms`:'';
+ const partial=s.truncated?' · ⚠ Quét bị cắt; kết quả chưa đầy đủ.':scanErrors.length?' · ⚠ Có mục không quét được.':'';
+ const limited=s.matched>s.shown_items?` · Chỉ hiện ${s.shown_items}/${s.matched} mục lớn nhất.`:'';
+ const stale=s.scan_id&&!cleanScopeValid(s)&&s.phase==='done'?' · Phạm vi hoặc kết quả đã đổi. Quét lại trước khi dọn.':'';
+ setText('cstatus',(s.interrupted?'⚠ Lần dọn trước bị ngắt. Hãy quét lại.':phase+summary+partial+limited+stale)+
+  (errs.length||scanErrors.length?' · lỗi: '+[...errs,...scanErrors].join('; '):''));
+ const scope=(s.roots?.length?s.roots:s.scope)||[];
+ setText('clean-scope',scope.length?`Phạm vi phiên quét: ${scope.join(' · ')} · bỏ qua build trong ${s.skip_recent_days} ngày`:'');
+ if(cleanReview&&(!cleanScopeValid(s)||cleanReview.scan!==s.scan_id))cancelCleanReview();
+ const sig=JSON.stringify([s.scan_id,s.items]);
+ if(cleanSelection!==sig){
+  cleanSelection=sig;cancelCleanReview();
+  // Identical rows in a new manifest still start unchecked.
+  for(const i of $('cleanlist').querySelectorAll('input[data-id]'))i.checked=false;
+  const items=s.items||[];
+  setHTML('cleanlist',items.length?`<table><thead><tr><th scope="col">Chọn</th><th scope="col">Đường dẫn đầy đủ</th><th scope="col">Loại</th><th scope="col">Dung lượng</th></tr></thead><tbody>${items.map(it=>
+   `<tr><td><input type="checkbox" data-id="${esc(it.id)}" aria-label="Chọn ${esc(it.path)}"></td><td class="clean-path">${esc(it.path)}</td><td>${esc(it.kind)}</td><td title="${it.size} B">${fmtSize(it.size)}</td></tr>`).join('')}</tbody></table>`:s.phase==='done'&&s.scan_id?'<p>Không tìm thấy artefact phù hợp.</p>':'');
+ }
  renderCharts(s);
- const outs=s.outcomes||[];
- setHTML('cresult',outs.length?outs.map(o=>`<div>${esc(shortPath(o.id))}: ${o.ok?'<span style="color:var(--ok)">✓</span>':'<span style="color:var(--bad)">'+esc(o.err||'lỗi')+'</span>'}</div>`).join(''):'');
- if((prev==='scanning'||prev==='cleaning')&&s.phase==='done')fit(true)
+ const outs=s.outcomes||[],success=outs.filter(o=>o.ok).length;
+ setHTML('cresult',outs.length?`<b>Thành công: ${success} · Lỗi hoặc chưa hoàn tất: ${outs.length-success}</b>`+
+  outs.map(o=>`<div>${o.id?esc(o.id)+': ':''}${o.ok?'<span style="color:var(--ok)">✓ Thành công</span>':'<span style="color:var(--bad)">⚠ '+esc(o.err||'Lỗi')+'</span>'}</div>`).join(''):'');
+ syncCleanControls();
+ if((prev==='scanning'||prev==='cleaning')&&s.phase==='done')fit(true);
 }
-// File trùng — CHỈ phát hiện, không có checkbox/nút xoá. Poll riêng: setHTML + signature guard,
-// không gọi apply()/fit() ở mỗi tick; chỉ 1 lần fit(true) ở transition scanning -> done.
 let dupsTimer=null,dupsPolling=false,dupsPhase='';
-// Gốc ổ (D:\) là root hợp lệ nhưng quét có thể chậm / bị cắt — chỉ cảnh báo, KHÔNG chặn quét.
-function updateDupsRootWarn(){const roots=$('croots').value.split(String.fromCharCode(10)).map(x=>x.trim()).filter(Boolean);
-  $('drootwarn').hidden=!roots.some(r=>/^[A-Za-z]:\\$/.test(r))}
 function stopDupsPoll(){if(dupsTimer){clearInterval(dupsTimer);dupsTimer=null}}
 function startDupsPoll(){if(dupsTimer)return;dupsTimer=setInterval(async()=>{if(dupsPolling)return;dupsPolling=true;
  try{const s=await api.cleaner_dups_status();applyDups(s);if(s&&(s.phase==='idle'||s.phase==='done'))stopDupsPoll()}catch(e){}finally{dupsPolling=false}},300)}
 function applyDups(s){
  if(!s)return;
  const prev=dupsPhase;dupsPhase=s.phase;
- const running=s.phase==='scanning';
- $('dscan').disabled=running;setText('dscan',running?'đang tìm…':'Tìm file trùng');
- const errs=(s.errors||[]).filter(Boolean);
- const cut=!!(s.truncated||errs.length);
- setText('dstatus',(running?'đang tìm…':s.phase==='done'?(cut?'⚠ bị cắt, kết quả chưa đầy đủ':'xong'):'chưa quét')+
-  ` · đã quét ${s.scanned} file · bỏ qua ${s.skipped} · hash ${fmtSize(s.bytes_hashed)} · ${s.elapsed_ms} ms`+
+ setText('dscan',s.phase==='scanning'?'Đang tìm…':'Tìm file trùng');
+ const errs=(s.errors||[]).filter(Boolean),cut=s.truncated||errs.length;
+ setText('dstatus',(s.phase==='scanning'?'Đang tìm…':s.phase==='done'?(cut?'⚠ Bị cắt hoặc chưa đầy đủ':'Xong'):'Chưa quét')+
+  (s.phase!=='idle'?` · đã quét ${s.scanned} file · bỏ qua ${s.skipped} · hash ${fmtSize(s.bytes_hashed)} · ${s.elapsed_ms} ms`:'')+
+  (s.total_groups>s.shown_groups?` · Chỉ hiện ${s.shown_groups}/${s.total_groups} nhóm lớn nhất.`:'')+
   (errs.length?' · lỗi: '+errs.join('; '):''));
- const sig=JSON.stringify(s.groups);
- if($('dlist')._sig!==sig){$('dlist')._sig=sig;
-  const gs=(s.groups||[]).slice(0,8);
-  $('dlist').innerHTML=gs.map(g=>`<div class="dgrp"><div class="dh">${g.files.length} bản · ${fmtSize(g.size_each)} mỗi bản · lãng phí ${fmtSize(g.wasted)} · ${esc(g.hash)}</div>`+
-   (g.files||[]).map(p=>`<div class="dp" title="${esc(p)}">${esc(shortPath(p))}</div>`).join('')+`</div>`).join('')||'<div class="hdr">không tìm thấy file trùng</div>'}
- if(prev==='scanning'&&s.phase==='done')fit(true)
+ setText('dups-scope',s.scope?.length?`Phạm vi đã quét: ${s.scope.join(' · ')}`:'');
+ const gs=s.groups||[];
+ setHTML('dlist',gs.map(g=>`<div class="dgrp"><div class="dh">${g.files.length} bản · ${fmtSize(g.size_each)} mỗi bản · lãng phí ${fmtSize(g.wasted)} · ${esc(g.hash)}</div>`+
+  g.files.map(p=>`<div class="dp">${esc(p)}</div>`).join('')+`</div>`).join('')||(s.phase==='done'?'<p>Không tìm thấy file trùng.</p>':''));
+ syncCleanControls();
+ if(prev==='scanning'&&s.phase==='done')fit(true);
 }
-async function scanDups(){const r=await api.cleaner_dups_scan();if(!r||!r.ok){toast(r&&r.error||'không tìm được');if(r&&r.error==='đang chạy')startDupsPoll();return}
- dupsPhase='scanning';setText('dscan','đang tìm…');$('dscan').disabled=true;setText('dstatus','đang tìm…');startDupsPoll()}
-async function scanClean(){const r=await api.cleaner_scan();if(!r||!r.ok){toast(r&&r.error||'không quét được');if(r&&r.error==='đang chạy')startCleanPoll();return}
- cleanScanned=true;cleanPhase='scanning';setText('cstatus','đang quét…');$('cscan').disabled=true;$('cperm').disabled=true;$('crecyc').disabled=true;setText('cscan','đang quét…');startCleanPoll()}
-async function saveCleanConfig(){const roots=$('croots').value.split(String.fromCharCode(10)).map(x=>x.trim()).filter(Boolean);
- const days=Math.max(0,Math.min(365,parseInt($('cdays').value,10)||0)),dmin=Math.max(0,parseInt($('dmin').value,10)||0);let ok=false;
- try{ok=!!(await api.save({cleaner_roots:roots,cleaner_skip_recent_days:days,cleaner_dups_min_kb:dmin}))}catch(e){}
- toast(ok?'đã lưu cấu hình dọn ổ, bấm Quét để áp dụng':'lỗi lưu cấu hình dọn ổ')}
-function armClean(mode){if(cleanPhase!=='done')return;const ids=selectedIds();if(!ids.length){toast('chưa tick mục nào');return}
- const btn=mode==='permanent'?$('cperm'):$('crecyc');
- if(cleanArm===mode){disarmClean();doClean(ids,mode);return}
- disarmClean();cleanArm=mode;
- btn.textContent=mode==='permanent'?`Xác nhận xoá vĩnh viễn ${ids.length} mục?`:`Xác nhận cho ${ids.length} mục vào Thùng rác?`;
- cleanArmT=setTimeout(disarmClean,6000)}
-async function doClean(ids,mode){let r;try{r=await api.cleaner_clean(ids,mode)}catch(e){}
- if(!r||!r.ok){toast(r&&r.error||'lỗi');return}
- cleanPhase='cleaning';$('cperm').disabled=true;$('crecyc').disabled=true;setText('cstatus','đang dọn…');startCleanPoll()}
-$('cleanlist').addEventListener('change',updateCleanCount);
-$('croots').addEventListener('input',updateDupsRootWarn);
+async function scanDups(){
+ if($('dscan').disabled)return;
+ dupsScanStarting=true;syncCleanControls();
+ try{const r=await api.cleaner_dups_scan(cleanConfig);if(r?.ok||r?.error==='đang chạy'){applyDups(await api.cleaner_dups_status());startDupsPoll()}else toast(r?.error||'Không tìm được file trùng.')}
+ catch(e){toast('Không tìm được file trùng.')}finally{dupsScanStarting=false;syncCleanControls()}
+}
+async function scanClean(){
+ if($('cscan').disabled)return;
+ cancelCleanReview();
+ for(const i of $('cleanlist').querySelectorAll('input[data-id]'))i.checked=false;
+ cleanEpoch++;cleanScanStarting=true;syncCleanControls();
+ try{const r=await api.cleaner_scan(cleanConfig);if(r?.ok||r?.error==='đang chạy'){applyClean(await api.cleaner_status());startCleanPoll()}else toast(r?.error||'Không quét được.')}
+ catch(e){toast('Không quét được.')}finally{cleanScanStarting=false;syncCleanControls()}
+}
+async function saveCleanConfig(){
+ if(cleanConfigBusy)return;
+ cancelCleanReview();const draft=cleanDraft(),changesScope=!sameClean(draft.roots,cleanConfig?.roots)||draft.days!==cleanConfig?.days;
+ cleanConfigBusy=true;syncCleanControls();
+ try{
+  if(await api.save({cleaner_roots:draft.roots,cleaner_skip_recent_days:draft.days,cleaner_dups_min_kb:draft.min})){
+   if(changesScope){
+    cleanFailedScan=cleanStatus?.scan_id;
+    for(const i of $('cleanlist').querySelectorAll('input[data-id]'))i.checked=false;
+   }
+   cleanConfig=draft;if(changesScope){cleanEpoch++;applyClean(await api.cleaner_status())}else if(cleanStatus)applyClean(cleanStatus);
+   toast('Đã lưu. Kiểm tra phạm vi trước khi quét.');
+  }else toast('Không lưu được cấu hình.');
+ }catch(e){toast('Không lưu được cấu hình.')}
+ finally{cleanConfigBusy=false;renderCleanConfig()}
+}
+async function armClean(mode){
+ const button=$(mode==='permanent'?'cperm':'crecyc');
+ if(!['permanent','recycle'].includes(mode)||button.disabled)return;
+ cancelCleanReview();const selection=selectedCleanItems(),scan=cleanStatus.scan_id;
+ const review={mode,scan,ids:selectedIds(),ticket:null,count:selection.length,bytes:selection.reduce((n,it)=>n+it.size,0)};
+ cleanReview=review;$('clean-review').hidden=false;
+ const permanent=mode==='permanent';
+ setText('clean-review-title',permanent?'Xác nhận xoá vĩnh viễn':'Xác nhận đưa vào Thùng rác');
+ setText('clean-review-summary',`${review.count} mục · ${fmtSize(review.bytes)} (${review.bytes} B). ${permanent?'Không thể khôi phục từ Thùng rác.':'Nếu Windows không thể đưa vào Thùng rác, hãy huỷ lời nhắc của Windows để không xoá vĩnh viễn.'}`);
+ setHTML('clean-review-paths',selection.map(it=>`<li>${esc(it.path)} · ${esc(it.kind)} · ${fmtSize(it.size)}</li>`).join(''));
+ setText('clean-confirm',permanent?'Xác nhận xoá vĩnh viễn':'Xác nhận đưa vào Thùng rác');
+ syncCleanControls();$('clean-cancel').focus();fit(true);
+ let r;try{r=await api.cleaner_review(review.ids,mode,scan)}catch(e){}
+ if(cleanReview!==review){if(r?.ticket)void api.cleaner_cancel_review(r.ticket).catch(()=>{});return}
+ if(!r?.ok||!r.ticket||r.count!==review.count||r.bytes!==review.bytes){
+  if(r?.ticket)void api.cleaner_cancel_review(r.ticket).catch(()=>{});
+  if(r?.error?.includes('Hãy quét lại'))cleanFailedScan=scan;
+  cancelCleanReview();toast(r?.error||'Không xác nhận được phiên quét.');return;
+ }
+ review.ticket=r.ticket;syncCleanControls();
+}
+async function confirmCleanReview(){
+ const r=cleanReview;
+ if(!r?.ticket||$('clean-confirm').disabled||$('clean').hidden||!cleanScopeValid(cleanStatus)||cleanTab!=='artifacts'||r.scan!==cleanStatus.scan_id||!sameClean(r.ids,selectedIds())){
+  cancelCleanReview();return;
+ }
+ cleanEpoch++;cleanReview=null;$('clean-review').hidden=true;cleanSubmitting=true;syncCleanControls();
+ try{
+  const result=await api.cleaner_clean(r.ids,r.mode,r.scan,r.ticket,r.count,r.bytes);
+  if(!result?.ok){cleanFailedScan=r.scan;toast(result?.error||'Không dọn được. Quét lại trước khi thử.');}
+  else{applyClean(await api.cleaner_status());startCleanPoll()}
+ }catch(e){cleanFailedScan=r.scan;toast('Không nhận được kết quả. Kiểm tra trạng thái trước khi thử lại.');startCleanPoll()}
+ finally{cleanSubmitting=false;syncCleanControls()}
+}
+$('cleanlist').addEventListener('change',()=>{cancelCleanReview();syncCleanControls()});
+for(const id of ['croots','cdays','dmin'])$(id).addEventListener('input',()=>{cancelCleanReview();renderCleanConfig()});
 let activeRoute='overview',activeAi='grammar';
 function toolTab(t){
  const previousFocus=document.activeElement;
  const route=t==='localai'?'settings':(t==='grammar'||t==='translation'||t==='ocr'?'ai':t);
+ if(activeRoute==='cleaner'&&route!=='cleaner'){cancelCleanReview();stopCleanPoll();stopDupsPoll()}
  activeRoute=route; if(route==='ai')activeAi=t==='ai'?'grammar':t;
  document.body.className=document.body.className.replace(/\broute-\w+/g,'').replace(/\blocalai-route\b/g,'').trim()+' route-'+route+(t==='localai'?' localai-route':'');
  document.querySelectorAll('.toolpanel').forEach(e=>e.classList.toggle('on',e.id==='tool-'+(t==='localai'?'localai':route==='ai'?activeAi:route)));
@@ -659,8 +782,8 @@ $('ai-managed').addEventListener('change',()=>{if($('ai-managed').checked){aiMan
 function tab(t){
  $('gen').hidden=t!=='gen';$('look').hidden=t!=='look';$('clean').hidden=t!=='clean';
  $('t-gen').classList.toggle('on',t==='gen');$('t-look').classList.toggle('on',t==='look');$('t-clean')?.classList.toggle('on',t==='clean');
- if(t==='clean'){api.cleaner_status().then(s=>{applyClean(s);if(s&&(s.phase==='scanning'||s.phase==='cleaning'))startCleanPoll()}).catch(()=>{});api.cleaner_dups_status().then(s=>{applyDups(s);if(s&&s.phase==='scanning')startDupsPoll()}).catch(()=>{})}
- else {stopCleanPoll();stopDupsPoll()}
+ if(t==='clean'){const epoch=cleanEpoch;api.cleaner_status().then(s=>{if(epoch!==cleanEpoch)return;applyClean(s);if(s&&(s.phase==='scanning'||s.phase==='cleaning'))startCleanPoll()}).catch(()=>{});api.cleaner_dups_status().then(s=>{applyDups(s);if(s&&s.phase==='scanning')startDupsPoll()}).catch(()=>{})}
+ else {cancelCleanReview();stopCleanPoll();stopDupsPoll()}
  fit(true)
 }
 function autoSave(){clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;save(true)},450)}
@@ -680,7 +803,7 @@ async function testNotify(){await api.test_notify();toast('đã gửi thông bá
 async function hook(kind){const r=await api[kind==='install'?'hook_install':'hook_uninstall']();toast(r.map(x=>x[0]+': '+x[1]).join(' · '),4000);hookStatus()}
 async function hookStatus(){const st=await api.hook_status();const ok=st.filter(x=>x[1]===true).length;
  $('hookst').textContent=`hook: đã cài ${ok}/${st.length} profile`+(st.some(x=>x[1]===null)?' (có file settings lỗi)':'')}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeDash();return}const t=e.target;if(['INPUT','TEXTAREA','SELECT'].includes(t.tagName)||t.isContentEditable||e.ctrlKey||e.altKey||e.metaKey)return;if(e.key==='r')refresh()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(cleanReview){cancelCleanReview(true);return}closeDash();return}const t=e.target;if(['INPUT','TEXTAREA','SELECT'].includes(t.tagName)||t.isContentEditable||e.ctrlKey||e.altKey||e.metaKey)return;if(e.key==='r')refresh()});
 document.addEventListener('keydown',e=>{const t=e.target;if(!(t instanceof Element)||!t.matches('.toolnav button,.ai-subnav button'))return;const group=[...t.parentElement.querySelectorAll('button')];const i=group.indexOf(t);let n=-1;if(e.key==='ArrowRight'||e.key==='ArrowDown')n=(i+1)%group.length;else if(e.key==='ArrowLeft'||e.key==='ArrowUp')n=(i-1+group.length)%group.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=group.length-1;else return;e.preventDefault();group[n].focus();group[n].click()});
 $('look').addEventListener('input',autoSave);$('look').addEventListener('change',autoSave);
 let accentSaving=Promise.resolve();$('accent').addEventListener('change',()=>{const value=applyAccent($('accent').value);accentSaving=api.save({dashboard_accent:value}).then(ok=>{if(!ok)toast('Không lưu được màu giao diện')}).catch(()=>toast('Không lưu được màu giao diện'))});

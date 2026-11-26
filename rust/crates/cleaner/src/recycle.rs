@@ -6,11 +6,9 @@
 //!
 //! # Hạn chế quan trọng cần biết
 //!
-//! `FOF_ALLOWUNDO` **không đảm bảo** file sẽ vào Thùng rác. Trên các volume đã tắt Thùng rác
-//! (thuộc tính recycle bin bị disable), ổ đĩa mạng / network drive, hoặc một số volume di động,
-//! Shell có thể **xoá vĩnh viễn im lặng** dù đã đặt cờ này. Engine đã chặn UNC / removable /
-//! network drive ở `validate_target`, nhưng vẫn không thể kiểm soát cấu hình Thùng rác của
-//! volume cục bộ — đây là giới hạn cố hữu của Shell API, không phải lỗi của code ở đây.
+//! `FOF_ALLOWUNDO` requests the Recycle Bin but is not a guarantee. We explicitly request
+//! a Windows warning if recycling is unavailable and never use Shell's auto-confirm flag.
+//! Cancel any OS prompt offering permanent deletion to keep the file intact.
 //!
 //! Ngoài ra, `SHFileOperationW` không hỗ trợ đường dẫn dài (> `MAX_PATH` = 260) hay tiền tố
 //! `\\?\`. [`ShellDeleter::delete`] từ chối các path đó bằng [`DelErr`] và **không** tự đổi sang
@@ -32,8 +30,11 @@ pub const FOF_NOERRORUI: u32 = 0x0400;
 /// Shell flag: không hiện thanh tiến trình.
 pub const FOF_SILENT: u32 = 0x0004;
 
-/// Tổ hợp cờ dùng cho thao tác Thùng rác.
-pub const RECYCLE_FLAGS: u32 = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+/// Request a warning if Windows is unable to recycle the item.
+pub const FOF_WANTNUKEWARNING: u32 = 0x4000;
+
+/// Tổ hợp cờ dùng cho thao tác Thùng rác. No auto-yes for a permanent fallback.
+pub const RECYCLE_FLAGS: u32 = FOF_ALLOWUNDO | FOF_WANTNUKEWARNING | FOF_NOERRORUI | FOF_SILENT;
 
 /// `MAX_PATH` trên Windows.
 const MAX_PATH: usize = 260;

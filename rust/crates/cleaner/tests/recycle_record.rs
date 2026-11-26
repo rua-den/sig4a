@@ -3,7 +3,7 @@
 
 use cu_cleaner::{
     build_double_nul_buffer, DelErr, Deleter, Item, Mode, RuleKind, ShellDeleter, ShellOp,
-    ShellStatus, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, RECYCLE_FLAGS,
+    ShellStatus, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOF_WANTNUKEWARNING, RECYCLE_FLAGS,
 };
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
@@ -37,8 +37,9 @@ fn op_carries_recycle_flags_and_allow_undo() {
     assert_eq!(FLAGS_SEEN.load(Ordering::SeqCst), RECYCLE_FLAGS);
     assert_eq!(
         FLAGS_SEEN.load(Ordering::SeqCst),
-        FOF_ALLOWUNDO | FOF_NOERRORUI | FOF_NOCONFIRMATION | FOF_SILENT
+        FOF_ALLOWUNDO | FOF_NOERRORUI | FOF_WANTNUKEWARNING | FOF_SILENT
     );
+    assert_eq!(FLAGS_SEEN.load(Ordering::SeqCst) & FOF_NOCONFIRMATION, 0);
     assert!(FLAGS_UNDO.load(Ordering::SeqCst));
     assert_eq!(*FLAGS_PATH.lock().unwrap(), vec![path.to_string()]);
 }

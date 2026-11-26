@@ -203,16 +203,26 @@ impl App {
             "hook_status" => c.hook_status(),
             "hook_install" => c.hook_install(),
             "hook_uninstall" => c.hook_uninstall(),
-            "cleaner_scan" => c.cleaner_scan(),
+            "cleaner_scan" => c.cleaner_scan(Some(a.first().unwrap_or(&Value::Null))),
             "cleaner_status" => c.cleaner_status(),
-            "cleaner_dups_scan" => c.cleaner_dups_scan(),
+            "cleaner_dups_scan" => c.cleaner_dups_scan(Some(a.first().unwrap_or(&Value::Null))),
             "cleaner_dups_status" => c.cleaner_dups_status(),
-            "cleaner_clean" => {
+            "cleaner_cancel_review" => c.cleaner_cancel_review(a.first().and_then(Value::as_str).unwrap_or("")),
+            "cleaner_review" | "cleaner_clean" => {
                 let ids: &[Value] = a
                     .first()
                     .and_then(Value::as_array)
                     .map_or(&[][..], |v| v.as_slice());
-                c.cleaner_clean(ids, a.get(1).and_then(Value::as_str).unwrap_or(""))
+                let mode = a.get(1).and_then(Value::as_str).unwrap_or("");
+                let scan_id = a.get(2).and_then(Value::as_str).unwrap_or("");
+                if m == "cleaner_review" {
+                    c.cleaner_review(ids, mode, scan_id)
+                } else {
+                    c.cleaner_clean(
+                        ids, mode, scan_id, a.get(3).and_then(Value::as_str).unwrap_or(""),
+                        a.get(4).and_then(Value::as_u64), a.get(5).and_then(Value::as_u64),
+                    )
+                }
             }
             "widget_unlock" => c.widget_unlock(),
             "widget_reset" => c.widget_reset(),

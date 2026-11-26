@@ -203,7 +203,7 @@ fn revalidate(item: &Item, opts: &ScanOptions, fs: &dyn FsView) -> Result<(), St
 ///
 /// Every id is re-validated (id in manifest -> `validate_target_with` -> `validate_item_kind`)
 /// through the injected `fs` before the deleter is called; a rejected id yields an error outcome
-/// and the loop continues. A snapshot is written after **every** id and once more with
+/// and the loop continues. A snapshot is written before the first delete, after **every** id, and with
 /// `phase = "done"`. If a journal write fails, remaining items are skipped and a single
 /// `{ id: "", err: "không ghi được journal" }` outcome is appended.
 pub fn clean_with(
@@ -217,6 +217,9 @@ pub fn clean_with(
 ) -> Vec<DeleteOutcome> {
     let run_id = new_run_id();
     let mut outcomes: Vec<DeleteOutcome> = Vec::with_capacity(ids.len());
+    if !snapshot(journal, &run_id, mode, &outcomes, PHASE_CLEANING) {
+        return vec![journal_error_outcome()];
+    }
 
     for id in ids {
         let outcome = match manifest

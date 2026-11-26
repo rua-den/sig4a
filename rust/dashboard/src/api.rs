@@ -298,6 +298,8 @@ pub enum CleanPhase {
 pub struct CleanerState {
     pub phase: CleanPhase,
     pub manifest: Option<Manifest>,
+    review: Option<CleanReview>,
+    scope_version: u64,
     pub opts: Option<ScanOptions>,
     pub outcomes: Vec<DeleteOutcome>,
     pub last_run: Option<CleanRecord>,
@@ -312,6 +314,8 @@ impl Default for CleanerState {
         Self {
             phase: CleanPhase::Idle,
             manifest: None,
+            review: None,
+            scope_version: 0,
             opts: None,
             outcomes: Vec::new(),
             last_run: None,
@@ -319,6 +323,39 @@ impl Default for CleanerState {
             errors: Vec::new(),
             started_at: now_millis(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CleanReview {
+    ticket: String,
+    scan_id: String,
+    mode: Mode,
+    ids: Vec<String>,
+    bytes: u64,
+}
+
+fn reviewed_selection(manifest: &Manifest, ids: &[Value]) -> Option<(Vec<String>, u64)> {
+    if ids.is_empty() || ids.len() > 12 {
+        return None;
+    }
+    let mut exact = ids.iter().map(|id| id.as_str().map(str::to_string)).collect::<Option<Vec<_>>>()?;
+    exact.sort_unstable();
+    if exact.windows(2).any(|pair| pair[0] == pair[1]) {
+        return None;
+    }
+    let bytes = exact.iter().try_fold(0u64, |bytes, id| {
+        let item = manifest.items.iter().take(12).find(|item| &item.id == id)?;
+        bytes.checked_add(item.size)
+    })?;
+    Some((exact, bytes))
+}
+
+fn clean_mode(mode: &str) -> Option<Mode> {
+    match mode {
+        "permanent" => Some(Mode::Permanent),
+        "recycle" => Some(Mode::Recycle),
+        _ => None,
     }
 }
 
@@ -344,6 +381,7 @@ impl DupsPhase {
 /// bởi các khoá/journal của luồng dọn.
 #[derive(Debug)]
 pub struct DupsState {
+    pub scope: Vec<PathBuf>,
     pub phase: DupsPhase,
     pub report: Option<DupsReport>,
     pub errors: Vec<String>,
@@ -353,6 +391,7 @@ pub struct DupsState {
 impl Default for DupsState {
     fn default() -> Self {
         Self {
+            scope: Vec::new(),
             phase: DupsPhase::Idle,
             report: None,
             errors: Vec::new(),
@@ -499,6 +538,8 @@ impl Core {
             return Value::Bool(false);
         };
         let mut cfg = self.cfg();
+        let scope_changed = ["cleaner_roots", "cleaner_skip_recent_days"].into_iter()
+            .any(|key| patch.get(key).is_some_and(|value| cfg.get(key) != Some(value)));
         for (k, val) in patch {
             cfg.insert(k.clone(), val.clone());
         }
@@ -508,6 +549,15 @@ impl Core {
         cfg.insert("interval_sec".into(), Value::from(iv.max(MIN_INTERVAL)));
         if !self.save_cfg(&cfg) {
             return Value::Bool(false);
+        }
+        if scope_changed {
+            let mut st = self.cleaner.lock().unwrap_or_else(|e| e.into_inner());
+            st.scope_version = st.scope_version.wrapping_add(1);
+            st.review = None;
+            if st.phase == CleanPhase::Done {
+                st.manifest = None;
+                st.opts = None;
+            }
         }
         if self.autostart_ok {
             crate::win::set_autostart(cfg.get("autostart").is_some_and(truthy), &self.tray_exe);
@@ -534,12 +584,12 @@ impl Core {
             .map(|a| {
                 a.iter()
                     .filter_map(Value::as_str)
+                    .map(str::trim)
                     .filter(|s| !s.is_empty())
                     .map(PathBuf::from)
                     .collect::<Vec<_>>()
             })
-            .filter(|v| !v.is_empty())
-            .unwrap_or_else(|| vec![PathBuf::from(r"D:\stu")]);
+            .unwrap_or_default();
         let skip_recent_days = cfg
             .get("cleaner_skip_recent_days")
             .and_then(py_int)
@@ -603,22 +653,39 @@ impl Core {
     }
 
     /// Bắt đầu quét nền. Trả `{ok:true}` ngay; UI gọi `cleaner_status` để lấy kết quả.
-    pub fn cleaner_scan(&self) -> Value {
-        {
+    pub fn cleaner_scan(&self, scope: Option<&Value>) -> Value {
+        let opts = self.scan_options(&self.cfg());
+        if scope.is_some_and(|s| s["roots"] != json!(&opts.roots) || s["days"].as_u64() != Some(opts.skip_recent_days)) {
+            return json!({"ok":false,"error":"Phạm vi đã lưu đã đổi. Mở lại dashboard để kiểm tra."});
+        }
+        if opts.roots.is_empty() {
+            return json!({"ok": false, "error": "Chưa lưu thư mục cần quét"});
+        }
+        let scope_version = {
             let mut st = self.cleaner.lock().unwrap_or_else(|e| e.into_inner());
             if matches!(st.phase, CleanPhase::Scanning | CleanPhase::Cleaning { .. }) {
                 return json!({"ok": false, "error": "đang chạy"});
             }
             st.phase = CleanPhase::Scanning;
+            st.manifest = None;
+            st.review = None;
+            st.opts = Some(opts.clone());
+            st.outcomes.clear();
             st.started_at = now_millis();
             st.errors.clear();
-        }
-        let opts = self.scan_options(&self.cfg());
+            st.scope_version
+        };
         let cleaner = Arc::clone(&self.cleaner);
         std::thread::spawn(move || {
             let result =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| scan(&opts, &RealFs)));
             let mut st = cleaner.lock().unwrap_or_else(|e| e.into_inner());
+            if st.scope_version != scope_version {
+                st.phase = CleanPhase::Idle;
+                st.opts = None;
+                st.errors.push("Phạm vi đổi khi đang quét. Hãy quét lại.".into());
+                return;
+            }
             match result {
                 Ok(manifest) => {
                     st.manifest = Some(manifest);
@@ -629,6 +696,7 @@ impl Core {
                 }
                 Err(_) => {
                     st.phase = CleanPhase::Idle;
+                    st.opts = None;
                     st.errors.push("quét bị lỗi".into());
                 }
             }
@@ -677,6 +745,13 @@ impl Core {
             "items": items,
             "total": total,
             "matched": matched,
+            "scan_id": st.manifest.as_ref().map(|m| &m.run_id),
+            "scope": st.opts.as_ref().map(|o| &o.roots),
+            "roots": st.manifest.as_ref().map(|m| &m.roots),
+            "skip_recent_days": st.opts.as_ref().map(|o| o.skip_recent_days),
+            "manifest_errors": st.manifest.as_ref().map(|m| &m.errors),
+            "truncated": st.manifest.as_ref().is_some_and(|m| m.errors.iter().any(|e| e.starts_with("scan truncated:"))),
+            "shown_items": items.len(),
             "scanned": scanned,
             "cleaned": cleaned,
             "top_files": top_files,
@@ -689,38 +764,73 @@ impl Core {
         })
     }
 
-    /// Dọn các id đã quét. Chỉ nhận khi `Done` + có manifest + không bị ngắt lần trước.
-    /// `a[0]` là mảng id, `a[1]` là `"permanent"` / `"recycle"`.
-    pub fn cleaner_clean(&self, ids: &[Value], mode: &str) -> Value {
-        let mode = match mode {
-            "permanent" => Mode::Permanent,
-            "recycle" => Mode::Recycle,
-            _ => return json!({"ok": false, "error": "mode không hợp lệ"}),
-        };
-        let ids: Vec<String> = ids
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::to_string)
-            .collect();
-        let (manifest, opts, run_id) = {
-            let st = self.cleaner.lock().unwrap_or_else(|e| e.into_inner());
-            if !matches!(st.phase, CleanPhase::Done) || st.manifest.is_none() || st.opts.is_none() {
-                return json!({"ok": false, "error": "chưa quét"});
-            }
-            if st.interrupted {
-                return json!({"ok": false, "error": "lần trước bị ngắt"});
-            }
-            let m = st.manifest.clone().expect("manifest checked");
-            let o = st.opts.clone().expect("opts checked");
-            let rid = m.run_id.clone();
-            (m, o, rid)
-        };
+    fn current_review(
+        st: &CleanerState, scope: &ScanOptions, ids: &[Value], mode: &str, scan_id: &str,
+    ) -> Result<CleanReview, &'static str> {
+        if st.interrupted { return Err("lần trước bị ngắt"); }
+        if st.phase != CleanPhase::Done { return Err("chưa quét"); }
+        let manifest = st.manifest.as_ref().ok_or("Hãy quét lại trước khi dọn")?;
+        let opts = st.opts.as_ref().ok_or("Hãy quét lại trước khi dọn")?;
+        if manifest.run_id != scan_id || opts.roots != scope.roots
+            || opts.skip_recent_days != scope.skip_recent_days || opts.forbidden != scope.forbidden
         {
+            return Err("Phạm vi hoặc phiên quét đã đổi. Hãy quét lại.");
+        }
+        let mode = clean_mode(mode).ok_or("mode không hợp lệ")?;
+        let (ids, bytes) = reviewed_selection(manifest, ids).ok_or("Lựa chọn không hợp lệ. Hãy chọn lại.")?;
+        Ok(CleanReview { ticket: String::new(), scan_id: scan_id.into(), mode, ids, bytes })
+    }
+
+    pub fn cleaner_review(&self, ids: &[Value], mode: &str, scan_id: &str) -> Value {
+        let scope = self.scan_options(&self.cfg());
+        let mut st = self.cleaner.lock().unwrap_or_else(|e| e.into_inner());
+        st.review = None;
+        match Self::current_review(&st, &scope, ids, mode, scan_id) {
+            Ok(mut reviewed) => {
+                reviewed.ticket = cu_cleaner::new_run_id();
+                let result = json!({"ok":true,"ticket":&reviewed.ticket,"count":reviewed.ids.len(),"bytes":reviewed.bytes});
+                st.review = Some(reviewed);
+                result
+            }
+            Err(error) => json!({"ok":false,"error":error}),
+        }
+    }
+
+    pub fn cleaner_cancel_review(&self, ticket: &str) -> Value {
+        let mut st = self.cleaner.lock().unwrap_or_else(|e| e.into_inner());
+        if st.review.as_ref().is_some_and(|r| r.ticket == ticket) { st.review = None; }
+        Value::Bool(true)
+    }
+
+    pub fn cleaner_clean(
+        &self, ids: &[Value], mode: &str, scan_id: &str, ticket: &str,
+        count: Option<u64>, bytes: Option<u64>,
+    ) -> Value {
+        let scope = self.scan_options(&self.cfg());
+        let (manifest, opts, mode, ids) = {
             let mut st = self.cleaner.lock().unwrap_or_else(|e| e.into_inner());
-            st.phase = CleanPhase::Cleaning { run_id };
+            // A submit attempt consumes the review even if any field fails validation.
+            let approved = st.review.take();
+            let mut current = match Self::current_review(&st, &scope, ids, mode, scan_id) {
+                Ok(current) => current,
+                Err(error) => return json!({"ok":false,"error":error}),
+            };
+            current.ticket = ticket.into();
+            if approved.as_ref() != Some(&current) || count != Some(current.ids.len() as u64)
+                || bytes != Some(current.bytes)
+            {
+                return json!({"ok":false,"error":"Xác nhận không còn hợp lệ. Hãy kiểm tra lại lựa chọn."});
+            }
+            let manifest = st.manifest.clone().expect("manifest reviewed");
+            let mut opts = st.opts.clone().expect("scope reviewed");
+            // Bind deletion to the canonical roots observed by the scanner instead of
+            // allowing changed symlinks or raw scope aliases to enlarge the approved boundary.
+            opts.roots = manifest.roots.iter().map(PathBuf::from).collect();
+            st.phase = CleanPhase::Cleaning { run_id: manifest.run_id.clone() };
             st.started_at = now_millis();
             st.outcomes.clear();
-        }
+            (manifest, opts, current.mode, current.ids)
+        };
         let cleaner = Arc::clone(&self.cleaner);
         let journal_path = self.paths.data.join("cleaner_result.json");
         std::thread::spawn(move || {
@@ -740,11 +850,18 @@ impl Core {
                         .ok()
                         .and_then(|t| serde_json::from_str::<CleanRecord>(&t).ok())
                     {
-                        Some(rec) => st.last_run = Some(rec),
-                        None => st.errors.push("không đọc được journal kết quả".into()),
+                        Some(rec) => {
+                            st.interrupted = rec.phase == PHASE_CLEANING;
+                            st.last_run = Some(rec);
+                        }
+                        None => {
+                            st.interrupted = true;
+                            st.errors.push("không đọc được journal kết quả".into());
+                        }
                     }
                 }
                 Err(_) => {
+                    st.interrupted = true;
                     st.errors.push("dọn bị lỗi".into());
                     st.outcomes.push(DeleteOutcome {
                         id: String::new(),
@@ -763,26 +880,29 @@ impl Core {
 
     /// Bắt đầu tìm file trùng nền. Detection-only: không có API xoá, không đụng vào `cleaner`.
     /// Dùng chung roots + forbidden với `scan_options` để cùng ranh giới an toàn với Quét.
-    pub fn cleaner_dups_scan(&self) -> Value {
+    pub fn cleaner_dups_scan(&self, scope: Option<&Value>) -> Value {
+        let cfg = self.cfg();
+        let so = self.scan_options(&cfg);
+        let min_kb = cfg.get("cleaner_dups_min_kb").and_then(py_int).unwrap_or(0).max(0) as u64;
+        if scope.is_some_and(|s| s["roots"] != json!(&so.roots) || s["min"].as_u64() != Some(min_kb)) {
+            return json!({"ok":false,"error":"Phạm vi đã lưu đã đổi. Mở lại dashboard để kiểm tra."});
+        }
+        if so.roots.is_empty() {
+            return json!({"ok": false, "error": "Chưa lưu thư mục cần quét"});
+        }
         {
             let mut st = self.dups.lock().unwrap_or_else(|e| e.into_inner());
             if st.phase == DupsPhase::Scanning {
                 return json!({"ok": false, "error": "đang chạy"});
             }
             st.phase = DupsPhase::Scanning;
+            st.scope = so.roots.clone();
             st.started_at = now_millis();
             st.errors.clear();
             st.report = None;
         }
-        let cfg = self.cfg();
-        let so = self.scan_options(&cfg);
         // KB từ config (0 = mọi file >0 byte); clamp >= 0 rồi đổi sang byte. Chỉ đọc config ở đây,
         // cleaner_dups_status() vẫn không gọi cfg().
-        let min_kb = cfg
-            .get("cleaner_dups_min_kb")
-            .and_then(py_int)
-            .unwrap_or(0)
-            .max(0) as u64;
         let opts = DupsOptions {
             roots: so.roots,
             forbidden: so.forbidden,
@@ -839,6 +959,9 @@ impl Core {
         errors.extend(st.errors.iter().cloned());
         json!({
             "phase": st.phase.as_str(),
+            "scope": &st.scope,
+            "shown_groups": groups.len(),
+            "total_groups": st.report.as_ref().map_or(0, |r| r.groups.len()),
             "groups": groups,
             "scanned": scanned,
             "skipped": skipped,
@@ -1182,61 +1305,76 @@ mod tests {
     }
 
     #[test]
-    fn cleaner_scan_then_clean_uses_recording_deleter() {
+    fn cleaner_scan_then_clean_requires_exact_one_time_review() {
         let c = core(&sandbox());
-        let (root, _fake_id, size) = fake_tree();
+        assert_eq!(c.cleaner_scan(None)["ok"], false, "fresh config cannot scan");
+        assert_eq!(c.cleaner_dups_scan(None)["ok"], false);
+        let (root, _, size) = fake_tree();
+        let second = root.join("second");
+        fs::create_dir_all(second.join("node_modules")).unwrap();
+        fs::write(second.join("package.json"), "{}").unwrap();
+        fs::write(second.join("node_modules/payload.bin"), vec![8u8; size as usize]).unwrap();
+        write_scan_cfg(&c, &[root.clone()]);
+
+        assert_eq!(c.cleaner_scan(None)["ok"], true);
+        let scan = wait_done(&c);
+        let token = scan["scan_id"].as_str().unwrap();
+        assert_eq!(scan["phase"], "done");
+        assert_eq!(scan["matched"], 2);
+        assert_eq!(scan["total"], size * 2);
+        let a = scan["items"][0]["id"].clone();
+        let b = scan["items"][1]["id"].clone();
+        assert_eq!(scan["items"][0]["kind"], "NodeModules");
+        for invalid in [vec![], vec![a.clone(),a.clone()], vec![a.clone(), json!(12)], vec![json!("unknown")]] {
+            assert_eq!(c.cleaner_review(&invalid, "recycle", token)["ok"], false);
+        }
+        for (ids, mode, count, total) in [
+            (vec![b.clone()], "recycle", Some(1), Some(size)),
+            (vec![a.clone()], "permanent", Some(1), Some(size)),
+            (vec![a.clone()], "recycle", Some(2), Some(size)),
+            (vec![a.clone()], "recycle", Some(1), Some(size + 1)),
+        ] {
+            let r = c.cleaner_review(&[a.clone()], "recycle", token);
+            let ticket = r["ticket"].as_str().unwrap();
+            assert_eq!(c.cleaner_clean(&ids, mode, token, ticket, count, total)["ok"], false);
+            assert_eq!(c.cleaner_clean(&[a.clone()], "recycle", token, ticket, Some(1), Some(size))["ok"], false, "wrong submission consumed ticket");
+        }
+        let r = c.cleaner_review(&[a.clone()], "recycle", token);
+        let ticket = r["ticket"].as_str().unwrap();
+        assert_eq!(c.cleaner_cancel_review(ticket), true);
+        assert_eq!(c.cleaner_clean(&[a.clone()], "recycle", token, ticket, Some(1), Some(size))["ok"], false);
+
+        let r = c.cleaner_review(&[a.clone()], "recycle", token);
+        let ticket = r["ticket"].as_str().unwrap();
+        assert_eq!(c.save(&json!({"cleaner_skip_recent_days":1})), true);
+        assert_eq!(c.cleaner_clean(&[a.clone()], "recycle", token, ticket, Some(1), Some(size))["ok"], false, "age change invalidates ticket");
         write_scan_cfg(&c, &[root]);
-
-        assert_eq!(
-            c.cleaner_clean(&[json!("bat-ky")], "permanent")["ok"],
-            false
-        ); // chưa quét
-        assert_eq!(c.cleaner_scan(), json!({"ok": true}));
-        let s = wait_done(&c);
-        assert_eq!(s["phase"], "done");
-        assert_eq!(s["matched"], 1);
-        assert_eq!(s["total"], size);
-        // scanner canonicalise root (có thể trả về tên 8.3) → lấy id đúng từ manifest.
-        let id = s["items"][0]["id"].as_str().unwrap().to_string();
-        assert_eq!(s["items"][0]["kind"], json!("NodeModules"));
-        assert!(s["scanned"].as_u64().unwrap_or(0) > 0);
-        assert_eq!(s["cleaned"], 0);
-        assert_eq!(s["interrupted"], false);
-
-        // id lạ: engine từ chối vì không nằm trong manifest.
-        assert_eq!(
-            c.cleaner_clean(&[json!("id-khong-ton-tai")], "permanent"),
-            json!({"ok": true})
-        );
-        let s = wait_done(&c);
-        assert_eq!(s["outcomes"][0]["ok"], false);
-        assert_eq!(s["cleaned"], 0);
-        assert_eq!(s["last_run"]["phase"], "done"); // last_run đã được làm mới
-        assert!(s["outcomes"][0]["err"]
-            .as_str()
-            .unwrap()
-            .contains("not in the manifest"));
-        assert_eq!(s["items"], json!([])); // manifest cũ đã vô hiệu
-
-        // Quét lại rồi dọn id thật: debug build dùng RecordingDeleter, không đụng đĩa.
-        assert_eq!(c.cleaner_scan()["ok"], true);
-        let s = wait_done(&c);
-        assert_eq!(s["phase"], "done");
-        assert_eq!(c.cleaner_clean(&[json!(id.clone())], "recycle")["ok"], true);
-        let s = wait_done(&c);
-        assert_eq!(s["outcomes"][0]["id"], json!(id));
-        assert_eq!(s["outcomes"][0]["ok"], true);
-        assert_eq!(s["cleaned"], 1);
-        assert_eq!(s["scanned"], 0); // manifest đã bị xoá sau clean
-        assert_eq!(s["last_run"]["phase"], "done");
-        assert!(std::path::Path::new(&id).is_dir()); // vẫn còn nguyên — không có xoá thật
-        let rec: CleanRecord = serde_json::from_str(
-            &fs::read_to_string(c.paths.data.join("cleaner_result.json")).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(rec.phase, "done");
-        assert!(rec.outcomes[0].ok);
-        assert_eq!(c.cleaner_clean(&[json!(id)], "khong-hop-le")["ok"], false);
+        assert_eq!(c.cleaner_review(&[a.clone()], "recycle", token)["ok"], false, "restoring an old scope does not restore its scan");
+        assert_eq!(c.cleaner_scan(None)["ok"], true);
+        let restored_scan = wait_done(&c);
+        let restored = restored_scan["scan_id"].as_str().unwrap();
+        let r = c.cleaner_review(&[a.clone()], "recycle", restored);
+        let ticket = r["ticket"].as_str().unwrap();
+        assert_eq!(c.cleaner_scan(None)["ok"], true);
+        let new_scan = wait_done(&c);
+        let new_token = new_scan["scan_id"].as_str().unwrap();
+        assert_ne!(token, new_token);
+        assert_eq!(c.cleaner_clean(&[a.clone()], "recycle", restored, ticket, Some(1), Some(size))["ok"], false);
+        assert!(!c.paths.data.join("cleaner_result.json").exists());
+        let r = c.cleaner_review(&[a.clone()], "recycle", new_token);
+        assert_eq!(r["count"], 1);
+        assert_eq!(r["bytes"], size);
+        let ticket = r["ticket"].as_str().unwrap();
+        assert_eq!(c.cleaner_clean(&[a.clone()], "recycle", new_token, ticket, Some(1), Some(size))["ok"], true);
+        let done = wait_done(&c);
+        assert_eq!(done["outcomes"][0]["id"], a);
+        assert_eq!(done["outcomes"][0]["ok"], true);
+        assert_eq!(done["outcomes"].as_array().unwrap().len(), 1);
+        assert_eq!(done["scan_id"], Value::Null);
+        assert_eq!(done["last_run"]["phase"], "done");
+        assert_eq!(done["last_run"]["mode"], "recycle");
+        assert!(std::path::Path::new(a.as_str().unwrap()).is_dir());
+        assert!(std::path::Path::new(b.as_str().unwrap()).is_dir());
     }
 
     #[test]
@@ -1317,7 +1455,7 @@ mod tests {
         assert_eq!(s["interrupted"], true);
         assert_eq!(s["last_run"]["phase"], "cleaning");
         write_scan_cfg(&c, &[root]);
-        assert_eq!(c.cleaner_scan()["ok"], true);
+        assert_eq!(c.cleaner_scan(None)["ok"], true);
         let s = wait_done(&c);
         assert_eq!(s["phase"], "done");
         // Quét mới = đồng ý mới → cờ ngắt được xoá trong RAM.
@@ -1325,7 +1463,7 @@ mod tests {
         // Giả lập cờ ngắt còn tồn tại: clean phải bị chặn, không tự resume.
         c.cleaner.lock().unwrap().interrupted = true;
         assert_eq!(
-            c.cleaner_clean(&[json!(id)], "permanent"),
+            c.cleaner_review(&[json!(id)], "permanent", s["scan_id"].as_str().unwrap()),
             json!({"ok": false, "error": "lần trước bị ngắt"})
         );
         assert_eq!(
@@ -1391,7 +1529,7 @@ mod tests {
         let c = core(&dir);
         write_scan_cfg(&c, &[root]);
 
-        assert_eq!(c.cleaner_dups_scan()["ok"], true);
+        assert_eq!(c.cleaner_dups_scan(None)["ok"], true);
         let s = wait_dups_done(&c);
         assert_eq!(s["phase"], "done");
         assert!(s["groups"].as_array().is_some_and(|g| !g.is_empty()));

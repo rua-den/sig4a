@@ -27,7 +27,7 @@ pub fn defaults() -> Config {
         "widget_show_reset5": true, "widget_show_reset7": true, "widget_tooltip": true,
         "widget_label": "alias", "widget_font": 100, "widget_opacity": 100,
         "widget_theme": "auto", "widget_plate": false, "widget_hidden": [], "widget_style": "rings",
-        "widget_layout": "auto", "cleaner_roots": ["D:\\stu"], "cleaner_skip_recent_days": 0, "cleaner_dups_min_kb": 0,
+        "widget_layout": "auto", "cleaner_roots": [], "cleaner_skip_recent_days": 0, "cleaner_dups_min_kb": 0,
         "widget_cx": null, "widget_cy": null, "widget_angle": 0.0
     });
     match v {

@@ -118,7 +118,7 @@ struct Scanner<'a> {
 }
 
 pub fn scan(opts: &ScanOptions, fs: &dyn FsView) -> Manifest {
-    let forbidden = opts.forbidden.iter().map(|p| canonical_for(p)).collect();
+    let forbidden = opts.forbidden.iter().flat_map(|p| [p.clone(), canonical_for(p)]).collect();
     let mut scanner = Scanner {
         opts,
         fs,
@@ -351,6 +351,10 @@ impl<'a> Scanner<'a> {
         // `opts.roots`. Only UNC, blocked drive types, reparse points and forbidden subtrees are
         // rejected below. `is_root_dir` still protects *deletion* targets elsewhere in the crate.
         // canonicalize is only meaningful for real, existing paths; in-memory views keep the input.
+        if crate::has_reparse_component(raw, self.fs) {
+            self.error(format!("invalid root '{}': reparse points are not scanned", display(raw)));
+            return;
+        }
         let canonical = std::fs::canonicalize(raw).ok().map(|p| strip_verbatim(&p));
         let path = canonical.clone().unwrap_or_else(|| raw.to_path_buf());
         let Some(attrs) = self.fs.attrs(&path) else {
@@ -497,6 +501,11 @@ impl<'a> Scanner<'a> {
             for child in children {
                 if self.out_of_budget {
                     return;
+                }
+                if self.forbidden.iter().any(|protected| path_contains(&child.path, protected)) {
+                    // Still traverse eligible siblings, but never offer the parent for recursive deletion.
+                    stack.push(child.path);
+                    continue;
                 }
                 match candidate_rule(&child.name, &entries) {
                     Candidate::None => stack.push(child.path),
