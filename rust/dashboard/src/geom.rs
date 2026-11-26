@@ -53,10 +53,43 @@ pub fn fit_rect_in_area(cur: [i32; 4], h_css: f64, scale: f64, area: [i32; 4]) -
     [cur[0], y, cur[2], h]
 }
 
+/// Place the capture popup just below the selected region, or above it if needed.
+pub fn capture_popup(bounds: [i32; 4], area: [i32; 4], scale: f64) -> [i32; 4] {
+    let [left, top, aw, ah] = area;
+    let w = ((400.0 * scale).round() as i32).clamp(1, aw.max(1));
+    let h = ((320.0 * scale).round() as i32).clamp(1, ah.max(1));
+    let gap = (8.0 * scale).round() as i32;
+    let bottom = top + ah;
+    let below = bounds[1] + bounds[3] + gap;
+    let above = bounds[1] - gap - h;
+    let x = bounds[0].clamp(left, left + (aw - w).max(0));
+    let y = if below + h <= bottom {
+        below
+    } else if above >= top {
+        above
+    } else if bottom - below >= bounds[1] - gap - top {
+        below
+    } else {
+        above
+    };
+    [x, y.clamp(top, top + (ah - h).max(0)), w, h]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn capture_popup_uses_nearest_edge_and_monitor_work_area() {
+        let primary = [0, 0, 1920, 1040];
+        assert_eq!(capture_popup([100, 90, 290, 110], primary, 1.0), [100, 208, 400, 320]);
+        assert_eq!(capture_popup([1810, 910, 97, 65], primary, 1.0), [1520, 582, 400, 320]);
+        let secondary = [-1600, -140, 1600, 860];
+        assert_eq!(capture_popup([-220, 520, 140, 140], secondary, 1.5), [-600, 28, 600, 480]);
+        let small = [-300, 10, 300, 260];
+        assert_eq!(capture_popup([-150, 80, 80, 35], small, 1.25), small);
+    }
 
     #[test]
     fn initial_width_by_profile_count() {

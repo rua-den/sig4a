@@ -1,0 +1,46 @@
+{
+  "title": "Anchored OCR shortcut popup",
+  "status": "passed",
+  "baseline": "bc1b673331fb45f0cafa8b2f56edfa70f735b44f",
+  "scope": "SIG4A Ctrl+Alt+O on Windows. Independent of Phase 4 Cleaner.",
+  "goal": "Start the region picker directly, then show detected text, Copy and inline Vietnamese translation beside the selection, without changing the configured Local AI model.",
+  "acceptance": [
+    {
+      "id": "OCRPOP-AUTO-1",
+      "case": "Popup placement below or above the selection and clamped to the selected monitor work area, including negative origins and DPI scaling.",
+      "status": "passed",
+      "evidence": "Windows all-target locked check and 28 Rust tests passed, including monitor geometry with negative origins and mixed scale inputs: https://github.com/rua-den/sig4a/actions/runs/45873176979/job/140093513616"
+    },
+    {
+      "id": "OCRPOP-AUTO-2",
+      "case": "Latest capture wins while OCR or translation is pending. Stale results never replace a newer capture. Dashboard OCR stays unchanged.",
+      "status": "passed",
+      "evidence": "Real WebView2 integration 1/1 plus Rust render-token regression tests. Tests verify replacement behind earlier OCR, popup translation, a standalone shortcut or readiness, and unchanged dashboard OCR: https://github.com/rua-den/sig4a/actions/runs/45873176979/job/140093513616"
+    },
+    {
+      "id": "OCRPOP-WIN-1",
+      "case": "Native Ctrl+Alt+O opens the picker without first showing the popup. Esc on the first capture returns without showing an empty popup. A later shortcut is usable.",
+      "status": "passed",
+      "evidence": "Native Windows 2025 tray Ctrl+Alt+O: picker observed in 120 ms; first Esc ended picker and child PID with no visible popup/dashboard across 67 samples; the next shortcut worked: https://github.com/rua-den/sig4a/actions/runs/45874026394/job/140096423956"
+    },
+    {
+      "id": "OCRPOP-WIN-2",
+      "case": "Drag a real screen region, verify the actual popup bounds, automatic OCR, Copy to Windows clipboard and Vietnamese translation without leaving the popup.",
+      "status": "passed",
+      "evidence": "Native 460×110 crop [40,65,500,175], popup [40,183,440,503], work area [0,0,1024,720] (96 DPI). Automatic Qwen3-VL 2B read “Close the door.” and inline translation returned “Đóng cửa.” Native mouse and clipboard confirmed both copies in same HWND and both survived warm Esc: https://github.com/rua-den/sig4a/actions/runs/45874026394/job/140096423956"
+    }
+  ],
+  "advisor": {
+    "status": "approved",
+    "evidence": "Independent GPT-6.2 Astra review approved exact main.rs blob 6a687b7b2a1dc7b563ee055d74016ab2d266470e and the unchanged UI, regression, placement and capture blobs; conditional Windows proof is now satisfied."
+  },
+  "gate": {
+    "status": "passed",
+    "rule": "Record passed only after the required automated and independent native Windows evidence and Advisor approval of the exact product diff. Do not mark Phase 4 as changed.",
+    "closed_at": "2026-11-26T18:27:21.079Z"
+  },
+  "tested_product": "eba1c42646327c55e9944fef1ec41e38dad8039c",
+  "limitations": [
+    "Native proof used a hosted Windows Server 2025 desktop with a single 96-DPI monitor and pinned Qwen3-VL 2B via llama.cpp CPU. Multi-monitor/mixed DPI was checked with geometry tests only. The user's LFM configuration was not changed or tested here."
+  ]
+}

@@ -1,6 +1,17 @@
 // Runs inside the real dashboard page with a controlled Local AI bridge.
 const quickMode = window.__QUICK_MODE__;
 const originalApi = window.pywebview.api;
+const originalSend = window.__cu_send;
+const presentation = [];
+window.__cu_send = (method, args) => {
+  if (method !== '__quick_presented') return originalSend?.(method, args);
+  presentation.push({
+    token: args[0], preview: document.getElementById('ocr-preview').getAttribute('src'),
+    canCopy: !document.getElementById('ocr-copy').disabled,
+    translationHidden: document.getElementById('ocr-inline').hidden,
+    anchored: document.body.classList.contains('ocr-popup'),
+  });
+};
 const requests = [];
 const readiness = [];
 let capture;
@@ -146,9 +157,78 @@ try {
   check(document.body.classList.contains('quick') && node('tool-localai').classList.contains('on'), 'quick recovery exposed unrelated routes');
   node('ai-back').click();
   check(document.activeElement === node('ocr-run'), 'quick OCR recovery did not return focus to visible retry');
+  // Actual quick-hotkey callback: a newer crop waits behind the active request
+  // and automatically takes over as soon as the previous response is discarded.
+  showQuickCapture(first, null, 41);
+  check(presentation.length === 1 && presentation[0].token === 41 && presentation[0].anchored &&
+    presentation[0].preview === first && !presentation[0].canCopy && presentation[0].translationHidden,
+    'first render acknowledgement preceded updating the anchored view');
+  await tick();
+  check(requests.length === 7 && requests[6].data.image === first, 'anchored capture did not run OCR immediately');
+  showQuickCapture(fourth, null, 42);
+  check(presentation.at(-1).token === 42 && presentation.at(-1).preview === fourth && !presentation.at(-1).canCopy,
+    'replacement render acknowledgement exposed the prior capture');
+  await tick();
+  check(requests.length === 7 && copy.disabled, 'replacement did not wait behind the active OCR request');
+  requests[6].resolve({text:'stale capture A'});
+  await tick();
+  check(requests.length === 8 && requests[7].data.image === fourth && !node('ocr-out').textContent.includes('stale'), 'newest crop was not queued safely');
+  requests[7].resolve({text:'Open the window.'});
+  await tick();
+  translate.click();
+  await tick();
+  check(requests.length === 9 && requests[8].data.task === 'translation' && requests[8].data.text === 'Open the window.' && requests[8].data.target === 'vi', 'inline translation request was incorrect');
+  check(node('tool-ocr').classList.contains('on') && !node('ocr-inline').hidden && !copy.disabled, 'inline translation hid the OCR result or Copy');
+  showQuickCapture(first, null);
+  requests[8].resolve({text:'stale translation'});
+  await tick();
+  check(requests.length === 10 && requests[9].data.image === first && node('ocr-inline').hidden, 'recapture did not invalidate pending translation and re-run OCR');
+  requests[9].resolve({text:'Close the door.'});
+  await tick();
+  translate.click();
+  await tick();
+  requests[10].resolve({text:'Đóng cửa.'});
+  await tick();
+  check(node('ocr-out').textContent === 'Close the door.' && node('ocr-translation-out').textContent === 'Đóng cửa.' && !node('ocr-translation-copy').disabled, 'popup did not keep both results available');
+  const popupCancel = captureOcr();
+  await tick(); capture(null); await popupCancel;
+  check(node('ocr-preview').getAttribute('src') === first && node('ocr-out').textContent === 'Close the door.' &&
+    node('ocr-translation-out').textContent === 'Đóng cửa.' && !node('ocr-translation-copy').disabled,
+    'cancelling recapture discarded prior anchored results');
+  const popupButton = captureOcr();
+  await tick(); capture({presenting:true}); await popupButton;
+  check(node('ocr-preview').getAttribute('src') === first && presentation.length === 2,
+    'bridge acknowledgement displayed an image before native presentation');
+  node('ocr-out').textContent = 'Edited';
+  node('ocr-out').dispatchEvent(new Event('input', {bubbles:true}));
+  check(node('ocr-inline').hidden && node('ocr-translation-copy').disabled, 'editing the OCR result retained a stale translation');
+  // A previous shortcut or settings readiness check also owns the native AI worker.
+  openQuickTool('translation', 'Standalone translation.');
+  await tick();
+  check(requests.length === 12 && requests[11].data.task === 'translation', 'standalone quick translation did not start');
+  showQuickCapture(fourth, null);
+  await tick();
+  check(requests.length === 12, 'capture competed with the previous quick tool for the native worker');
+  requests[11].resolve({text:'previous shortcut'});
+  await tick();
+  check(requests.length === 13 && requests[12].data.image === fourth, 'capture did not follow the previous shortcut');
+  requests[12].resolve({text:'fourth'});
+  await tick();
+  const checkBeforeCapture = checkAi(); await tick();
+  const discovery = readiness.at(-1);
+  showQuickCapture(first, null);
+  await tick();
+  check(requests.length === 13, 'capture competed with Local AI readiness for the native worker');
+  discovery.resolve({models:['new-model']});
+  await checkBeforeCapture; await tick();
+  check(requests.length === 14 && requests[13].data.image === first, 'capture did not follow Local AI readiness');
+  requests[13].resolve({text:'first'});
+  await tick();
   return { ocr_result_lifecycle: true };
 } finally {
   window.pywebview.api = originalApi;
+  window.__cu_send = originalSend;
   window.__QUICK_MODE__ = quickMode;
+  document.body.classList.remove('ocr-popup');
   document.body.classList.toggle('quick', !!quickMode);
 }

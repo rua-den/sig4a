@@ -98,6 +98,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
 .localai-route #settings-box,.localai-route #tool-usage{display:none}
 .quick .toolnav,.quick .wb:not(.x),.quick footer,.quick #tool-overview,.quick #tool-usage,.quick #tool-localai{display:none}.quick main{padding:10px 12px}.quick .title{height:30px}.quick .toolpanel.on{display:block}.quick .box{padding:8px 10px}.quick .result{max-height:118px;overflow:auto}.quick textarea{min-height:58px}.quick #ocr-preview{max-height:82px}.quick .toolactions{margin-top:7px}
 .quick.localai-route #tool-localai.on{display:block}.quick #ocr-preview,.quick #ocr-in{display:none}.quick #ocr-status{display:block}.quick #tool-ocr .hint{display:none}.quick #tool-ocr .result{min-height:122px;max-height:156px}.quick .accent-picker{display:none}
+.ocr-popup .rz,.ocr-popup #ocr-remove{display:none}.ocr-popup #tool-ocr .result{min-height:44px;max-height:111px;overflow:auto;overflow-wrap:anywhere}.ocr-popup #ocr-out{margin-top:6px}.ocr-inline{margin-top:8px}.ocr-inline .toolactions{margin-top:5px}.ocr-popup #tool-ocr .toolactions{gap:5px}.ocr-popup #ocr-out:focus-visible,.ocr-popup #ocr-translation-out:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.quota-row{overflow-wrap:anywhere}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable=true]{cursor:text}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
 </style></head><body>
 <div class="title"><div class="drag pywebview-drag-region" ondblclick="toggleMax()"><b>Kane's Tool Box</b><span id="sub"></span></div><label class="accent-picker" title="Màu giao diện">Màu giao diện<select id="accent" aria-label="Màu giao diện"><option value="orange">Cam</option><option value="blue">Xanh</option><option value="purple">Tím</option></select></label>
@@ -117,7 +118,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
  <div id="ai-subnav-wrap"><nav class="ai-subnav" aria-label="Công cụ AI"><button class="on" data-ai="grammar" aria-current="page" onclick="toolTab('grammar')">Grammar</button><button data-ai="translation" onclick="toolTab('translation')">Translation</button><button data-ai="ocr" onclick="toolTab('ocr')">OCR</button></nav></div>
 <section class="toolpanel" id="tool-grammar"><div class="box"><div class="lbl">GRAMMAR</div><label>Văn bản tiếng Anh<textarea id="grammar-in" placeholder="Dán văn bản cần kiểm tra..." spellcheck="true"></textarea></label><div class="toolactions"><button class="b p" id="grammar-run" onclick="runTool('grammar')">Kiểm tra</button><button class="b" onclick="copyResult('grammar-out')">Sao chép</button></div><button hidden class="b" id="grammar-recovery" onclick="openAiRecovery('grammar')">Cài đặt Local AI</button><div class="result" id="grammar-out" contenteditable="true" role="textbox" aria-label="Kết quả Grammar">Kết quả sẽ hiển thị ở đây.</div></div></section>
  <section class="toolpanel" id="tool-translation"><div class="box"><div class="lbl">TRANSLATION</div><label>Văn bản<textarea id="translation-in" placeholder="Dán văn bản cần dịch..."></textarea></label><label style="max-width:240px;margin-top:8px">Ngôn ngữ đích<select id="translation-lang"><option value="vi">Tiếng Việt (mặc định)</option><option value="en">English</option></select></label><div class="toolactions"><button class="b p" id="translation-run" onclick="runTool('translation')">Dịch</button><button class="b" onclick="copyResult('translation-out')">Sao chép</button></div><button hidden class="b" id="translation-recovery" onclick="openAiRecovery('translation')">Cài đặt Local AI</button><div class="result" id="translation-out" contenteditable="true" role="textbox" aria-label="Kết quả Translation">Kết quả sẽ hiển thị ở đây.</div></div></section>
- <section class="toolpanel" id="tool-ocr"><div class="box"><div class="lbl">OCR</div><p class="hint">Dán ảnh trực tiếp hoặc chụp vùng bằng nút bên dưới. Chỉ nhận PNG, JPEG, WebP (tối đa 6 MB).</p><textarea id="ocr-in" readonly placeholder="Chưa có ảnh — hãy dán ảnh hoặc chụp một vùng màn hình..." style="min-height:56px;margin-top:8px"></textarea><img id="ocr-preview" class="ocr-preview" alt="Xem trước ảnh OCR"><div class="toolactions"><button class="b" id="ocr-capture" onclick="captureOcr()">Chụp vùng màn hình</button><button class="b" id="ocr-remove" onclick="removeOcr()" disabled>Xoá ảnh</button><button class="b p" id="ocr-run" onclick="runTool('ocr')" disabled>Nhận chữ</button><button class="b" id="ocr-copy" onclick="copyResult('ocr-out')" disabled>Sao chép</button><button class="b" data-quick-translate onclick="translateOcr()" disabled>Dịch</button></div><span class="hint" id="ocr-status" role="status">Chưa có ảnh.</span><button hidden class="b" id="ocr-recovery" onclick="openAiRecovery('ocr')">Cài đặt Local AI</button><div class="result" id="ocr-out" contenteditable="true" role="textbox" aria-label="Kết quả OCR">Kết quả OCR sẽ hiển thị ở đây.</div></div></section>
+ <section class="toolpanel" id="tool-ocr"><div class="box"><div class="lbl">OCR</div><p class="hint">Dán ảnh trực tiếp hoặc chụp vùng bằng nút bên dưới. Chỉ nhận PNG, JPEG, WebP (tối đa 6 MB).</p><textarea id="ocr-in" readonly placeholder="Chưa có ảnh — hãy dán ảnh hoặc chụp một vùng màn hình..." style="min-height:56px;margin-top:8px"></textarea><img id="ocr-preview" class="ocr-preview" alt="Xem trước ảnh OCR"><div class="toolactions"><button class="b" id="ocr-capture" onclick="captureOcr()">Chụp vùng màn hình</button><button class="b" id="ocr-remove" onclick="removeOcr()" disabled>Xoá ảnh</button><button class="b p" id="ocr-run" onclick="runTool('ocr')" disabled>Nhận chữ</button><button class="b" id="ocr-copy" onclick="copyResult('ocr-out')" disabled>Sao chép</button><button class="b" data-quick-translate onclick="translateOcr()" disabled>Dịch</button></div><span class="hint" id="ocr-status" role="status">Chưa có ảnh.</span><button hidden class="b" id="ocr-recovery" onclick="openAiRecovery('ocr')">Cài đặt Local AI</button><div class="result" id="ocr-out" contenteditable="true" role="textbox" aria-label="Kết quả OCR">Kết quả OCR sẽ hiển thị ở đây.</div><section class="ocr-inline" id="ocr-inline" aria-label="Bản dịch tiếng Việt" hidden><div class="lbl">Bản dịch tiếng Việt</div><div class="result" id="ocr-translation-out" tabindex="0" role="status"></div><div class="toolactions"><button class="b" id="ocr-translation-copy" onclick="copyResult('ocr-translation-out')" disabled>Sao chép bản dịch</button></div></section></div></section>
  <section class="toolpanel" id="tool-localai"><div class="box"><div class="lbl">LOCAL AI</div><label>Endpoint loopback<input id="ai-endpoint" type="text" value="http://127.0.0.1:11434"></label><label style="max-width:240px;margin-top:8px">Backend<select id="ai-backend"><option value="ollama">Ollama</option><option value="llama_cpp">llama.cpp server</option></select></label><label style="max-width:420px;margin-top:8px">Model<input id="ai-model" list="ai-models" value="hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0" autocomplete="off"><datalist id="ai-models"></datalist></label><div class="modelcard"><b>LiquidAI LFM2.5-VL-450M-GGUF</b><br><span class="hint">Ollama HF pattern Q4: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q4_K_M</code>; Q8: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0</code>.<br>llama.cpp chọn ID thực từ <code>/v1/models</code>; khởi chạy server ngoài với listen loopback và model path phù hợp.</span></div><div class="toolactions"><button class="b" id="ai-check" onclick="checkAi()">Kiểm tra kết nối</button><button class="b" id="model-list" onclick="listModels()">Lấy model</button><button class="b" id="ai-test" onclick="testAi()">Thử model với ảnh mẫu</button><button class="b p" id="ai-save" onclick="saveAi()">Lưu Local AI</button></div><div class="result" id="ai-status" role="status" data-state="unchecked">Chưa kiểm tra. Chọn backend, endpoint và model rồi kiểm tra.</div><div id="ai-save-status" role="status" class="hint"></div><button hidden class="b" id="ai-back" onclick="returnToAi()">Quay lại công cụ</button></div></section>
  <section class="toolpanel" id="tool-usage">
  <div class="box" id="usage-accounts"><div class="lbl">ACCOUNTS</div><div id="accs"></div></div>
@@ -198,7 +199,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
 // that gap used to throw and be lost. Every call goes through api.X(...), which waits for the bridge when needed.
 const bridge=new Promise(r=>{if(window.pywebview&&window.pywebview.api&&window.pywebview.api.state)r();else window.addEventListener('pywebviewready',()=>r(),{once:true})});
 const api=new Proxy({},{get:(_,n)=>async(...a)=>{if(!(window.pywebview&&pywebview.api&&pywebview.api[n]))await bridge;return pywebview.api[n](...a)}});
-window.openQuickTool=function(tool,text){if(!['grammar','translation','ocr'].includes(tool))return;document.body.classList.toggle('quick',!!window.__QUICK_MODE__);toolTab(tool);const input=$(tool+'-in');if(tool==='ocr'){if(text)toast('Quick tool OCR cần ảnh; hãy dán hoặc chụp vùng màn hình');else captureOcr();return}if(text){input.value=text;input.focus();runTool(tool);}else {input.focus();toast('Chưa có văn bản được chọn — hãy dán hoặc nhập nội dung');}};
+window.openQuickTool=function(tool,text){if(!['grammar','translation','ocr'].includes(tool))return;document.body.classList.remove('ocr-popup');document.body.classList.toggle('quick',!!window.__QUICK_MODE__);toolTab(tool);const input=$(tool+'-in');if(tool==='ocr'){if(text)toast('Quick tool OCR cần ảnh; hãy dán hoặc chụp vùng màn hình');else captureOcr();return}if(text){input.value=text;input.focus();runTool(tool);}else {input.focus();toast('Chưa có văn bản được chọn — hãy dán hoặc nhập nội dung');}};
 const $=id=>document.getElementById(id);let cfg=null,loaded=false,waitingRefresh=0,seenRefresh=0,timer=null;
 function applyAccent(value){const name=['orange','blue','purple'].includes(value)?value:'orange';const colors={orange:['#0a0a0a','#141414','#303030','#fab283','#2a201b','#f6c8a8'],blue:['#0a0a0a','#141414','#303030','#8bb8ff','#182532','#b8d0ff'],purple:['#0a0a0a','#141414','#303030','#c7a0ff','#271b32','#dcc7ff']}[name];const root=document.documentElement;['--bg','--panel','--line','--accent','--sel','--busy'].forEach((k,i)=>root.style.setProperty(k,colors[i]));if($('accent'))$('accent').value=name;return name}
 const endpointDefaults={ollama:'http://127.0.0.1:11434',llama_cpp:'http://127.0.0.1:8080'},managedAi={endpoint:'http://127.0.0.1:18080',backend:'llama_cpp',model:'lfm25-vl-q8'};let endpointTouched=false,lastBackend='ollama',aiManual={endpoint:endpointDefaults.ollama,backend:'ollama',model:'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0'},aiCheckGeneration=0,aiCheckBusy=false,aiSaveBusy=false,aiManagedSaved=false,aiReturn=null;
@@ -222,6 +223,7 @@ document.addEventListener('pointerdown',()=>{pressing=true},true);
 // shrink=true only for things the user did (tab, auto-fit, opening): a background change (a warning line that comes and
 // goes) may grow the window but never shrinks it back, so the window does not keep jumping up and down
 function fit(shrink){
+ if(document.body.classList.contains('ocr-popup'))return;
  if(pressing&&!rs){fitLater=shrink||fitLater==='shrink'?'shrink':'grow';return}
  if(userSized||maxed){                                   // the user chose the size: never resize, only tighten the layout if it would not fit
   document.body.classList.remove('compact');if(natural()>innerHeight)document.body.classList.add('compact');return}
@@ -421,15 +423,55 @@ function toolTab(t){
 async function copyResult(id){const el=$(id),text=(el.value!==undefined?el.value:el.innerText||'').trim();if(id!=='ocr-out'&&el.dataset.valid!=='true')return toast('Chưa có kết quả để sao chép');if(id==='ocr-out'&&!ocrResultValid)return toast('Chưa có kết quả OCR để sao chép');if(!text||text==='Kết quả sẽ hiển thị ở đây.'||text==='Đang xử lý…'||text.startsWith('Local AI chưa sẵn sàng'))return toast('Chưa có kết quả để sao chép');try{await navigator.clipboard.writeText(text);toast('Đã sao chép');return true}catch(e){const tmp=document.createElement('textarea');tmp.value=text;tmp.style.cssText='position:fixed;opacity:0';document.body.appendChild(tmp);tmp.select();const ok=document.execCommand('copy');tmp.remove();toast(ok?'Đã sao chép':'Không sao chép được');return ok}}
 const OCR_PLACEHOLDER='Kết quả OCR sẽ hiển thị ở đây.';
 let ocrImage=null,ocrImageVersion=0,ocrInputVersion=0,ocrBusy=false,ocrResultValid=false;
+let queuedOcr=null,ocrInlineBusy=false,ocrTextVersion=0,regularAiRequests=0;
+function resetOcrTranslation(){
+ ocrTextVersion++;
+ $('ocr-inline').hidden=true;
+ $('ocr-translation-out').textContent='';
+ $('ocr-translation-out').dataset.valid='false';
+ $('ocr-translation-copy').disabled=true;
+}
+function drainOcr(){
+ if(queuedOcr===null||ocrBusy||ocrInlineBusy||regularAiRequests||aiCheckBusy)return;
+ const version=queuedOcr;
+ queuedOcr=null;
+ if(version===ocrImageVersion&&document.body.classList.contains('ocr-popup')&&document.querySelector('#tool-ocr.on'))void runTool('ocr');
+ else syncOcrButtons();
+}
+function useQuickOcrImage(data){
+ setOcrImage(data);
+ queuedOcr=ocrImageVersion;
+ syncOcrButtons();
+ drainOcr();
+}
+window.notifyQuickPresented=function(token){
+ if(!Number.isSafeInteger(token))return;
+ // Flush the current route's layout before the hidden native HWND is allowed to show.
+ document.querySelector('.toolpanel.on')?.getBoundingClientRect();
+ window.__cu_send?.('__quick_presented',[token]);
+};
+window.showQuickCapture=function(data,error,token){
+ ++ocrInputVersion;
+ document.body.classList.add('ocr-popup');
+ toolTab('ocr');
+ if(data)useQuickOcrImage(data);
+ else {setOcrImage(null);setText('ocr-status',error==='selected region is too large'?'Vùng chụp quá lớn. Hãy chọn một vùng nhỏ hơn.':'Không chụp được vùng màn hình.');}
+ $('ocr-capture').focus();
+ notifyQuickPresented(token);
+};
+$('ocr-out').addEventListener('input',()=>{if(ocrResultValid){resetOcrTranslation();syncOcrButtons()}});
+
 function syncOcrButtons(){
- $('ocr-run').disabled=!ocrImage||ocrBusy;
+ $('ocr-run').disabled=!ocrImage||ocrBusy||ocrInlineBusy||queuedOcr!==null;
  $('ocr-remove').disabled=!ocrImage;
  $('ocr-copy').disabled=!ocrResultValid;
- document.querySelector('#tool-ocr [data-quick-translate]').disabled=!ocrResultValid;
+ document.querySelector('#tool-ocr [data-quick-translate]').disabled=!ocrResultValid||ocrInlineBusy;
 }
 function setOcrImage(data){
  ocrImage=data;
  ocrImageVersion++;
+ queuedOcr=null;
+ resetOcrTranslation();
  ocrResultValid=false;
  $('ocr-recovery').hidden=true;
  const preview=$('ocr-preview');
@@ -465,46 +507,50 @@ async function captureOcr(){
  setText('ocr-status','Đang mở công cụ chụp…');
  try{
   const data=await api.ocr_capture();
-  if(version!==ocrInputVersion)return;
-  if(data){setOcrImage(data);if(window.__QUICK_MODE__)runTool('ocr')}
+  if(version!==ocrInputVersion||data?.presenting===true)return;
+  if(data){if(document.body.classList.contains('ocr-popup'))useQuickOcrImage(data);else {setOcrImage(data);if(window.__QUICK_MODE__)runTool('ocr')}}
   else setText('ocr-status','Đã huỷ chụp.');
  }catch(e){if(version===ocrInputVersion)setText('ocr-status','Không chụp được vùng màn hình.')}
 }
 function translateOcr(){
  const text=($('ocr-out').innerText||'').trim();
  if(!ocrResultValid||!text)return toast('Chưa có kết quả OCR để dịch');
+ if(document.body.classList.contains('ocr-popup'))return runTool('translation',true);
  $('translation-in').value=text;
  toolTab('translation');
  runTool('translation');
 }
-async function runTool(kind){
- const isOcr=kind==='ocr',input=isOcr?'':$(kind+'-in').value.trim();
+async function runTool(kind,inline=false){
+ const isOcr=kind==='ocr',input=isOcr?'':inline?$('ocr-out').innerText.trim():$(kind+'-in').value.trim();
  if(!isOcr&&!input){toast('Hãy nhập nội dung trước');$(kind+'-in').focus();return}
- if(isOcr&&ocrBusy)return;
+ if((isOcr&&(ocrBusy||ocrInlineBusy))||(inline&&(!ocrResultValid||ocrInlineBusy)))return;
  if(isOcr&&!ocrImage){toast('Hãy dán hoặc chụp ảnh trước');return}
- const out=$(kind+'-out'),button=$(kind+'-run'),ai=aiSnapshot(),generation=aiCheckGeneration;
- const imageVersion=ocrImageVersion,recovery=$(kind+'-recovery');
- const stillCurrent=()=>!isOcr||imageVersion===ocrImageVersion;
- if(isOcr){ocrBusy=true;ocrResultValid=false;syncOcrButtons()}
- else button.disabled=true;
+ const out=$(inline?'ocr-translation-out':kind+'-out'),button=$(kind+'-run'),ai=aiSnapshot(),generation=aiCheckGeneration;
+ const imageVersion=ocrImageVersion,textVersion=ocrTextVersion,recovery=$(inline?'ocr-recovery':kind+'-recovery');
+ const stillCurrent=()=>inline?imageVersion===ocrImageVersion&&textVersion===ocrTextVersion:!isOcr||imageVersion===ocrImageVersion;
+ if(isOcr){resetOcrTranslation();ocrBusy=true;ocrResultValid=false;setText('ocr-status','Đang nhận chữ…');syncOcrButtons()}
+ else if(inline){ocrInlineBusy=true;$('ocr-inline').hidden=false;$('ocr-translation-copy').disabled=true;syncOcrButtons()}
+ else {regularAiRequests++;button.disabled=true}
  recovery.hidden=true;out.dataset.valid='false';out.textContent='Đang xử lý…';
  const failure=(code)=>{
   if(!stillCurrent())return;
   out.textContent=aiError(code,ai,kind);
+  if(isOcr)setText('ocr-status','Nhận chữ chưa thành công.');
   recovery.hidden=['request_too_large','invalid_image','busy'].includes(code);
  };
  try{
   const missing=aiConfigError(ai,true);
   if(missing){failure(missing);return}
-  const r=await api.local_chat({endpoint:ai.endpoint,backend:ai.backend,model:ai.model,task:kind,text:input,target:kind==='translation'?$('translation-lang').value:null,image:isOcr?ocrImage:null});
+  const r=await api.local_chat({endpoint:ai.endpoint,backend:ai.backend,model:ai.model,task:kind,text:input,target:kind==='translation'?(inline?'vi':$('translation-lang').value):null,image:isOcr?ocrImage:null});
   if(!stillCurrent())return;
   if(generation!==aiCheckGeneration||!aiSame(ai,aiSnapshot())){failure('configuration_changed');return}
   if(typeof r?.text!=='string'||!r.text.trim()){failure(r?.code||'empty_response');return}
-  out.textContent=r.text;out.dataset.valid='true';if(isOcr)ocrResultValid=true;
+  out.textContent=r.text;out.dataset.valid='true';if(isOcr){ocrResultValid=true;setText('ocr-status','Đã nhận chữ.')}if(inline)$('ocr-translation-copy').disabled=false;
  }catch(e){failure('bridge_error')}
  finally{
-  if(isOcr){ocrBusy=false;syncOcrButtons()}
-  else button.disabled=false;
+  if(isOcr){ocrBusy=false;syncOcrButtons();drainOcr()}
+  else if(inline){ocrInlineBusy=false;syncOcrButtons();drainOcr()}
+  else {regularAiRequests--;button.disabled=false;drainOcr()}
   fit();
  }
 }
@@ -585,7 +631,7 @@ async function inspectAi(test){
   }
   setAiStatus('ready','Sẵn sàng: model đã đọc đúng ảnh mẫu. Bấm Lưu Local AI để giữ cấu hình.');
  }catch(e){fail('bridge_error')}
- finally{aiCheckBusy=false;syncAiControls()}
+ finally{aiCheckBusy=false;syncAiControls();drainOcr()}
 }
 function checkAi(){return inspectAi(false)}
 function listModels(){return inspectAi(false)}
