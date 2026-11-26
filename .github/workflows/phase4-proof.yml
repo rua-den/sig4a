@@ -1,0 +1,53 @@
+name: SIG4A Phase 4 independent Windows acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/phase4-proof.yml', '.github/phase4-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: 006873a054744f73d7fbcaa65e56387b9af87955
+jobs:
+  automated:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          persist-credentials: false
+      - working-directory: rust
+        name: Build and verify exact Windows source
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne $env:PRODUCT_SHA) { throw 'wrong source revision' }
+          cargo check --locked --workspace --all-targets; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - working-directory: rust
+        name: Cleaner revalidation, deletion journal and duplicate engine
+        run: cargo test --locked -p cu-cleaner
+      - working-directory: rust
+        name: Core compatibility and fresh Cleaner defaults
+        run: cargo test --locked -p cu-core
+      - working-directory: rust
+        name: Dashboard API and exact manifest confirmation
+        run: cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard
+      - working-directory: rust
+        name: Actual WebView2 Cleaner safety flow
+        run: cargo test --locked -p claude-usage-dashboard --test dashboard_cleaner -- --test-threads=1
+  native:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - working-directory: product/rust
+        run: cargo build --locked -p claude-usage-dashboard
+      - name: Actual Windows mouse over isolated artifacts and duplicate fixtures
+        run: ./proof/.github/phase4-proof/windows.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA
