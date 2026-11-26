@@ -8,6 +8,7 @@ use cu_cleaner::{
 };
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 #[derive(Clone)]
@@ -15,11 +16,15 @@ struct Node {
     path: PathBuf,
     is_dir: bool,
     attrs: u32,
+    modified: Option<u64>,
 }
 
 #[derive(Default)]
 struct MemoryFs {
     nodes: Vec<Node>,
+    strict_fails_at: Option<PathBuf>,
+    reparse_after_strict: Option<PathBuf>,
+    changed_during_walk: AtomicBool,
 }
 
 fn key(path: &Path) -> String {
@@ -36,6 +41,7 @@ impl MemoryFs {
             path: PathBuf::from(path),
             is_dir: true,
             attrs: 0,
+            modified: Some(1),
         });
         self
     }
@@ -45,8 +51,14 @@ impl MemoryFs {
             path: PathBuf::from(path),
             is_dir: false,
             attrs: 0,
+            modified: Some(1),
         });
         self
+    }
+
+    fn set_modified(&mut self, path: &str, modified: Option<u64>) {
+        let wanted = key(Path::new(path));
+        self.nodes.iter_mut().find(|n| key(&n.path) == wanted).unwrap().modified = modified;
     }
 
     /// Simulate the item becoming a reparse point after the scan.
@@ -88,12 +100,26 @@ impl FsView for MemoryFs {
                 is_dir: n.is_dir,
                 attrs: n.attrs,
                 len: 1,
-                modified: None,
+                modified: n.modified,
             })
             .collect())
     }
 
+    fn strict_entries(&self, dir: &Path) -> io::Result<Vec<EntryInfo>> {
+        if self.strict_fails_at.as_deref() == Some(dir) {
+            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "a child metadata lookup failed"));
+        }
+        let entries = self.entries(dir)?;
+        if self.reparse_after_strict.as_deref() == Some(dir) {
+            self.changed_during_walk.store(true, Ordering::SeqCst);
+        }
+        Ok(entries)
+    }
+
     fn attrs(&self, path: &Path) -> Option<u32> {
+        if self.changed_during_walk.load(Ordering::SeqCst) && self.reparse_after_strict.as_deref() == Some(path) {
+            return Some(REPARSE_POINT);
+        }
         let wanted = key(path);
         self.nodes
             .iter()
@@ -311,4 +337,67 @@ fn original_ancestor_that_became_reparse_is_rejected() {
     assert!(validate_target_with(&item, &options, &fs).is_ok());
     fs.set_reparse(r"D:\rv\app");
     assert!(validate_target_with(&item, &options, &fs).unwrap_err().contains("reparse"));
+}
+
+#[test]
+fn newly_built_or_unverifiable_artifact_fails_age_revalidation_before_delete() {
+    let root = r"D:\rv";
+    let target = r"D:\rv\app\bin";
+    let mut fs = MemoryFs::new();
+    fs.dir(root).dir(r"D:\rv\app")
+        .file(r"D:\rv\app\p.csproj")
+        .dir(target).file(r"D:\rv\app\bin\old.dll");
+    let mut options = opts(root);
+    options.skip_recent_days = 1;
+    options.now_secs = 200_000;
+    let manifest = cu_cleaner::scan(&options, &fs);
+    assert_eq!(manifest.items.len(), 1, "{manifest:?}");
+    let ids = [manifest.items[0].id.clone()];
+    let old_deleter = RecordingDeleter::new();
+    let old = clean_with(&manifest, &ids, Mode::Permanent, &options, &fs, &old_deleter, &MemoryJournal::default());
+    assert!(old[0].ok, "{old:?}");
+    assert_eq!(old_deleter.calls.lock().unwrap().len(), 1);
+
+    let added = r"D:\rv\app\bin\new.dll";
+    fs.file(added);
+    for (mtime, error) in [(Some(199_999), "recent build"), (None, "cannot verify build age")] {
+        fs.set_modified(added, mtime);
+        let deleter = RecordingDeleter::new();
+        let outputs = clean_with(&manifest, &ids, Mode::Permanent, &options, &fs, &deleter, &MemoryJournal::default());
+        assert!(!outputs[0].ok);
+        assert!(outputs[0].err.as_deref().unwrap().contains(error));
+        assert!(deleter.calls.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn partial_age_enumeration_or_reparse_during_walk_never_calls_deleter() {
+    let root = r"D:\rv";
+    let target = r"D:\rv\app\bin";
+    let mut fs = MemoryFs::new();
+    fs.dir(root).dir(r"D:\rv\app")
+        .file(r"D:\rv\app\p.csproj")
+        .dir(target).file(r"D:\rv\app\bin\fixture.dll");
+    let mut options = opts(root);
+    options.skip_recent_days = 1;
+    options.now_secs = 200_000;
+    let manifest = cu_cleaner::scan(&options, &fs);
+    assert_eq!(manifest.items.len(), 1);
+    let ids = [manifest.items[0].id.clone()];
+    let deleter = RecordingDeleter::new();
+
+    fs.strict_fails_at = Some(target.into());
+    assert!(fs.entries(Path::new(target)).is_ok(), "discovery deliberately succeeds");
+    let output = clean_with(&manifest, &ids, Mode::Permanent, &options, &fs, &deleter, &MemoryJournal::default());
+    assert!(!output[0].ok);
+    assert!(output[0].err.as_deref().unwrap().contains("cannot verify build age"));
+    assert!(deleter.calls.lock().unwrap().is_empty());
+
+    fs.strict_fails_at = None;
+    fs.reparse_after_strict = Some(target.into());
+    let output = clean_with(&manifest, &ids, Mode::Permanent, &options, &fs, &deleter, &MemoryJournal::default());
+    assert!(fs.changed_during_walk.load(Ordering::SeqCst));
+    assert!(!output[0].ok);
+    assert!(output[0].err.as_deref().unwrap().contains("reparse"));
+    assert!(deleter.calls.lock().unwrap().is_empty());
 }

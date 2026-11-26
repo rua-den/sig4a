@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 env:
-  PRODUCT_SHA: 006873a054744f73d7fbcaa65e56387b9af87955
+  PRODUCT_SHA: 4e9384042b21ffb999df8f9119b07ddac6b7d1e3
 jobs:
   automated:
     runs-on: windows-2025
@@ -26,7 +26,15 @@ jobs:
         run: cargo test --locked -p cu-cleaner
       - working-directory: rust
         name: Core compatibility and fresh Cleaner defaults
-        run: cargo test --locked -p cu-core
+        run: |
+          $old=(Get-TimeZone).Id
+          try {
+            # The versioned Python parity fixture metadata records this exact timezone.
+            Set-TimeZone -Id 'SE Asia Standard Time'
+            if ((Get-TimeZone).Id -ne 'SE Asia Standard Time') { throw 'wrong parity fixture timezone' }
+            cargo test --locked -p cu-core; $code=$LASTEXITCODE
+          } finally { Set-TimeZone -Id $old }
+          if ($code) { exit $code }
       - working-directory: rust
         name: Dashboard API and exact manifest confirmation
         run: cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard

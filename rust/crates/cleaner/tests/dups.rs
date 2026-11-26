@@ -655,3 +655,16 @@ fn real_fs_finds_small_duplicates_and_skips_zero_bytes_without_deleting_them() {
         "all fixture files must still exist"
     );
 }
+
+#[test]
+fn duplicate_scan_refuses_root_under_original_reparse_ancestor() {
+    let mut fs = DupFs::new();
+    fs.reparse(r"D:\junction");
+    fs.file(r"D:\junction\scope\a.dat", b"same", Some(FileId { volume: 1, index: 101 }), Some(1));
+    fs.file(r"D:\junction\scope\b.dat", b"same", Some(FileId { volume: 1, index: 102 }), Some(1));
+    let report = find_duplicates(&opts(&[r"D:\junction\scope"]), &fs);
+    assert_eq!(report.scanned, 0);
+    assert!(report.groups.is_empty());
+    assert!(report.errors.iter().any(|error| error.contains("reparse points")));
+    assert_eq!(fs.read_calls.load(Ordering::SeqCst), 0);
+}

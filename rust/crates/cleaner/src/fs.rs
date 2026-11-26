@@ -131,30 +131,40 @@ fn modified_secs(meta: &fs::Metadata) -> Option<u64> {
         .map(|d| d.as_secs())
 }
 
+fn read_entries(dir: &Path, strict: bool) -> io::Result<Vec<EntryInfo>> {
+    let mut out = Vec::new();
+    for entry in fs::read_dir(to_long_path(dir))? {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) if !strict => continue,
+            Err(error) => return Err(error),
+        };
+        let path = strip_verbatim(&entry.path());
+        let meta = match fs::symlink_metadata(to_long_path(&path)) {
+            Ok(meta) => meta,
+            Err(_) if !strict => continue,
+            Err(error) => return Err(error),
+        };
+        out.push(EntryInfo {
+            name: entry.file_name().to_string_lossy().into_owned(),
+            path,
+            is_dir: meta.file_type().is_dir(),
+            attrs: file_attributes(&meta),
+            len: meta.len(),
+            modified: modified_secs(&meta),
+        });
+    }
+    Ok(out)
+}
+
 impl FsView for RealFs {
     fn entries(&self, dir: &Path) -> io::Result<Vec<EntryInfo>> {
-        let mut out = Vec::new();
-        for entry in fs::read_dir(to_long_path(dir))? {
-            // One unreadable child must not abort the whole directory.
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-            let path = strip_verbatim(&entry.path());
-            let meta = match fs::symlink_metadata(to_long_path(&path)) {
-                Ok(m) => m,
-                Err(_) => continue,
-            };
-            out.push(EntryInfo {
-                name: entry.file_name().to_string_lossy().into_owned(),
-                path,
-                is_dir: meta.file_type().is_dir(),
-                attrs: file_attributes(&meta),
-                len: meta.len(),
-                modified: modified_secs(&meta),
-            });
-        }
-        Ok(out)
+        // Read-only discovery remains best-effort if one child cannot be read.
+        read_entries(dir, false)
+    }
+
+    fn strict_entries(&self, dir: &Path) -> io::Result<Vec<EntryInfo>> {
+        read_entries(dir, true)
     }
 
     fn attrs(&self, path: &Path) -> Option<u32> {
