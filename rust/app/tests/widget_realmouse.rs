@@ -20,8 +20,8 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_MOVE, MOUSEINPUT,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    FindWindowExW, GetCursorPos, GetWindowThreadProcessId, IsWindowVisible, SendMessageW,
-    SetCursorPos, WM_APP,
+    FindWindowExW, GetCursorPos, GetSystemMetrics, GetWindowThreadProcessId, IsWindowVisible,
+    SendMessageW, SetCursorPos, SM_CXSCREEN, SM_CYSCREEN, WM_APP,
 };
 
 const WM_DUMP: u32 = WM_APP + 21;
@@ -195,6 +195,11 @@ fn widget_real_pointer_hover_and_leave() {
     // (the user's own tray may be running; its widget sits elsewhere and the sandbox has its own pid file).
     // SAFETY: process-wide, same context as the widget so cursor coordinates are physical pixels.
     unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+    // Use the same physical primary-screen metrics as the widget. A fixed saved
+    // centre of (1400, 500) puts the fixture offscreen on a 1024x768 runner.
+    let (screen_w, screen_h) = unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
+    assert!(screen_w > 0 && screen_h > 0, "no usable primary screen");
+    let (fixture_x, fixture_y) = (f64::from(screen_w) * 0.75, f64::from(screen_h) * 0.5);
     let tmp = tempfile::tempdir().unwrap();
     let local = tmp.path().join("local");
     let home = tmp.path().join("home");
@@ -229,7 +234,7 @@ fn widget_real_pointer_hover_and_leave() {
         json!({"autostart": false, "notify_enabled": false, "interval_sec": 3600, "profiles": plist,
                "widget_enabled": true, "widget_locked": true, "widget_style": "rings", "widget_theme": "dark",
                "widget_layout": "vertical", "widget_tooltip": true, "widget_plate": true,
-               "widget_anchor": "tray", "widget_cx": 1400.0, "widget_cy": 500.0})
+               "widget_anchor": "tray", "widget_cx": fixture_x, "widget_cy": fixture_y})
         .to_string(),
     )
     .unwrap();
@@ -268,8 +273,19 @@ fn widget_real_pointer_hover_and_leave() {
         d["hover"] == -1 && d["tip_visible"] == false
     });
 
+    let cell0 = Rig::cell_center(&d0, 0);
+    let cell1 = Rig::cell_center(&d0, 1);
+    println!("real pointer fixture: primary {sw}x{sh}, centre ({fixture_x},{fixture_y}), cells {cell0:?} and {cell1:?}");
+    for (x, y) in [cell0, cell1] {
+        // The synthetic 1 px jiggle must also stay on-screen.
+        assert!(
+            (1..sw - 1).contains(&x) && (1..sh - 1).contains(&y),
+            "physical pointer target ({x},{y}) outside {sw}x{sh}; widget state: {d0}"
+        );
+    }
+
     // 1. real hover over cell 0 -> hover index 0 and the tip appears after the 0.3 s delay
-    let (x0, y0) = Rig::cell_center(&d0, 0);
+    let (x0, y0) = cell0;
     move_to(x0, y0);
     rig.until_at((x0, y0), "real pointer over cell 0 -> hover 0", 3, |d| {
         d["hover"] == 0
@@ -288,7 +304,7 @@ fn widget_real_pointer_hover_and_leave() {
     );
 
     // 3. real move to the next cell -> hover index follows (tip stays or switches, never stuck on 0)
-    let (x1, y1) = Rig::cell_center(&d0, 1);
+    let (x1, y1) = cell1;
     move_to(x1, y1);
     rig.until_at((x1, y1), "real pointer over cell 1 -> hover 1", 3, |d| {
         d["hover"] == 1

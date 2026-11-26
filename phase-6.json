@@ -1,7 +1,7 @@
 {
   "phase": 6,
   "title": "Windows release acceptance",
-  "status": "pending",
+  "status": "passed",
   "goal": "Verify the integrated release through actual Windows entry points, old and fresh data, and current documentation.",
   "dependencies": [
     "Phase 5 has gate.status = passed and all required evidence recorded"
@@ -16,7 +16,8 @@
     "Smoke run both binaries colocated in an isolated test location. Validate startup, restart, tray, desktop popup, WebView2 and settings persistence.",
     "Exercise the complete journey with a real local AI vision model and isolated cleaner fixtures. Test fresh and pre-change configuration.",
     "Verify keyboard, narrow width, reported DPI/geometry and typical Windows scaling. Run deterministic DPI tests where desktop scaling is fixed.",
-    "Update README with startup, default black–orange interface, color setting, hotkeys, Local AI requirements and cleaner behaviors."
+    "Update README with startup, default black–orange interface, color setting, hotkeys, Local AI requirements and cleaner behaviors.",
+    "Measure native Ctrl+Alt+O cold and warm separately with a healthy local model: hotkey to picker, mouse release to visible popup, and popup to recognized text. Keep release executable unmodified and cite observed Windows environment."
   ],
   "acceptance": {
     "automated": [
@@ -25,24 +26,24 @@
         "case": "Locked build and complete test suite",
         "run": "cargo check --locked --workspace --all-targets; cargo build --locked --release --workspace; cargo test --locked --workspace -- --test-threads=1",
         "expected": "All required Windows build/tests exit 0. Any failure or excluded required check must be resolved and rerun before marking passed.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Passed locked all-target check, ordinary locked release workspace build and serialized full workspace: 201 passed, 0 failed. One pre-existing ignored optional manual external TLS probe (transport::tests::tls_to_real_endpoint_without_token); no required test skipped. Actual widget pointer fixture now uses runner dimensions and both real targets; passed. https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130254466"
       },
       {
         "id": "P6-AUTO-002",
         "case": "Windows profile and config migration",
         "run": "Run config, dashboard and tray tests on both a fresh location and saved 2.3.0 fixture.",
         "expected": "Old keys and widget/hook behavior survive. Fresh defaults and selected accent after restart work.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Full config and tray/dashboard compatibility tests passed. Real release native fresh/legacy isolated setup also verified orange default, purple after restart, old blue/widget values rendered, unrelated save/reopen preserved old hook/config files. https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130254466 https://github.com/rua-den/sig4a/actions/runs/45884084746/job/140130356999"
       },
       {
         "id": "P6-AUTO-003",
         "case": "DPI and responsiveness",
         "run": "cargo test --locked -p cu-core --test dpi_scale; cargo test --locked -p claude-usage-dashboard --test dashboard_responsive -- --test-threads=1",
         "expected": "DPI calculations and actual responsive Windows UI preserve access to primary actions and maintain capped fit behavior.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Explicit deterministic dpi_scale 4/4 and real WebView2 dashboard_responsive 40/40 checks passed (separate reruns). Independent ordinary release on actual 96 DPI measured 420 logical px; no unsupported mixed-DPI or dual-monitor claim. https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130254466 https://github.com/rua-den/sig4a/actions/runs/45884084746/job/140130356999"
       }
     ],
     "real_ui": [
@@ -50,25 +51,25 @@
         "id": "P6-UI-001",
         "case": "Release smoke",
         "steps": "Run colocated release binaries with isolated profile/config. Open dashboard from tray, use hotkeys and restart. Verify no duplicate instance from repeated opening.",
-        "expected": "Tray, dashboard, popup and WebView2 work in the release build. Theme and preferences persist.",
-        "status": "pending",
-        "evidence": null
+        "expected": "Tray, dashboard, popup and WebView2 work in the release build. Theme and preferences persist. The ordinary release build has no test-only feature enabled.",
+        "status": "passed",
+        "evidence": "Colocated exact package bin names built unmodified, no e2e. Actual Explorer notification icon opens fresh/legacy and same HWND/PID on repeat; physical restart; real Ctrl+Alt+O and native Escape/clipboard. https://github.com/rua-den/sig4a/actions/runs/45884084746/job/140130356999 https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130253971"
       },
       {
         "id": "P6-UI-002",
         "case": "Complete workflows",
         "steps": "Try real OCR and Translation, view multi-profile quotas, and use synthetic cleaner and duplicate report. Verify with keyboard and a narrow window.",
-        "expected": "All expected outputs appear, errors remain actionable and deletion review is explicit.",
-        "status": "pending",
-        "evidence": null
+        "expected": "All expected outputs appear, errors remain actionable and deletion review is explicit. Record cold/warm selection and OCR timings, with app startup and model inference reported separately.",
+        "status": "passed",
+        "evidence": "Real pinned Qwen3-VL 2B on loopback, same healthy model listener PID; cold 23/6230/1477 ms and warm 105/111/964 ms (hotkey→picker, release→popup, visible popup→OCR observed); correct new warm crop, inline “Đóng cửa.” and native clipboard. At logical 420px used native arrow/cancel keys, verified Usage/reset windows, both Cleaner confirmations canceled, separate duplicate report, unchanged SHA-256. https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130253971 https://github.com/rua-den/sig4a/actions/runs/45884084746/job/140130356999"
       },
       {
         "id": "P6-UI-003",
         "case": "README and screenshots",
         "steps": "Follow build/startup instructions against the release output and inspect the visible app at narrow and normal widths.",
         "expected": "Instructions match release behavior and user-visible labels. No runtime test is silently skipped.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "README build/startup commands matched exact build and ordinary runtime. Inspected native screenshot at 760×574 and two 420×670 snapshots for current labels, default orange, legacy blue, quota and read-only duplicate view. No e2e and no runtime skip. https://github.com/rua-den/sig4a/actions/runs/45884084746/job/140130356999"
       }
     ]
   },
@@ -77,38 +78,45 @@
       "id": "P6-TEST-1",
       "owner": "Phase Luna (gpt-5.6-luna, medium)",
       "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Luna checked exact documentation/core inventory and made actual resolution-derived widget test fixture, Node/Markdown/diff local checks; Rust unavailable locally. Full review candidate Windows reran successful. https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130254466"
     },
     {
       "id": "P6-TEST-2",
       "owner": "Continuous advisor",
       "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Independent GPT-6.2 Astra approved exact README 355999ca, CHANGELOG 978ccbfd, widget_realmouse.rs d0d30a8 test-only correction. Proof checked physical Explorer and no wrong-process model/window claims."
     },
     {
       "id": "P6-TEST-3",
       "owner": "Orchestrator",
       "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Root independently reviewed exact checkout and ran full workspace, locked release, explicit DPI, native release desktop and local OCR, visually inspected exact screenshot crops. https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130254466 https://github.com/rua-den/sig4a/actions/runs/45884084746/job/140130356999 https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130253971"
     },
     {
       "id": "P6-TEST-4",
       "owner": "Phase Luna, continuous advisor and orchestrator",
       "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Re-ran exact tests after initial offscreen fixture failure; verified real pointer actual targets and unchanged runtime. Also refined native harness legacy settings/pointer input and reran exact desktop and OCR. https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130254466 https://github.com/rua-den/sig4a/actions/runs/45884084746/job/140130356999 https://github.com/rua-den/sig4a/actions/runs/45884054387/job/140130253971 https://github.com/rua-den/sig4a/actions/runs/45883920477"
     }
   ],
   "test_notes": [
-    "Native tests must use isolated fixture state. Existing user tray/dashboard instances should not be stopped or modified by release verification without authorization. If their global window class blocks required tests, use a permitted isolated Windows session or record the blocker and hold the gate."
+    "Native tests must use isolated fixture state. Existing user tray/dashboard instances should not be stopped or modified by release verification without authorization. If their global window class blocks required tests, use a permitted isolated Windows session or record the blocker and hold the gate.",
+    "The release acceptance runtime uses colocated ordinary `--release` binaries without `e2e`. Physical input and external HWND/UI Automation do not rely on debug-only bridge hooks. Preserve fixture time zone for full core parity tests. Build and verify only; do not publish, tag, or change a user machine."
   ],
-  "findings": [],
+  "findings": [
+    {
+      "status": "resolved",
+      "title": "Native widget mouse fixture was hardcoded off-screen",
+      "resolution": "Derive synthetic fixture centre from live primary screen dimensions; both native pointer targets checked in bounds and original hover/leave/tooltip assertions rerun. No runtime behavior changed."
+    }
+  ],
   "gate": {
-    "status": "pending",
-    "closed_at": null,
+    "status": "passed",
+    "closed_at": "2026-11-26T19:42:19.217Z",
     "required": [
       "implementation complete",
       "all required acceptance cases passed with evidence",
@@ -118,5 +126,11 @@
       "affected tests re-passed after any fix"
     ],
     "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
-  }
+  },
+  "started_at": "2026-11-26T19:14:35.938Z",
+  "baseline": "3b2521014e7ec54c50357e2b33abbd9e1cef09dd",
+  "tested_product": "db1e68419f11ece6c912df39d5516b36ccddd566",
+  "limitations": [
+    "The hosted desktop was Windows Server 2025 at 96 DPI; mixed-scale and negative-origin behavior is covered by deterministic geometry tests, not by a real multi-monitor desk. Timing observations are for this test setup, not a guarantee on other machines. No release publication."
+  ]
 }
