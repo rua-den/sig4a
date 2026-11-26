@@ -19,6 +19,26 @@ public static class ProofWin {
  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd,out uint process);
+ public delegate bool EnumFn(IntPtr hwnd,IntPtr state);
+ [DllImport("user32.dll")] public static extern bool EnumWindows(EnumFn callback,IntPtr state);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr hwnd,System.Text.StringBuilder text,int max);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd,System.Text.StringBuilder text,int max);
+ public static string[] WindowsFor(uint owner) {
+   var result=new System.Collections.Generic.List<string>();
+   EnumWindows((hwnd,state) => {
+     uint found;
+     GetWindowThreadProcessId(hwnd,out found);
+     if (found==owner) {
+       var cls=new System.Text.StringBuilder(256);
+       var title=new System.Text.StringBuilder(256);
+       GetClassName(hwnd,cls,cls.Capacity);
+       GetWindowText(hwnd,title,title.Capacity);
+       result.Add(hwnd.ToString()+" | "+cls+" | "+title+" | visible="+IsWindowVisible(hwnd));
+     }
+     return true;
+   },IntPtr.Zero);
+   return result.ToArray();
+ }
  [DllImport("user32.dll")] public static extern void mouse_event(uint flags,int dx,int dy,uint data,IntPtr extra);
 }
 '@
@@ -83,10 +103,12 @@ try {
   Wait-Proof 'dashboard OCR UI stage' { Test-Path "$out.capture" }
   New-Item -ItemType File "$out.capture.go" | Out-Null
   Wait-Proof 'native region picker owned by dashboard' {
-    $h = [ProofWin]::FindWindow('KaneRegion', 'KaneRegion')
+    if ($dashboard.HasExited) { throw "Dashboard exited: $($dashboard.ExitCode)" }
+    if (Test-Path $out) { throw "Dashboard finished before opening picker: $(Get-Content -Raw $out)" }
+    $h = [ProofWin]::FindWindow('KaneRegion', $null)
     (Owned-By $h $dashboard.Id) -and [ProofWin]::IsWindowVisible($h)
-  }
-  $picker = [ProofWin]::FindWindow('KaneRegion','KaneRegion')
+  } 50
+  $picker = [ProofWin]::FindWindow('KaneRegion',$null)
   $x1 = $f.x + 10; $y1 = $f.y + 10; $x2 = $x1 + 460; $y2 = $y1 + 110
   if ((Root-At $x1 $y1) -ne $picker -or (Root-At $x2 $y2) -ne $picker) { throw 'Picker does not own the intended drag area' }
   Mouse-At $x1 $y1
@@ -113,6 +135,16 @@ try {
   Write-Host "OCR proof: $($result | ConvertTo-Json -Compress)"
   if ($result.error -or $result.translationInput -cne $c.text) { throw 'OCR was not handed to translation' }
   if (($result.translated -notmatch '(?i)đóng') -or ($result.translated -notmatch '(?i)cửa')) { throw 'Live model did not translate the fixture into Vietnamese' }
+} catch {
+  if ($dashboard) {
+    Write-Host "Dashboard owner PID: $($dashboard.Id), session: $($dashboard.SessionId)"
+    [ProofWin]::WindowsFor($dashboard.Id) | Write-Host
+    if (Test-Path "$cfg/events.log") { Get-Content "$cfg/events.log" -Tail 35 | Write-Host }
+    foreach ($stageFile in (Get-ChildItem $scratch -Filter 'result.json.*')) {
+      Write-Host "$($stageFile.Name): $(Get-Content -Raw $stageFile.FullName)"
+    }
+  }
+  throw
 } finally {
   foreach ($process in @($dashboard,$fixture,$server)) {
     if ($process -and !$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

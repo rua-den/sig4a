@@ -19,7 +19,10 @@ async function untilAsync(name) {
 }
 toolTab('ocr');
 await stage('capture', {});
-document.querySelector('#tool-ocr button[onclick="captureOcr()"]').click();
+const captureButton = document.querySelector('#tool-ocr button[onclick="captureOcr()"]');
+if (!captureButton) throw new Error('Capture button was missing');
+captureButton.click();
+await api.e2e_stage('capture_started', { status: document.getElementById('ocr-status').textContent });
 await until(() => !document.getElementById('ocr-run').disabled || /huỷ|Không chụp/.test(document.getElementById('ocr-status').textContent), 'Capture did not finish');
 const img = document.getElementById('ocr-preview');
 if (!img.getAttribute('src')?.startsWith('data:image/png;base64,')) throw new Error('Native capture: '+document.getElementById('ocr-status').textContent);
