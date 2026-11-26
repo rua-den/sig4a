@@ -3,8 +3,15 @@
 //! The picker owns its Win32 window and runs on a short-lived worker thread, so a
 //! cancelled or failed picker cannot wedge the dashboard event loop.
 
+/// PNG plus the selected rectangle in physical virtual-desktop coordinates.
+pub struct Capture {
+    pub image: String,
+    pub bounds: [i32; 4],
+}
+
 #[cfg(windows)]
 mod windows_capture {
+    use super::Capture;
     use std::mem::{size_of, zeroed};
     use std::ptr::{null, null_mut};
     use std::sync::mpsc;
@@ -152,7 +159,7 @@ mod windows_capture {
         (r.right - r.left >= 2 && r.bottom - r.top >= 2).then_some(r)
     }
 
-    pub fn capture() -> Result<Option<String>, String> {
+    pub fn capture() -> Result<Option<Capture>, String> {
         let (tx, rx) = mpsc::channel();
         thread::Builder::new()
             .name("kane-region-picker".into())
@@ -164,7 +171,7 @@ mod windows_capture {
         rx.recv().map_err(|e| e.to_string())?
     }
 
-    unsafe fn pick_and_capture() -> Result<Option<String>, String> {
+    unsafe fn pick_and_capture() -> Result<Option<Capture>, String> {
         let x = GetSystemMetrics(SM_XVIRTUALSCREEN);
         let y = GetSystemMetrics(SM_YVIRTUALSCREEN);
         let w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
@@ -240,7 +247,7 @@ mod windows_capture {
         capture_rect(r)
     }
 
-    unsafe fn capture_rect(r: RECT) -> Result<Option<String>, String> {
+    unsafe fn capture_rect(r: RECT) -> Result<Option<Capture>, String> {
         let w = (r.right - r.left) as i32;
         let h = (r.bottom - r.top) as i32;
         // Raw RGBA is intentionally uncompressed, so keep the resulting base64 well under the
@@ -294,10 +301,10 @@ mod windows_capture {
             px.swap(0, 2);
             px[3] = 255;
         }
-        Ok(Some(format!(
-            "data:image/png;base64,{}",
-            base64(&png(w as u32, h as u32, &pixels))
-        )))
+        Ok(Some(Capture {
+            image: format!("data:image/png;base64,{}", base64(&png(w as u32, h as u32, &pixels))),
+            bounds: [r.left, r.top, w, h],
+        }))
     }
 
     fn png(w: u32, h: u32, rgba: &[u8]) -> Vec<u8> {
@@ -398,6 +405,6 @@ mod windows_capture {
 pub use windows_capture::capture;
 
 #[cfg(not(windows))]
-pub fn capture() -> Result<Option<String>, String> {
+pub fn capture() -> Result<Option<Capture>, String> {
     Err("screen region capture is only available on Windows".into())
 }

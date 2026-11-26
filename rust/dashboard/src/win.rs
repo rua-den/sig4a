@@ -3,11 +3,11 @@
 use std::path::Path;
 use windows_sys::Win32::Foundation::{HWND, RECT};
 use windows_sys::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    GetMonitorInfoW, MonitorFromRect, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
-use windows_sys::Win32::UI::HiDpi::GetDpiForSystem;
+use windows_sys::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow};
 use windows_sys::Win32::UI::Shell::{SetWindowSubclass, SUBCLASSPROC};
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
@@ -65,6 +65,28 @@ pub fn work_area(hwnd: isize) -> [i32; 4] {
         let w = mi.rcWork;
         [w.left, w.top, w.right - w.left, w.bottom - w.top]
     }
+}
+
+/// Monitor with the largest overlap with the selected screen rectangle.
+pub fn capture_work_area(bounds: [i32; 4], hwnd: isize) -> [i32; 4] {
+    let [x, y, w, h] = bounds;
+    let selected = RECT { left: x, top: y, right: x + w, bottom: y + h };
+    unsafe {
+        let monitor = MonitorFromRect(&selected, MONITOR_DEFAULTTONEAREST);
+        let mut info: MONITORINFO = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if GetMonitorInfoW(monitor, &mut info) == 0 {
+            return work_area(hwnd);
+        }
+        let r = info.rcWork;
+        [r.left, r.top, r.right - r.left, r.bottom - r.top]
+    }
+}
+
+/// Scale as measured by the per-monitor-aware HWND after moving it to its destination.
+pub fn window_scale(hwnd: isize) -> f64 {
+    let dpi = unsafe { GetDpiForWindow(h(hwnd)) };
+    if dpi == 0 { system_scale() } else { f64::from(dpi) / 96.0 }
 }
 
 /// Primary screen size in physical pixels (SM_CXSCREEN / SM_CYSCREEN).

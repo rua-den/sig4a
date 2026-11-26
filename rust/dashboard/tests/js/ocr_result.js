@@ -146,9 +146,41 @@ try {
   check(document.body.classList.contains('quick') && node('tool-localai').classList.contains('on'), 'quick recovery exposed unrelated routes');
   node('ai-back').click();
   check(document.activeElement === node('ocr-run'), 'quick OCR recovery did not return focus to visible retry');
+  // Actual quick-hotkey callback: a newer crop waits behind the active request
+  // and automatically takes over as soon as the previous response is discarded.
+  showQuickCapture(first, null);
+  await tick();
+  check(requests.length === 7 && requests[6].data.image === first, 'anchored capture did not run OCR immediately');
+  showQuickCapture(fourth, null);
+  await tick();
+  check(requests.length === 7 && copy.disabled, 'replacement did not wait behind the active OCR request');
+  requests[6].resolve({text:'stale capture A'});
+  await tick();
+  check(requests.length === 8 && requests[7].data.image === fourth && !node('ocr-out').textContent.includes('stale'), 'newest crop was not queued safely');
+  requests[7].resolve({text:'Open the window.'});
+  await tick();
+  translate.click();
+  await tick();
+  check(requests.length === 9 && requests[8].data.task === 'translation' && requests[8].data.text === 'Open the window.' && requests[8].data.target === 'vi', 'inline translation request was incorrect');
+  check(node('tool-ocr').classList.contains('on') && !node('ocr-inline').hidden && !copy.disabled, 'inline translation hid the OCR result or Copy');
+  showQuickCapture(first, null);
+  requests[8].resolve({text:'stale translation'});
+  await tick();
+  check(requests.length === 10 && requests[9].data.image === first && node('ocr-inline').hidden, 'recapture did not invalidate pending translation and re-run OCR');
+  requests[9].resolve({text:'Close the door.'});
+  await tick();
+  translate.click();
+  await tick();
+  requests[10].resolve({text:'Đóng cửa.'});
+  await tick();
+  check(node('ocr-out').textContent === 'Close the door.' && node('ocr-translation-out').textContent === 'Đóng cửa.' && !node('ocr-translation-copy').disabled, 'popup did not keep both results available');
+  node('ocr-out').textContent = 'Edited';
+  node('ocr-out').dispatchEvent(new Event('input', {bubbles:true}));
+  check(node('ocr-inline').hidden && node('ocr-translation-copy').disabled, 'editing the OCR result retained a stale translation');
   return { ocr_result_lifecycle: true };
 } finally {
   window.pywebview.api = originalApi;
   window.__QUICK_MODE__ = quickMode;
+  document.body.classList.remove('ocr-popup');
   document.body.classList.toggle('quick', !!quickMode);
 }

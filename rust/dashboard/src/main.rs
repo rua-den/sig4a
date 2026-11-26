@@ -33,7 +33,7 @@ enum Ev {
     Call(u64, String, Vec<Value>),
     Done(u64, Result<Value, String>),
     QuickTool(String, String),
-    OcrDone(u64, Result<Option<String>, String>),
+    OcrDone(Option<u64>, Result<Option<region::Capture>, String>),
 }
 
 fn bridge_result(id: u64, result: Result<Value, String>) -> String {
@@ -44,6 +44,19 @@ fn bridge_result(id: u64, result: Result<Value, String>) -> String {
 }
 static OCR_BUSY: AtomicBool = AtomicBool::new(false);
 static AI_BUSY: AtomicBool = AtomicBool::new(false);
+
+fn start_capture(id: Option<u64>, window: &Window, proxy: &EventLoopProxy<Ev>) -> bool {
+    if OCR_BUSY.swap(true, Ordering::AcqRel) {
+        return false;
+    }
+    window.set_visible(false);
+    let proxy = proxy.clone();
+    std::thread::spawn(move || {
+        let _ = proxy.send_event(Ev::OcrDone(id, region::capture()));
+    });
+    true
+}
+
 
 unsafe extern "system" fn quick_subclass(
     hwnd: windows_sys::Win32::Foundation::HWND,
@@ -87,6 +100,7 @@ struct App {
     core: Core,
     hwnd: isize,
     quick_mode: bool,
+    anchored: bool,
     geo: Geo,
     ready: bool,
     quick_pending: Option<(String, String)>,
@@ -220,7 +234,7 @@ impl App {
                 Value::Bool(true)
             }
             "fit" => {
-                if self.geo.user_sized || self.geo.maximized {
+                if self.anchored || self.geo.user_sized || self.geo.maximized {
                     return Ok(Value::Bool(false)); // the user's size wins
                 }
                 let scale = window.scale_factor();
@@ -297,14 +311,15 @@ fn main() {
     };
     let quick = quick_tool();
     let quick_mode = quick.is_some();
+    let startup_ocr = quick.as_ref().is_some_and(|(tool, _)| tool == "ocr");
     let instance_class = if quick_mode { win::QUICK_CLASS } else { win::CLASS };
     if let Some(existing) = win::find_existing(instance_class) {
         if let Some((tool, text)) = quick.clone() {
             if let Ok(payload) = serde_json::to_vec(&[tool, text]) {
-                let _ = win::send_quick(existing, &payload);
+                if win::send_quick(existing, &payload) { return; }
             }
         }
-        win::focus(existing); // single instance: bring the open dashboard forward
+        if !startup_ocr { win::focus(existing); } // Do not bring a popup into the captured pixels
         return;
     }
     let exe = std::env::current_exe().unwrap_or_default();
@@ -338,7 +353,7 @@ fn main() {
         .with_undecorated_shadow(false)
         .with_visible(false)
         .with_inner_size(LogicalSize::new(f64::from(width), if quick_mode { 315.0 } else { 640.0 }))
-        .with_min_inner_size(PhysicalSize::new(if quick_mode { 360 } else { MIN_W as u32 }, if quick_mode { 220 } else { MIN_H as u32 }))
+        .with_min_inner_size(PhysicalSize::new(if quick_mode { 1 } else { MIN_W as u32 }, if quick_mode { 1 } else { MIN_H as u32 }))
         .with_window_classname(instance_class);
     if quick_mode { window_builder = window_builder.with_skip_taskbar(true); }
     let window = match window_builder.build(&event_loop)
@@ -359,6 +374,8 @@ fn main() {
         let h = (315.0 * scale) as i32;
         win::place(window.hwnd() as isize, [wa[0] + (wa[2] - w).max(0) / 2, wa[1] + (wa[3] - h).max(0) / 3, w, h]);
     }
+    // Show the native picker while WebView2 initializes, not after a visible popup.
+    if startup_ocr { start_capture(None, &window, &proxy); }
     let mut ctx = WebContext::new(Some(if quick_mode { storage_dir_named(&core.paths.data, "webview-quick") } else { storage_dir(&core.paths.data) }));
     let handler_proxy = proxy.clone();
     let mode_script = format!("window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
@@ -389,6 +406,7 @@ fn main() {
         hwnd: window.hwnd() as isize,
         core,
         quick_mode,
+        anchored: startup_ocr,
         geo: Geo {
             user_sized: false,
             maximized: false,
@@ -396,7 +414,7 @@ fn main() {
             persist_at: None,
         },
         ready: false,
-        quick_pending: quick.clone(),
+        quick_pending: quick.filter(|(tool, _)| tool != "ocr"),
         #[cfg(any(debug_assertions, feature = "e2e"))]
         e2e_out: e2e.as_ref().map(|(_, o)| o.clone()),
     };
@@ -404,18 +422,46 @@ fn main() {
     let started = Instant::now();
     let mut shown = false;
     let mut e2e_started = false;
+    let mut startup_capture_finished = !startup_ocr;
+    let mut hotkey_result: Option<Result<String, String>> = None;
 
     event_loop.run(move |event, _, flow| {
         match event {
             Event::UserEvent(Ev::QuickTool(tool, text)) => {
-                if app.ready { let js = format!("openQuickTool({},{});", json!(tool), json!(text)); let _ = webview.evaluate_script(&js); }
-                else { app.quick_pending = Some((tool, text)); }
+                if tool == "ocr" {
+                    start_capture(None, &window, &proxy);
+                } else {
+                    app.quick_pending = Some((tool, text));
+                }
             }
             Event::UserEvent(Ev::OcrDone(id, result)) => {
                 OCR_BUSY.store(false, Ordering::Release);
-                window.set_visible(true); window.set_focus();
-                let js = match result { Ok(v) => format!("__cu_resolve({id},true,{})", json!(v)), Err(e) => format!("__cu_resolve({id},false,{})", json!(e)) };
-                let _ = webview.evaluate_script(&js);
+                startup_capture_finished = true;
+                if app.quick_mode {
+                    if let Ok(Some(capture)) = &result {
+                        let area = win::capture_work_area(capture.bounds, app.hwnd);
+                        app.anchored = true;
+                        // Move the hidden HWND to the destination before measuring its DPI.
+                        win::place(app.hwnd, geom::capture_popup(capture.bounds, area, 1.0));
+                        let scale = win::window_scale(app.hwnd);
+                        win::place(app.hwnd, geom::capture_popup(capture.bounds, area, scale));
+                    }
+                }
+                let result = result.map(|v| v.map(|capture| capture.image));
+                if let Some(id) = id {
+                    let _ = webview.evaluate_script(&bridge_result(id, result.map(|image| json!(image))));
+                } else {
+                    match result {
+                        Ok(None) if !shown && app.quick_pending.is_none() => app.close(),
+                        Ok(None) => {},
+                        Ok(Some(image)) => hotkey_result = Some(Ok(image)),
+                        Err(error) => hotkey_result = Some(Err(error)),
+                    }
+                }
+                if shown {
+                    window.set_visible(true);
+                    window.set_focus();
+                }
             }
             Event::UserEvent(Ev::Done(id, r)) => {
                 AI_BUSY.store(false, Ordering::Release);
@@ -438,8 +484,9 @@ fn main() {
                     }
                 } else {
                     if m == "ocr_capture" {
-                        if OCR_BUSY.swap(true, Ordering::AcqRel) { if id != 0 { let _=webview.evaluate_script(&format!("__cu_resolve({id},false,{} )", json!("OCR đang chạy"))); } }
-                        else { window.set_visible(false); let p=proxy.clone(); std::thread::spawn(move || { let r=region::capture(); let _=p.send_event(Ev::OcrDone(id, r)); }); }
+                        if !start_capture(Some(id), &window, &proxy) && id != 0 {
+                            let _ = webview.evaluate_script(&bridge_result(id, Err("OCR đang chạy".into())));
+                        }
                         return;
                     }
                     if matches!(m.as_str(), "local_models" | "local_chat") {
@@ -479,18 +526,32 @@ fn main() {
             } => app.close(), // Alt+F4 / taskbar "close": same fast path as the ✕ button
             _ => {}
         }
-        // the page has sized the window (or 4 s passed): now it may be shown, without a visible jump
-        if !shown && (app.ready || started.elapsed() >= READY_TIMEOUT) {
+        // A quick OCR panel can only open after the picker has closed. Keep it
+        // hidden during capture, even if WebView initialization exceeds the timeout.
+        let capturing = OCR_BUSY.load(Ordering::Acquire);
+        if app.ready && !capturing {
+            if let Some(result) = hotkey_result.take() {
+                let (image, error) = match result {
+                    Ok(image) => (Some(image), None),
+                    Err(error) => (None, Some(error)),
+                };
+                let js = format!("showQuickCapture({},{});", json!(image), json!(error));
+                let _ = webview.evaluate_script(&js);
+            }
+            if let Some((tool, text)) = app.quick_pending.take() {
+                app.anchored = false;
+                let js = format!("openQuickTool({},{});", json!(tool), json!(text));
+                let _ = webview.evaluate_script(&js);
+                if shown { win::focus(app.hwnd); }
+            }
+        }
+        if !shown && !capturing && startup_capture_finished
+            && (app.ready || started.elapsed() >= READY_TIMEOUT)
+        {
             shown = true;
             if e2e.is_none() || e2e_visible() {
                 window.set_visible(true);
                 window.set_focus();
-            }
-        }
-        if app.ready {
-            if let Some((tool, text)) = app.quick_pending.take() {
-                let js = format!("openQuickTool({},{});", json!(tool), json!(text));
-                let _ = webview.evaluate_script(&js);
             }
         }
         if let Some((script, _)) = &e2e {
@@ -506,7 +567,7 @@ fn main() {
             app.persist_now();
         }
         let mut next: Option<Instant> = app.geo.persist_at;
-        if !shown {
+        if !shown && !capturing && startup_capture_finished {
             let t = started + READY_TIMEOUT;
             next = Some(next.map_or(t, |n| n.min(t)));
         }
