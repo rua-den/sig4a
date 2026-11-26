@@ -1,7 +1,7 @@
 {
   "phase": 4,
   "title": "Safe disk cleaner",
-  "status": "in_progress",
+  "status": "passed",
   "goal": "Make selection and deletion consequences inspectable, with duplicate detection remaining report-only.",
   "dependencies": [
     "Phase 3 has gate.status = passed and all required evidence recorded"
@@ -27,24 +27,24 @@
         "case": "Safe review, selection and confirmation",
         "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_cleaner -- --test-threads=1",
         "expected": "Zero selection at scan completion. Wrong or cancelled confirmation preserves all files. Correct confirmation affects only selected eligible artifacts. Same-count A-to-B swaps, mode changes, cancellation, and new/stale manifests cannot submit under an earlier confirmation.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Passed 29 dashboard API tests and the real WebView2 dashboard_cleaner suite. Exact one-time scan/IDs/mode/size confirmation rejects stale, swapped and overlapping selections; the approved fixture path alone is sent to the recording deleter. https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140739"
       },
       {
         "id": "P4-AUTO-002",
         "case": "Cleaner revalidation and journal",
         "run": "cargo test --locked -p cu-cleaner",
         "expected": "Changed or protected items fail revalidation. Recycle/permanent modes and journal behavior preserve correct per-item results. Permission error does not imply successful removal.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Passed 68 cleaner tests: scoped and protected paths, reparse/age strictness, journal fail-closed and Recycle warning-mode flags. Real permanent deletion test removed only the approved artifact in a TempDir; legacy Recycle API is not shown as guaranteed recovery. https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140739"
       },
       {
         "id": "P4-AUTO-003",
         "case": "Duplicate report preserves files",
         "run": "Run the existing duplicate engine suite and dashboard duplicate report test with fixture paths and pre/post checksums.",
         "expected": "Duplicates are reported. No destructive control appears for them and all scanned duplicate files stay unchanged.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Engine and dashboard duplicate suite passed; native run also found one matching in-scope group and SHA-256 checks proved all files, both duplicates and outside canaries were unchanged. https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140739 https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140388"
       }
     ],
     "real_ui": [
@@ -53,16 +53,16 @@
         "case": "Review an artifact scan",
         "steps": "Use synthetic .vs, bin/obj, node_modules, TestResults and ordinary source under a sandbox. Scan, select one artifact, and open then cancel Recycle confirmation.",
         "expected": "Roots, count, size and mode are visible. No item starts selected and cancel returns to an intact review.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Actual Windows Server 2025 WebView and mouse: five fixture artifacts, saved root shown, zero selected, explicit Recycle review with count/size, focus on Cancel, cancellation preserved selection and produced no deletion. https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140388"
       },
       {
         "id": "P4-UI-002",
         "case": "Deletion modes and duplicate view",
         "steps": "Open the permanent confirmation without confirming through live UI. Then switch to duplicates and inspect the results.",
         "expected": "Permanent confirms separately with explicit wording. Duplicate results offer no deletion. Actual deletion verification runs only in isolated automated fixtures.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Actual native mouse: separate permanent confirmation opened and canceled, distinct duplicate view had no destructive controls, one real duplicate group matched; SHA-256 preserved all fixture files. https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140388"
       }
     ]
   },
@@ -71,29 +71,29 @@
       "id": "P4-TEST-1",
       "owner": "Phase Luna (gpt-5.6-luna, medium)",
       "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Luna implemented and completed local Node syntax, mock bridge cases and diff checks; local Rust toolchain not installed. Exact final Windows all-target build and suites: https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140739"
     },
     {
       "id": "P4-TEST-2",
       "owner": "Continuous advisor",
       "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Independent GPT-6.2 Astra approved the exact product after two corrections, including strict metadata enumeration blobs model 3581c911, fs c229f418, delete 86abd178 and delete_revalidation 7443fd2f. Exact Windows evidence passed."
     },
     {
       "id": "P4-TEST-3",
       "owner": "Orchestrator",
       "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Orchestrator reproduced initial issue without file deletion, reviewed the current diff and independently ran exact Windows automated and physical-input synthetic-fixture acceptance. https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140739 https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140388"
     },
     {
       "id": "P4-TEST-4",
       "owner": "Phase Luna, continuous advisor and orchestrator",
       "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "After review fixes, reran exact full engine, 65 core compatibility tests (matching versioned fixture timezone), 29 dashboard API tests, real Cleaner WebView2, native test and standard Windows validation. https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140739 https://github.com/rua-den/sig4a/actions/runs/45878372008/job/140111140388 https://github.com/rua-den/sig4a/actions/runs/45878249671/job/140110728730"
     }
   ],
   "test_notes": [
@@ -102,15 +102,21 @@
   ],
   "findings": [
     {
-      "status": "open",
+      "status": "resolved",
       "title": "A confirmation can silently apply to a different artifact",
       "evidence": "Mocked the existing handler using two synthetic IDs; in both modes a same-count swap between the first and second click submitted the replacement. No actual deletion was performed.",
-      "required_fix": "Review exact IDs and scan; invalidate the old confirmation and add regressions for both modes."
+      "required_fix": "Review exact IDs and scan; invalidate the old confirmation and add regressions for both modes.",
+      "resolution": "The UI and backend bind approval to exact scan/data/mode and reject stale, swapped, unknown and overlapping selections before cleaning."
+    },
+    {
+      "status": "resolved",
+      "title": "Fail closed on unsafe or unverified scope",
+      "resolution": "Remove silent fresh-scan default; preserve explicit roots, reject protected ancestors and reparse ancestry, verify age using strict enumeration and revalidate afterward; write journal before deleting. Recycle does not silently auto-confirm OS permanent fallback."
     }
   ],
   "gate": {
-    "status": "pending",
-    "closed_at": null,
+    "status": "passed",
+    "closed_at": "2026-11-26T18:48:50.000Z",
     "required": [
       "implementation complete",
       "all required acceptance cases passed with evidence",
@@ -122,5 +128,6 @@
     "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
   },
   "started_at": "2026-11-26T18:29:50.806Z",
-  "baseline": "ed8601b10bbefe2b5a880f788ac7be2eced57a21"
+  "baseline": "ed8601b10bbefe2b5a880f788ac7be2eced57a21",
+  "tested_product": "4e9384042b21ffb999df8f9119b07ddac6b7d1e3"
 }
