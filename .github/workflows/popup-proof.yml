@@ -1,0 +1,30 @@
+name: SIG4A anchored OCR popup native proof
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/popup-proof.yml', '.github/popup-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: 833d2dd1ab5efe907874424695f97856d609bee1
+jobs:
+  anchored-popup:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - name: Build real Windows binaries
+        working-directory: product/rust
+        run: cargo build --locked -p claude-usage -p claude-usage-dashboard
+      - name: Native shortcut, capture, bounds, real OCR, and inline translation
+        shell: pwsh
+        run: ./proof/.github/popup-proof/native.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA
