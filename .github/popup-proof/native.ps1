@@ -159,6 +159,27 @@ function Stage([string]$name) {
   return (Get-Content -Raw $stagePath | ConvertFrom-Json)
 }
 function Next-Stage([string]$name) { New-Item -ItemType File "$scratch/view.result.$name.go" | Out-Null }
+function Emit-PopupScreenshot([string]$name,[int]$x,[int]$y,[int]$w,[int]$h) {
+  try {
+    Add-Type -AssemblyName System.Drawing
+    $bmp=[System.Drawing.Bitmap]::new($w,$h)
+    $graphics=[System.Drawing.Graphics]::FromImage($bmp)
+    try { $graphics.CopyFromScreen($x,$y,0,0,[System.Drawing.Size]::new($w,$h)) }
+    finally { $graphics.Dispose() }
+    $stream=[System.IO.MemoryStream]::new()
+    try {
+      $bmp.Save($stream,[System.Drawing.Imaging.ImageFormat]::Png)
+      $data=[Convert]::ToBase64String($stream.ToArray())
+      Write-Host ("POPUP_IMAGE_START:"+$name)
+      for($i=0;$i -lt $data.Length;$i+=800){
+        Write-Host ("POPUP_IMAGE_BYTES:"+$data.Substring($i,[Math]::Min(800,$data.Length-$i)))
+      }
+      Write-Host ("POPUP_IMAGE_END:"+$name)
+    } finally { $bmp.Dispose();$stream.Dispose() }
+  } catch {
+    Write-Warning "Could not capture popup screenshot: $($_.Exception.Message)"
+  }
+}
 function Compare-Clipboard($expected) {
   try { (Get-Clipboard -Raw -ErrorAction Stop) -ceq $expected } catch { $false }
 }
@@ -293,6 +314,13 @@ try {
   Next-Stage 'translate'
   $translated=Stage 'translated-copy'
   $vi=$translated.vi
+  $shotLeft=[Math]::Max($wa.Left,[Math]::Min($x1,$r.Left)-14)
+  $shotTop=[Math]::Max($wa.Top,[Math]::Min($y1,$r.Top)-14)
+  $shotRight=[Math]::Min($wa.Right,[Math]::Max($x2,$r.Right)+14)
+  $shotBottom=[Math]::Min($wa.Bottom,[Math]::Max($y2,$r.Bottom)+14)
+  Mouse-At $shotRight $shotTop
+  Start-Sleep -Milliseconds 180
+  Emit-PopupScreenshot 'sig4a-popup-windows' $shotLeft $shotTop ($shotRight-$shotLeft) ($shotBottom-$shotTop)
   Assert-Proof ($vi -match '(?i)đóng' -and $vi -match '(?i)cửa' -and $translated.ocr -ceq $ocr) "Wrong or non-inline Vietnamese translation: $($translated | ConvertTo-Json -Compress)"
   Assert-Proof ((Visible $popupClass) -eq $popup -and !(Visible $dashClass)) 'Translation opened a different native window'
   Set-Clipboard -Value 'SIG4A-popup-clipboard-before-translation-copy'
