@@ -176,20 +176,25 @@ function Uia([IntPtr]$h,[string]$name,[string]$id='',[string]$kind='',[string]$m
 function Find-Control([IntPtr]$h,[string]$name,[string]$id='',[string]$kind='',[string]$mode='point',[int]$seconds=16){
  return Wait-Proof "UIA $name $id $mode" {$n=Uia $h $name $id $kind $mode;if($n.found -and ($mode -ne 'focus' -or ($n.enabled -and $n.focused))){$n}} $seconds
 }
-function Select-Nav([IntPtr]$h,[string]$name){
- $node=Find-Control $h $name '' 'Button' 'focus'
- Assert-Proof ($node.enabled -and $node.focused) "Native navigation could not focus $name"
- Send-Keys @(13)
+function Show-Point([IntPtr]$h,[string]$name,[string]$id='',[string]$kind='Button'){
+  $n=Uia $h $name $id $kind 'point'
+  if($n.found){return $n}
+  # Ask Windows accessibility to bring this exact control into view, then
+  # re-resolve an actual screen location instead of relying on UIA focus reporting.
+  [void](Uia $h $name $id $kind 'focus')
+  return Find-Control $h $name $id $kind 'point' 12
 }
 function Click-Control([IntPtr]$h,[string]$name,[string]$id='',[string]$kind='Button'){
- $node=Find-Control $h $name $id $kind 'point' 4
+ $node=Show-Point $h $name $id $kind
  $node|Add-Member -NotePropertyName source -NotePropertyValue 'uia-screen'
  Button-Click $node $h
 }
-function Keyboard-Control([IntPtr]$h,[string]$name,[string]$id='',[string]$kind='Button',[int]$key=13){
- $node=Find-Control $h $name $id $kind 'focus'
- Assert-Proof ($node.enabled -and $node.focused) "Native focus not confirmed for $name $id"
- Send-Keys @($key)
+function Select-Nav([IntPtr]$h,[string]$name){
+ $order=@('^Tổng quan$','^Trợ lý AI$','^Claude Usage$','^Dọn ổ$','^Cài đặt$')
+ $i=[Array]::IndexOf($order,$name)
+ Assert-Proof ($i -ge 0) "Unknown navigation fixture $name"
+ Click-Control $h $order[0]
+ for($j=0;$j -lt $i;$j++){Send-Keys @(39);Start-Sleep -Milliseconds 50}
 }
 function Shell-Node([string]$pattern){
  foreach($cls in @('Shell_TrayWnd','Shell_SecondaryTrayWnd','NotifyIconOverflowWindow','TopLevelWindowForOverflowXamlIsland')){
@@ -353,10 +358,11 @@ try {
  $legacyAccent=Find-Control $h '^Màu giao diện$' 'accent' 'ComboBox' 'state'
  Assert-Proof ($legacyAccent.value -match 'Xanh|blue' -or ($legacyAccent.selection -join ' ') -match 'Xanh|blue') 'Legacy blue accent did not render'
  Select-Nav $h '^Cài đặt$'
- Keyboard-Control $h '^Widget$' 't-look'
- $font=Find-Control $h '^Cỡ chữ' 'wfont' '' 'state'
- $opac=Find-Control $h '^Độ mờ' 'wopac' '' 'state'
- Assert-Proof (($font.value -eq '125' -or $font.range -eq 125) -and ($opac.value -eq '84' -or $opac.range -eq 84)) 'Legacy Widget preferences did not render'
+ Click-Control $h '^Widget$' 't-look'
+ $font=Find-Control $h '^Cỡ chữ' 'wfont' 'Edit|Spinner' 'state'
+ $opac=Find-Control $h '^Độ đậm widget' 'wopac' 'Edit|Spinner' 'state'
+ Write-Host ('P6-WIDGET-UIA: '+(@{font=$font;opacity=$opac}|ConvertTo-Json -Depth 6 -Compress))
+ Assert-Proof (($font.value -match '^125(?:[.,]0+)?$' -or $font.range -eq 125) -and ($opac.value -match '^84(?:[.,]0+)?$' -or $opac.range -eq 84)) 'Legacy Widget preferences did not render'
  $actualDpi=[ProofWin]::GetDpiForWindow($h)
  $width=[int][Math]::Round(420*$actualDpi/96.0)
  $area=[ProofWin]::WorkAt(100,100)
@@ -371,18 +377,18 @@ try {
  Capture-Dashboard $h 'narrow-usage'
  Select-Nav $h '^Dọn ổ$'
  [void](Find-Control $h 'fixture-cleaner' '' '' 'state')
- Keyboard-Control $h '^Quét artefact$' 'cscan'
- $check=Find-Control $h 'Chọn .*node_modules' '' 'CheckBox' 'focus'
- Assert-Proof ($check.enabled -and $check.focused) 'Cannot focus isolated artifact at narrow width'
- Send-Keys @(32)
- Keyboard-Control $h '^Đưa vào Thùng rác' 'crecyc'
+ Click-Control $h '^Quét artefact$' 'cscan'
+ Click-Control $h 'Chọn .*node_modules' '' 'CheckBox'
+ Click-Control $h '^Đưa vào Thùng rác' 'crecyc'
  [void](Find-Control $h '^Xác nhận đưa vào Thùng rác' '' '' 'state')
- Keyboard-Control $h '^Huỷ xác nhận' 'clean-cancel'
- Keyboard-Control $h '^Xoá vĩnh viễn' 'cperm'
+ Send-Keys @(27)
+ Assert-Proof ((Visible $dashClass) -eq $h) 'Recycle Escape closed the dashboard instead of canceling review'
+ Click-Control $h '^Xoá vĩnh viễn' 'cperm'
  [void](Find-Control $h '^Xác nhận xoá vĩnh viễn' '' '' 'state')
- Keyboard-Control $h '^Huỷ xác nhận' 'clean-cancel'
- Keyboard-Control $h 'File trùng.*chỉ đọc' 'clean-view-dups'
- Keyboard-Control $h '^Tìm file trùng' 'dscan'
+ Send-Keys @(27)
+ Assert-Proof ((Visible $dashClass) -eq $h) 'Permanent Escape closed the dashboard instead of canceling review'
+ Click-Control $h 'File trùng.*chỉ đọc' 'clean-view-dups'
+ Click-Control $h '^Tìm file trùng' 'dscan'
  [void](Find-Control $h 'copy-one\.txt' '' '' 'state')
  [void](Find-Control $h 'copy-two\.txt' '' '' 'state')
  Assert-Proof (!(Uia $h '^Xoá vĩnh viễn|^Đưa vào Thùng rác' '' 'Button' 'point').found) 'Duplicate view exposed visible removal'

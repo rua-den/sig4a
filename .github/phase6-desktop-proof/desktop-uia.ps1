@@ -32,11 +32,14 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
   $cond=[Windows.Automation.Condition]::TrueCondition
   foreach($e in $root.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)){
     $c=$e.Current
-    if($Kind -and $c.ControlType.ProgrammaticName -notlike ("*."+$Kind)){continue}
+    if($Kind -and $c.ControlType.ProgrammaticName -notmatch ('[.]('+$Kind+')$')){continue}
     if(($Id -or $Name) -and !(($Id -and $c.AutomationId -ceq $Id) -or ($Name -and $c.Name -match $Name))){continue}
     if($Mode -eq 'list'){
       if($c.Name -and $names.Count -lt 180){$names.Add(@{name=$c.Name;id=$c.AutomationId;kind=$c.ControlType.ProgrammaticName;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen})}
       continue
+    }
+    if($Mode -eq 'point' -and $c.IsOffscreen -and $c.IsEnabled){
+      try {$e.GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView();$c=$e.Current} catch {}
     }
     if($Mode -eq 'focus' -and $c.IsEnabled){ try{$e.SetFocus()}catch{continue} }
     $item=@{found=$true;name=$c.Name;id=$c.AutomationId;kind=$c.ControlType.ProgrammaticName;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen;focused=$e.Current.HasKeyboardFocus}
