@@ -97,7 +97,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
 .route-cleaner #settings-box{display:block}.route-cleaner #settings-box>.tabs,.route-cleaner #settings-box>#gen,.route-cleaner #settings-box>#look,.route-cleaner #settings-box>.row{display:none}.route-cleaner #settings-label{display:none}.route-cleaner #clean-label{display:block}#clean-label{display:none}
 .localai-route #settings-box,.localai-route #tool-usage{display:none}
 .quick .toolnav,.quick .wb:not(.x),.quick footer,.quick #tool-overview,.quick #tool-usage,.quick #tool-localai{display:none}.quick main{padding:10px 12px}.quick .title{height:30px}.quick .toolpanel.on{display:block}.quick .box{padding:8px 10px}.quick .result{max-height:118px;overflow:auto}.quick textarea{min-height:58px}.quick #ocr-preview{max-height:82px}.quick .toolactions{margin-top:7px}
-.quick #ocr-preview,.quick #ocr-in{display:none}.quick #ocr-status{display:block}.quick #tool-ocr .hint{display:none}.quick #tool-ocr .result{min-height:122px;max-height:156px}.quick .accent-picker{display:none}
+.quick.localai-route #tool-localai.on{display:block}.quick #ocr-preview,.quick #ocr-in{display:none}.quick #ocr-status{display:block}.quick #tool-ocr .hint{display:none}.quick #tool-ocr .result{min-height:122px;max-height:156px}.quick .accent-picker{display:none}
 .toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.quota-row{overflow-wrap:anywhere}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable=true]{cursor:text}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
 </style></head><body>
 <div class="title"><div class="drag pywebview-drag-region" ondblclick="toggleMax()"><b>Kane's Tool Box</b><span id="sub"></span></div><label class="accent-picker" title="Màu giao diện">Màu giao diện<select id="accent" aria-label="Màu giao diện"><option value="orange">Cam</option><option value="blue">Xanh</option><option value="purple">Tím</option></select></label>
@@ -115,10 +115,10 @@ textarea:focus{outline:0;border-color:var(--accent)}
   <button class="tile" onclick="toolTab('localai')"><b>Local AI</b><span>Kiểm tra cấu hình model cục bộ trong Cài đặt.</span></button>
  </div></div></section>
  <div id="ai-subnav-wrap"><nav class="ai-subnav" aria-label="Công cụ AI"><button class="on" data-ai="grammar" aria-current="page" onclick="toolTab('grammar')">Grammar</button><button data-ai="translation" onclick="toolTab('translation')">Translation</button><button data-ai="ocr" onclick="toolTab('ocr')">OCR</button></nav></div>
-<section class="toolpanel" id="tool-grammar"><div class="box"><div class="lbl">GRAMMAR</div><label>Văn bản tiếng Anh<textarea id="grammar-in" placeholder="Dán văn bản cần kiểm tra..." spellcheck="true"></textarea></label><div class="toolactions"><button class="b p" id="grammar-run" onclick="runTool('grammar')">Kiểm tra</button><button class="b" onclick="copyResult('grammar-out')">Sao chép</button></div><div class="result" id="grammar-out" contenteditable="true" role="textbox" aria-label="Kết quả Grammar">Kết quả sẽ hiển thị ở đây.</div></div></section>
- <section class="toolpanel" id="tool-translation"><div class="box"><div class="lbl">TRANSLATION</div><label>Văn bản<textarea id="translation-in" placeholder="Dán văn bản cần dịch..."></textarea></label><label style="max-width:240px;margin-top:8px">Ngôn ngữ đích<select id="translation-lang"><option value="vi">Tiếng Việt (mặc định)</option><option value="en">English</option></select></label><div class="toolactions"><button class="b p" id="translation-run" onclick="runTool('translation')">Dịch</button><button class="b" onclick="copyResult('translation-out')">Sao chép</button></div><div class="result" id="translation-out" contenteditable="true" role="textbox" aria-label="Kết quả Translation">Kết quả sẽ hiển thị ở đây.</div></div></section>
- <section class="toolpanel" id="tool-ocr"><div class="box"><div class="lbl">OCR</div><p class="hint">Dán ảnh trực tiếp hoặc chụp vùng bằng nút bên dưới. Chỉ nhận PNG, JPEG, WebP (tối đa 6 MB).</p><textarea id="ocr-in" readonly placeholder="Chưa có ảnh — hãy dán ảnh hoặc chụp một vùng màn hình..." style="min-height:56px;margin-top:8px"></textarea><img id="ocr-preview" class="ocr-preview" alt="Xem trước ảnh OCR"><div class="toolactions"><button class="b" onclick="captureOcr()">Chụp vùng màn hình</button><button class="b" id="ocr-remove" onclick="removeOcr()" disabled>Xoá ảnh</button><button class="b p" id="ocr-run" onclick="runTool('ocr')" disabled>Nhận chữ</button><button class="b" id="ocr-copy" onclick="copyResult('ocr-out')" disabled>Sao chép</button><button class="b" data-quick-translate onclick="translateOcr()" disabled>Dịch</button></div><span class="hint" id="ocr-status" role="status">Chưa có ảnh.</span><div class="result" id="ocr-out" contenteditable="true" role="textbox" aria-label="Kết quả OCR">Kết quả OCR sẽ hiển thị ở đây.</div></div></section>
- <section class="toolpanel" id="tool-localai"><div class="box"><div class="lbl">LOCAL AI</div><label>Endpoint loopback<input id="ai-endpoint" type="text" value="http://127.0.0.1:11434"></label><label style="max-width:240px;margin-top:8px">Backend<select id="ai-backend"><option value="ollama">Ollama</option><option value="llama_cpp">llama.cpp server</option></select></label><label style="max-width:420px;margin-top:8px">Model<input id="ai-model" list="ai-models" value="hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0" autocomplete="off"><datalist id="ai-models"></datalist></label><div class="modelcard"><b>LiquidAI LFM2.5-VL-450M-GGUF</b><br><span class="hint">Ollama HF pattern Q4: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q4_K_M</code>; Q8: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0</code>.<br>llama.cpp chọn ID thực từ <code>/v1/models</code>; khởi chạy server ngoài với listen loopback và model path phù hợp.</span></div><div class="toolactions"><button class="b" id="ai-check" onclick="checkAi()">Kiểm tra kết nối</button><button class="b" id="model-list" onclick="listModels()">Lấy model</button><button class="b p" id="ai-save" onclick="saveAi()">Lưu Local AI</button></div><div class="result" id="ai-status" role="status">Chưa kiểm tra. Chọn backend, endpoint và model rồi kiểm tra.</div></div></section>
+<section class="toolpanel" id="tool-grammar"><div class="box"><div class="lbl">GRAMMAR</div><label>Văn bản tiếng Anh<textarea id="grammar-in" placeholder="Dán văn bản cần kiểm tra..." spellcheck="true"></textarea></label><div class="toolactions"><button class="b p" id="grammar-run" onclick="runTool('grammar')">Kiểm tra</button><button class="b" onclick="copyResult('grammar-out')">Sao chép</button></div><button hidden class="b" id="grammar-recovery" onclick="openAiRecovery('grammar')">Cài đặt Local AI</button><div class="result" id="grammar-out" contenteditable="true" role="textbox" aria-label="Kết quả Grammar">Kết quả sẽ hiển thị ở đây.</div></div></section>
+ <section class="toolpanel" id="tool-translation"><div class="box"><div class="lbl">TRANSLATION</div><label>Văn bản<textarea id="translation-in" placeholder="Dán văn bản cần dịch..."></textarea></label><label style="max-width:240px;margin-top:8px">Ngôn ngữ đích<select id="translation-lang"><option value="vi">Tiếng Việt (mặc định)</option><option value="en">English</option></select></label><div class="toolactions"><button class="b p" id="translation-run" onclick="runTool('translation')">Dịch</button><button class="b" onclick="copyResult('translation-out')">Sao chép</button></div><button hidden class="b" id="translation-recovery" onclick="openAiRecovery('translation')">Cài đặt Local AI</button><div class="result" id="translation-out" contenteditable="true" role="textbox" aria-label="Kết quả Translation">Kết quả sẽ hiển thị ở đây.</div></div></section>
+ <section class="toolpanel" id="tool-ocr"><div class="box"><div class="lbl">OCR</div><p class="hint">Dán ảnh trực tiếp hoặc chụp vùng bằng nút bên dưới. Chỉ nhận PNG, JPEG, WebP (tối đa 6 MB).</p><textarea id="ocr-in" readonly placeholder="Chưa có ảnh — hãy dán ảnh hoặc chụp một vùng màn hình..." style="min-height:56px;margin-top:8px"></textarea><img id="ocr-preview" class="ocr-preview" alt="Xem trước ảnh OCR"><div class="toolactions"><button class="b" id="ocr-capture" onclick="captureOcr()">Chụp vùng màn hình</button><button class="b" id="ocr-remove" onclick="removeOcr()" disabled>Xoá ảnh</button><button class="b p" id="ocr-run" onclick="runTool('ocr')" disabled>Nhận chữ</button><button class="b" id="ocr-copy" onclick="copyResult('ocr-out')" disabled>Sao chép</button><button class="b" data-quick-translate onclick="translateOcr()" disabled>Dịch</button></div><span class="hint" id="ocr-status" role="status">Chưa có ảnh.</span><button hidden class="b" id="ocr-recovery" onclick="openAiRecovery('ocr')">Cài đặt Local AI</button><div class="result" id="ocr-out" contenteditable="true" role="textbox" aria-label="Kết quả OCR">Kết quả OCR sẽ hiển thị ở đây.</div></div></section>
+ <section class="toolpanel" id="tool-localai"><div class="box"><div class="lbl">LOCAL AI</div><label>Endpoint loopback<input id="ai-endpoint" type="text" value="http://127.0.0.1:11434"></label><label style="max-width:240px;margin-top:8px">Backend<select id="ai-backend"><option value="ollama">Ollama</option><option value="llama_cpp">llama.cpp server</option></select></label><label style="max-width:420px;margin-top:8px">Model<input id="ai-model" list="ai-models" value="hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0" autocomplete="off"><datalist id="ai-models"></datalist></label><div class="modelcard"><b>LiquidAI LFM2.5-VL-450M-GGUF</b><br><span class="hint">Ollama HF pattern Q4: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q4_K_M</code>; Q8: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0</code>.<br>llama.cpp chọn ID thực từ <code>/v1/models</code>; khởi chạy server ngoài với listen loopback và model path phù hợp.</span></div><div class="toolactions"><button class="b" id="ai-check" onclick="checkAi()">Kiểm tra kết nối</button><button class="b" id="model-list" onclick="listModels()">Lấy model</button><button class="b" id="ai-test" onclick="testAi()">Thử model với ảnh mẫu</button><button class="b p" id="ai-save" onclick="saveAi()">Lưu Local AI</button></div><div class="result" id="ai-status" role="status" data-state="unchecked">Chưa kiểm tra. Chọn backend, endpoint và model rồi kiểm tra.</div><div id="ai-save-status" role="status" class="hint"></div><button hidden class="b" id="ai-back" onclick="returnToAi()">Quay lại công cụ</button></div></section>
  <section class="toolpanel" id="tool-usage">
  <div class="box" id="usage-accounts"><div class="lbl">ACCOUNTS</div><div id="accs"></div></div>
  <div class="box" id="settings-box"><div class="lbl" id="settings-label">SETTINGS</div><div class="lbl" id="clean-label">DỌN Ổ</div>
@@ -201,10 +201,10 @@ const api=new Proxy({},{get:(_,n)=>async(...a)=>{if(!(window.pywebview&&pywebvie
 window.openQuickTool=function(tool,text){if(!['grammar','translation','ocr'].includes(tool))return;document.body.classList.toggle('quick',!!window.__QUICK_MODE__);toolTab(tool);const input=$(tool+'-in');if(tool==='ocr'){if(text)toast('Quick tool OCR cần ảnh; hãy dán hoặc chụp vùng màn hình');else captureOcr();return}if(text){input.value=text;input.focus();runTool(tool);}else {input.focus();toast('Chưa có văn bản được chọn — hãy dán hoặc nhập nội dung');}};
 const $=id=>document.getElementById(id);let cfg=null,loaded=false,waitingRefresh=0,seenRefresh=0,timer=null;
 function applyAccent(value){const name=['orange','blue','purple'].includes(value)?value:'orange';const colors={orange:['#0a0a0a','#141414','#303030','#fab283','#2a201b','#f6c8a8'],blue:['#0a0a0a','#141414','#303030','#8bb8ff','#182532','#b8d0ff'],purple:['#0a0a0a','#141414','#303030','#c7a0ff','#271b32','#dcc7ff']}[name];const root=document.documentElement;['--bg','--panel','--line','--accent','--sel','--busy'].forEach((k,i)=>root.style.setProperty(k,colors[i]));if($('accent'))$('accent').value=name;return name}
-const endpointDefaults={ollama:'http://127.0.0.1:11434',llama_cpp:'http://127.0.0.1:8080'},managedAi={endpoint:'http://127.0.0.1:18080',backend:'llama_cpp',model:'lfm25-vl-q8'};let endpointTouched=false,lastBackend='ollama',aiManual={endpoint:endpointDefaults.ollama,backend:'ollama',model:'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0'},aiCheckGeneration=0;
+const endpointDefaults={ollama:'http://127.0.0.1:11434',llama_cpp:'http://127.0.0.1:8080'},managedAi={endpoint:'http://127.0.0.1:18080',backend:'llama_cpp',model:'lfm25-vl-q8'};let endpointTouched=false,lastBackend='ollama',aiManual={endpoint:endpointDefaults.ollama,backend:'ollama',model:'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0'},aiCheckGeneration=0,aiCheckBusy=false,aiSaveBusy=false,aiManagedSaved=false,aiReturn=null;
 function initManagedAi(){const box=$('tool-localai'),lbl=box&&box.querySelector('.lbl');if(lbl&&!$('ai-managed')){lbl.insertAdjacentHTML('afterend','<label class="chk"><input type="checkbox" id="ai-managed">Chạy model LFM cùng tray (llama.cpp, ẩn)</label><div class="hint" id="ai-managed-hint">Bật để tray tự chạy llama.cpp ẩn; lần đầu có thể tải khoảng 482 MB.</div>')} }
 function effectiveAi(){return $('ai-managed')&&$('ai-managed').checked?managedAi:{endpoint:$('ai-endpoint').value,backend:$('ai-backend').value,model:$('ai-model').value}}
-function renderAiMode(){if(!$('ai-managed'))return;const on=$('ai-managed').checked,s=on?managedAi:aiManual;$('ai-endpoint').value=s.endpoint;$('ai-backend').value=s.backend;$('ai-model').value=s.model;$('ai-endpoint').readOnly=on;$('ai-backend').disabled=on;$('ai-model').readOnly=on;$('ai-managed-hint').textContent=on?'Model managed đang khởi động/tải lần đầu nếu endpoint chưa sẵn sàng (khoảng 482 MB). Tắt tuỳ chọn để dùng cấu hình thủ công.':'Bật để tray tự chạy llama.cpp ẩn; lần đầu có thể tải khoảng 482 MB.'}
+function renderAiMode(){if(!$('ai-managed'))return;const on=$('ai-managed').checked,s=on?managedAi:aiManual;$('ai-endpoint').value=s.endpoint;$('ai-backend').value=s.backend;$('ai-model').value=s.model;$('ai-endpoint').readOnly=on;$('ai-backend').disabled=on;$('ai-model').readOnly=on;$('ai-managed-hint').textContent=on?'Lưu để tray nhận cấu hình. Sau đó kiểm tra endpoint; chưa kiểm tra không có nghĩa là model đang chạy.':'Bật để tray tự chạy llama.cpp ẩn; lần đầu có thể tải khoảng 482 MB.'}
 initManagedAi();
 function bar(p,c){const col=p>=c.block_pct?'var(--bad)':p>=c.warn_pct?'var(--warn)':'var(--ok)';
  return `<span class="pbw"><span class="pb"><i style="width:${Math.min(100,Math.max(0,p))}%;--c:${col}"></i></span><span class="pct" style="color:${col}">${p.toFixed(0)}%</span></span>`}
@@ -269,7 +269,7 @@ function overviewQuota(cache,cfg){
  }).join('')||'<div class="hdr">chưa có profile</div>';
 }
 function apply(s){if(!s)return 2000;
- if(!loaded){cfg=s.cfg;applyAccent(cfg.dashboard_accent);const backend=cfg.local_ai_backend||'ollama';lastBackend=backend;$('ai-backend').value=backend;$('ai-endpoint').value=cfg.local_ai_endpoint||endpointDefaults[backend];$('ai-model').value=cfg.local_ai_model||'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0';aiManual={endpoint:$('ai-endpoint').value,backend,model:$('ai-model').value};$('ai-managed').checked=cfg.local_ai_managed===true;renderAiMode();$('interval').value=cfg.interval_sec;$('warn').value=cfg.warn_pct;$('block').value=cfg.block_pct;
+ if(!loaded){cfg=s.cfg;applyAccent(cfg.dashboard_accent);const backend=cfg.local_ai_backend||'ollama';lastBackend=backend;$('ai-backend').value=backend;$('ai-endpoint').value=cfg.local_ai_endpoint||endpointDefaults[backend];$('ai-model').value=cfg.local_ai_model||'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0';aiManual={endpoint:$('ai-endpoint').value,backend,model:$('ai-model').value};$('ai-managed').checked=aiManagedSaved=cfg.local_ai_managed===true;renderAiMode();$('interval').value=cfg.interval_sec;$('warn').value=cfg.warn_pct;$('block').value=cfg.block_pct;
   $('blocksw').checked=cfg.block_enabled;$('wsize').value=cfg.widget_size;$('wstyle').value=cfg.widget_style||'rings';$('wen').checked=cfg.widget_enabled;$('autosw').checked=cfg.autostart;$('trefsw').checked=cfg.token_refresh!==false;
   $('wlabel').value=cfg.widget_label||'alias';$('wfont').value=cfg.widget_font||100;$('wopac').value=cfg.widget_opacity||100;$('wtheme').value=cfg.widget_theme||'auto';$('wplate').checked=!!cfg.widget_plate;const on=(k,d)=>cfg[k]===undefined?d:!!cfg[k];$('sl').checked=on('widget_show_label',true);$('s5').checked=on('widget_show_5h',true);$('s7').checked=on('widget_show_7d',true);const rm=on('widget_reset',true);$('r5').checked=rm&&on('widget_show_reset5',true);$('r7').checked=rm&&on('widget_show_reset7',true);$('wtip').checked=on('widget_tooltip',true);$('wsort').value=cfg.widget_sort||'config';$('wmax').value=cfg.widget_max_cells||0;$('nen').checked=cfg.notify_enabled;$('nwarn').checked=cfg.notify_warn;$('nblock').checked=cfg.notify_block;loaded=true;$('croots').value=(cfg.cleaner_roots||['D:\\stu']).join(String.fromCharCode(10));$('dmin').value=cfg.cleaner_dups_min_kb||0;updateDupsRootWarn();$('cdays').value=cfg.cleaner_skip_recent_days||0}
  $('ver').textContent='v'+(s.version||'');
@@ -418,7 +418,7 @@ function toolTab(t){
  }
  fit(true)
 }
-async function copyResult(id){const el=$(id),text=(el.value!==undefined?el.value:el.innerText||'').trim();if(id==='ocr-out'&&!ocrResultValid)return toast('Chưa có kết quả OCR để sao chép');if(!text||text==='Kết quả sẽ hiển thị ở đây.'||text==='Đang xử lý…'||text.startsWith('Local AI chưa sẵn sàng'))return toast('Chưa có kết quả để sao chép');try{await navigator.clipboard.writeText(text);toast('Đã sao chép');return true}catch(e){const tmp=document.createElement('textarea');tmp.value=text;tmp.style.cssText='position:fixed;opacity:0';document.body.appendChild(tmp);tmp.select();const ok=document.execCommand('copy');tmp.remove();toast(ok?'Đã sao chép':'Không sao chép được');return ok}}
+async function copyResult(id){const el=$(id),text=(el.value!==undefined?el.value:el.innerText||'').trim();if(id!=='ocr-out'&&el.dataset.valid!=='true')return toast('Chưa có kết quả để sao chép');if(id==='ocr-out'&&!ocrResultValid)return toast('Chưa có kết quả OCR để sao chép');if(!text||text==='Kết quả sẽ hiển thị ở đây.'||text==='Đang xử lý…'||text.startsWith('Local AI chưa sẵn sàng'))return toast('Chưa có kết quả để sao chép');try{await navigator.clipboard.writeText(text);toast('Đã sao chép');return true}catch(e){const tmp=document.createElement('textarea');tmp.value=text;tmp.style.cssText='position:fixed;opacity:0';document.body.appendChild(tmp);tmp.select();const ok=document.execCommand('copy');tmp.remove();toast(ok?'Đã sao chép':'Không sao chép được');return ok}}
 const OCR_PLACEHOLDER='Kết quả OCR sẽ hiển thị ở đây.';
 let ocrImage=null,ocrImageVersion=0,ocrInputVersion=0,ocrBusy=false,ocrResultValid=false;
 function syncOcrButtons(){
@@ -431,6 +431,7 @@ function setOcrImage(data){
  ocrImage=data;
  ocrImageVersion++;
  ocrResultValid=false;
+ $('ocr-recovery').hidden=true;
  const preview=$('ocr-preview');
  if(data)preview.src=data;else preview.removeAttribute('src');
  preview.classList.toggle('on',!!data);
@@ -454,8 +455,9 @@ document.addEventListener('paste',e=>{
  if(!file)return;
  if(file.size>6*1024*1024){toast('Ảnh quá lớn (tối đa 6 MB)');return}
  const version=++ocrInputVersion,reader=new FileReader();
+ setOcrImage(null);setText('ocr-status','Đang đọc ảnh đã dán…');
  reader.onload=()=>{if(version===ocrInputVersion)setOcrImage(reader.result)};
- reader.onerror=()=>{if(version===ocrInputVersion)toast('Không đọc được ảnh')};
+ reader.onerror=()=>{if(version===ocrInputVersion){setText('ocr-status','Không đọc được ảnh.');toast('Không đọc được ảnh')}};
  reader.readAsDataURL(file);
 });
 async function captureOcr(){
@@ -480,35 +482,134 @@ async function runTool(kind){
  if(!isOcr&&!input){toast('Hãy nhập nội dung trước');$(kind+'-in').focus();return}
  if(isOcr&&ocrBusy)return;
  if(isOcr&&!ocrImage){toast('Hãy dán hoặc chụp ảnh trước');return}
- const out=$(kind+'-out'),button=$(kind+'-run'),ai=effectiveAi();
- const imageVersion=ocrImageVersion,managed=$('ai-managed').checked;
+ const out=$(kind+'-out'),button=$(kind+'-run'),ai=aiSnapshot(),generation=aiCheckGeneration;
+ const imageVersion=ocrImageVersion,recovery=$(kind+'-recovery');
  const stillCurrent=()=>!isOcr||imageVersion===ocrImageVersion;
  if(isOcr){ocrBusy=true;ocrResultValid=false;syncOcrButtons()}
  else button.disabled=true;
- out.textContent='Đang xử lý…';
- const managedHint='Model managed đang khởi động/tải lần đầu; hãy thử lại sau.';
+ recovery.hidden=true;out.dataset.valid='false';out.textContent='Đang xử lý…';
+ const failure=(code)=>{
+  if(!stillCurrent())return;
+  out.textContent=aiError(code,ai,kind);
+  recovery.hidden=['request_too_large','invalid_image','busy'].includes(code);
+ };
  try{
+  const missing=aiConfigError(ai,true);
+  if(missing){failure(missing);return}
   const r=await api.local_chat({endpoint:ai.endpoint,backend:ai.backend,model:ai.model,task:kind,text:input,target:kind==='translation'?$('translation-lang').value:null,image:isOcr?ocrImage:null});
   if(!stillCurrent())return;
-  out.textContent=r?.text||(managed&&r?.error?managedHint:r?.error||'Không có kết quả');
-  if(isOcr)ocrResultValid=typeof r?.text==='string'&&!!r.text.trim();
- }catch(e){
-  if(stillCurrent())out.textContent=managed?managedHint:'Local AI chưa sẵn sàng. Hãy cấu hình Local AI hoặc kiểm tra endpoint.';
- }finally{
+  if(generation!==aiCheckGeneration||!aiSame(ai,aiSnapshot())){failure('configuration_changed');return}
+  if(typeof r?.text!=='string'||!r.text.trim()){failure(r?.code||'empty_response');return}
+  out.textContent=r.text;out.dataset.valid='true';if(isOcr)ocrResultValid=true;
+ }catch(e){failure('bridge_error')}
+ finally{
   if(isOcr){ocrBusy=false;syncOcrButtons()}
   else button.disabled=false;
+  fit();
  }
 }
-function aiSnapshot(){const a=effectiveAi();return {endpoint:a.endpoint.trim(),backend:a.backend,model:a.model.trim(),managed:!!$('ai-managed').checked}}
+function aiSnapshot(){const a=effectiveAi();return {endpoint:a.endpoint.trim(),backend:a.backend,model:a.model.trim(),managed:$('ai-managed').checked}}
 function aiSame(a,b){return a.endpoint===b.endpoint&&a.backend===b.backend&&a.model===b.model&&a.managed===b.managed}
-function aiDiagnosis(r,ai){
- if(r&&Array.isArray(r.models)){const models=r.models.filter(x=>!String(x).toLowerCase().includes(':cloud'));if(!models.length)return 'Đã kết nối nhưng chưa có model local. Hãy cài/tải một model rồi thử lại.';if(ai.model&&!models.includes(ai.model))return `Đã kết nối; model “${ai.model}” chưa có trong server. Chọn model trong danh sách.`;return `Sẵn sàng: ${models.length} model local (hãy chạy OCR thử để xác nhận model nhận ảnh).`}
- const e=String(r&&r.error||'').toLowerCase();if(e.includes('endpoint')||e.includes('loopback'))return 'Endpoint không hợp lệ. Chỉ dùng HTTP loopback (127.0.0.1/localhost) và port.';if(e.includes('kết nối'))return ai.managed?'Managed model chưa sẵn sàng: tray chưa phản hồi endpoint loopback. Bật tray hoặc chờ model khởi động rồi thử lại.':'Không kết nối được Local AI. Hãy khởi động server loopback rồi thử lại.';if(e.includes('phản hồi'))return 'Server đã phản hồi dữ liệu không hợp lệ. Kiểm tra đúng backend và endpoint.';return r&&r.error||'Không kiểm tra được Local AI.'
+function aiConfigError(ai,needModel){
+ if(ai.managed&&!aiManagedSaved)return 'managed_unsaved';
+ if(!ai.endpoint)return 'missing_endpoint';
+ if(needModel&&!ai.model)return 'missing_model';
 }
-async function checkAi(){const b=$('ai-check'),ai=aiSnapshot(),gen=++aiCheckGeneration;b.disabled=true;setText('ai-status',ai.managed?'Đang kiểm tra managed endpoint…':'Đang kiểm tra endpoint…');try{const r=await api.local_models(ai.endpoint,ai.backend);if(gen!==aiCheckGeneration||!aiSame(ai,aiSnapshot()))return;setText('ai-status',aiDiagnosis(r,ai))}catch(e){if(gen===aiCheckGeneration&&aiSame(ai,aiSnapshot()))setText('ai-status',ai.managed?'Managed model chưa sẵn sàng: tray chưa phản hồi endpoint loopback.':'Không kết nối được Local AI. Hãy kiểm tra endpoint loopback và thử lại.')}finally{if(gen===aiCheckGeneration)b.disabled=false}}
-async function listModels(){const b=$('model-list'),ai=aiSnapshot(),gen=++aiCheckGeneration;b.disabled=true;try{const r=await api.local_models(ai.endpoint,ai.backend);if(gen!==aiCheckGeneration||!aiSame(ai,aiSnapshot()))return;if(r&&Array.isArray(r.models)){const current=ai.model,models=r.models.filter(x=>!String(x).toLowerCase().includes(':cloud'));$('ai-models').innerHTML=models.map(x=>`<option value="${esc(x)}"></option>`).join('');if(current&&!models.includes(current))$('ai-model').value=current;setText('ai-status',aiDiagnosis(r,ai))}else setText('ai-status',aiDiagnosis(r,ai))}catch(e){if(gen===aiCheckGeneration&&aiSame(ai,aiSnapshot()))setText('ai-status',ai.managed?'Managed model chưa sẵn sàng: tray chưa phản hồi endpoint loopback.':'Không kết nối được Local AI. Hãy kiểm tra endpoint loopback và thử lại.')}finally{if(gen===aiCheckGeneration)b.disabled=false}}
-async function saveAi(){const b=$('ai-save'),ai=$('ai-managed').checked?aiManual:effectiveAi();b.disabled=true;try{const r=await api.save({local_ai_endpoint:ai.endpoint,local_ai_backend:ai.backend,local_ai_model:ai.model,local_ai_managed:$('ai-managed').checked});toast(r?'Đã lưu Local AI':'Lỗi lưu cấu hình')}finally{b.disabled=false}}
-$('ai-endpoint').addEventListener('input',()=>{endpointTouched=true;if(!$('ai-managed').checked)aiManual.endpoint=$('ai-endpoint').value});$('ai-backend').addEventListener('change',()=>{const next=$('ai-backend').value;if(!endpointTouched&&$('ai-endpoint').value===endpointDefaults[lastBackend])$('ai-endpoint').value=endpointDefaults[next];lastBackend=next;if(!$('ai-managed').checked){aiManual.backend=next;aiManual.endpoint=$('ai-endpoint').value}});$('ai-model').addEventListener('input',()=>{if(!$('ai-managed').checked)aiManual.model=$('ai-model').value});$('ai-managed').addEventListener('change',()=>{if($('ai-managed').checked){aiManual={endpoint:$('ai-endpoint').value,backend:$('ai-backend').value,model:$('ai-model').value}}renderAiMode()});
+function aiError(code,ai,kind){
+ const messages={
+  missing_endpoint:'Chưa có endpoint. Nhập địa chỉ HTTP loopback trong Cài đặt Local AI.',
+  missing_model:'Chưa chọn model. Lấy danh sách và chọn một model local.',
+  managed_unsaved:'Chưa bật Local AI managed trong cấu hình. Bấm Lưu Local AI trước rồi kiểm tra.',
+  invalid_endpoint:'Endpoint không hợp lệ. Dùng HTTP loopback (127.0.0.1, localhost hoặc [::1]) và port.',
+  invalid_backend:'Backend không hợp lệ. Chọn Ollama hoặc llama.cpp.',
+  invalid_model:'Model không hợp lệ. Chọn ID model cục bộ từ danh sách.',
+  model_missing:'Server không tìm thấy model hoặc API chat. Chọn model trong danh sách và kiểm tra backend.',
+  busy:'Local AI đang xử lý yêu cầu khác. Đợi yêu cầu đó kết thúc rồi thử lại.',
+  timeout:'Local AI hết thời gian chờ. Thử lại khi model đã tải xong hoặc chọn model nhẹ hơn.',
+  unreachable:ai.managed?'Không kết nối được endpoint managed. Kiểm tra tray đang chạy, rồi thử lại.':'Không kết nối được Local AI. Khởi động server loopback và kiểm tra port.',
+  not_ready:'Server đã phản hồi nhưng báo chưa sẵn sàng. Đợi server tải model rồi thử lại.',
+  request_rejected:kind==='ocr'?'Server từ chối ảnh OCR. Kiểm tra backend và chọn model hỗ trợ ảnh (vision).':'Server từ chối yêu cầu. Kiểm tra backend và chọn model phù hợp.',
+  invalid_response:'Server trả dữ liệu không đúng định dạng. Kiểm tra đúng backend và endpoint.',
+  server_error:'Server từ chối yêu cầu. Kiểm tra trạng thái server và cấu hình backend.',
+  empty_response:'Model không trả nội dung. Thử lại hoặc đổi model.',
+  request_too_large:'Nội dung hoặc ảnh quá lớn. Giảm kích thước rồi thử lại.',
+  invalid_image:'Ảnh không hợp lệ. Dán hoặc chụp lại ảnh PNG, JPEG hoặc WebP (tối đa 6 MB).',
+  configuration_changed:'Cấu hình đã đổi khi đang xử lý. Chạy lại với cấu hình mới.',
+  bridge_error:'Không gọi được Local AI từ dashboard. Thử lại hoặc mở lại dashboard.'
+ };
+ return messages[code]||messages.bridge_error;
+}
+function setAiStatus(state,text){$('ai-status').dataset.state=state;setText('ai-status',text);fit()}
+function syncAiControls(){for(const id of ['ai-check','model-list','ai-test'])$(id).disabled=aiCheckBusy||aiSaveBusy;$('ai-save').disabled=aiCheckBusy||aiSaveBusy}
+function resetAiCheck(clearModels){
+ aiCheckGeneration++;if(clearModels)$('ai-models').replaceChildren();
+ setText('ai-save-status','');setAiStatus('unchecked','Cấu hình đã đổi. Kiểm tra lại endpoint và model.');
+}
+function openAiRecovery(kind){
+ aiReturn={kind,quick:document.body.classList.contains('quick')};
+ toolTab('localai');$('ai-back').hidden=false;$('ai-check').focus();
+}
+function returnToAi(){
+ if(!aiReturn)return;const {kind,quick}=aiReturn;aiReturn=null;$('ai-back').hidden=true;toolTab(kind);$(quick&&kind==='ocr'?($('ocr-run').disabled?'ocr-capture':'ocr-run'):kind+'-in').focus();
+}
+function fixtureAiImage(){
+ const canvas=document.createElement('canvas');canvas.width=400;canvas.height=120;
+ const c=canvas.getContext('2d');c.fillStyle='white';c.fillRect(0,0,400,120);
+ c.fillStyle='black';c.font='bold 42px Arial';c.textAlign='center';c.textBaseline='middle';c.fillText('Close the door.',200,60);
+ return canvas.toDataURL('image/png');
+}
+async function inspectAi(test){
+ if(aiCheckBusy||aiSaveBusy)return;
+ const ai=aiSnapshot(),gen=aiCheckGeneration;
+ const current=()=>gen===aiCheckGeneration&&aiSame(ai,aiSnapshot());
+ const fail=code=>{if(current())setAiStatus(code,aiError(code,ai,test?'ocr':null))};
+ const missing=aiConfigError(ai,test);
+ if(missing){fail(missing);return}
+ aiCheckBusy=true;syncAiControls();
+ setAiStatus('checking','Đang kiểm tra kết nối…');
+ try{
+  const r=await api.local_models(ai.endpoint,ai.backend);
+  if(!current())return;
+  if(!Array.isArray(r?.models)){fail(r?.code||'invalid_response');return}
+  const models=r.models.filter(x=>typeof x==='string'&&!/[:\-]cloud$/i.test(x));
+  $('ai-models').replaceChildren(...models.map(model=>new Option(model,model)));
+  if(!models.length){setAiStatus('missing_model','Đã kết nối nhưng chưa có model local. Tải hoặc nạp model rồi thử lại.');return}
+  if(!ai.model||!models.includes(ai.model)){setAiStatus('missing_model','Đã kết nối. Chọn một model có trong danh sách để thử.');return}
+  if(!test){setAiStatus('connected','Đã kết nối và tìm thấy model. Bấm Thử model với ảnh mẫu để kiểm tra OCR.');return}
+  setAiStatus('testing','Đang cho model đọc ảnh mẫu…');
+  const result=await api.local_chat({endpoint:ai.endpoint,backend:ai.backend,model:ai.model,task:'ocr',text:'',target:null,image:fixtureAiImage()});
+  if(!current())return;
+  if(!result?.text){fail(result?.code||'empty_response');return}
+  if(result.text.trim().replace(/\s+/g,' ').replace(/[.]$/,'').toLowerCase()!=='close the door'){
+   setAiStatus('fixture_mismatch','Model đã phản hồi nhưng không đọc đúng ảnh mẫu. Thử lại hoặc chọn model vision khác.');return;
+  }
+  setAiStatus('ready','Sẵn sàng: model đã đọc đúng ảnh mẫu. Bấm Lưu Local AI để giữ cấu hình.');
+ }catch(e){fail('bridge_error')}
+ finally{aiCheckBusy=false;syncAiControls()}
+}
+function checkAi(){return inspectAi(false)}
+function listModels(){return inspectAi(false)}
+function testAi(){return inspectAi(true)}
+async function saveAi(){
+ if(aiSaveBusy||aiCheckBusy)return;
+ const ai=aiSnapshot(),gen=aiCheckGeneration;
+ if(!ai.managed&&aiConfigError(ai,true)){setAiStatus(aiConfigError(ai,true),aiError(aiConfigError(ai,true),ai));return}
+ const manual=ai.managed?aiManual:ai;
+ aiSaveBusy=true;syncAiControls();
+ try{
+  const r=await api.save({local_ai_endpoint:manual.endpoint,local_ai_backend:manual.backend,local_ai_model:manual.model,local_ai_managed:ai.managed});
+  if(r)aiManagedSaved=ai.managed;
+  if(gen!==aiCheckGeneration||!aiSame(ai,aiSnapshot())){if(r)setText('ai-save-status','Đã lưu lựa chọn trước. Các thay đổi hiện tại chưa được lưu.');return}
+  if(r&&$('ai-status').dataset.state==='managed_unsaved')resetAiCheck(true);
+  setText('ai-save-status',r?'Đã lưu Local AI.':'Không lưu được cấu hình. Thử lại.');
+  toast(r?'Đã lưu Local AI':'Lỗi lưu cấu hình');
+ }catch(e){if(gen===aiCheckGeneration)setText('ai-save-status','Không lưu được cấu hình. Thử lại.')}
+ finally{aiSaveBusy=false;syncAiControls();fit()}
+}
+$('ai-endpoint').addEventListener('input',()=>{endpointTouched=true;if(!$('ai-managed').checked)aiManual.endpoint=$('ai-endpoint').value;resetAiCheck(true)});
+$('ai-backend').addEventListener('change',()=>{const next=$('ai-backend').value;if(!endpointTouched&&$('ai-endpoint').value===endpointDefaults[lastBackend])$('ai-endpoint').value=endpointDefaults[next];lastBackend=next;if(!$('ai-managed').checked){aiManual.backend=next;aiManual.endpoint=$('ai-endpoint').value}resetAiCheck(true)});
+$('ai-model').addEventListener('input',()=>{if(!$('ai-managed').checked)aiManual.model=$('ai-model').value;resetAiCheck(false)});
+$('ai-managed').addEventListener('change',()=>{if($('ai-managed').checked){aiManual={endpoint:$('ai-endpoint').value,backend:$('ai-backend').value,model:$('ai-model').value}}renderAiMode();resetAiCheck(true)});
 function tab(t){
  $('gen').hidden=t!=='gen';$('look').hidden=t!=='look';$('clean').hidden=t!=='clean';
  $('t-gen').classList.toggle('on',t==='gen');$('t-look').classList.toggle('on',t==='look');$('t-clean')?.classList.toggle('on',t==='clean');

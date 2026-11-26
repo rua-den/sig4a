@@ -446,11 +446,11 @@ fn main() {
                         if m == "local_chat" {
                             let o = a.first().and_then(Value::as_object);
                             let too_big = o.and_then(|x| x.get("text")).and_then(Value::as_str).is_some_and(|s| s.len() > 32 * 1024)
-                                || o.and_then(|x| x.get("image")).and_then(Value::as_str).is_some_and(|s| s.len() > 8 * 1024 * 1024);
-                            if too_big { if id != 0 { let _ = webview.evaluate_script(&format!("__cu_resolve({id},false,{})", json!("Yêu cầu quá lớn"))); } return; }
+                                || o.and_then(|x| x.get("image")).and_then(Value::as_str).is_some_and(|s| s.len() > api::MAX_IMAGE_DATA_URL_BYTES);
+                            if too_big { if id != 0 { let _ = webview.evaluate_script(&format!("__cu_resolve({id},true,{})", json!({"code":"request_too_large","error":"Yêu cầu quá lớn"}))); } return; }
                         }
                         if AI_BUSY.swap(true, Ordering::AcqRel) {
-                            if id != 0 { let _ = webview.evaluate_script(&format!("__cu_resolve({id},false,{})", json!("Local AI đang xử lý yêu cầu khác"))); }
+                            if id != 0 { let _ = webview.evaluate_script(&format!("__cu_resolve({id},true,{})", json!({"code":"busy","error":"Local AI đang xử lý yêu cầu khác"}))); }
                             return;
                         }
                         let p = proxy.clone();
