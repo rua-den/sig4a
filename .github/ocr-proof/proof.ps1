@@ -78,7 +78,7 @@ function Mouse-At([int]$x,[int]$y) {
   if (-not [ProofWin]::SetCursorPos($x,$y)) { throw 'Could not position pointer' }
 }
 $port = 18080
-$aliasName = 'lfm25-vl-q8'
+$aliasName = 'qwen3-vl-2b'
 $server = $fixture = $dashboard = $null
 $out = Join-Path $scratch 'result.json'
 try {
@@ -89,16 +89,16 @@ try {
   $exe = Get-ChildItem (Join-Path $scratch 'llama') -Filter llama-server.exe -Recurse | Select-Object -First 1
   $model = Join-Path $scratch 'model.gguf'
   $vision = Join-Path $scratch 'vision.gguf'
-  $hf = 'https://huggingface.co/LiquidAI/LFM2.5-VL-450M-GGUF/resolve/1abed04'
-  curl.exe -fLS --retry 3 -o $model "$hf/LFM2.5-VL-450M-Q8_0.gguf"
-  curl.exe -fLS --retry 3 -o $vision "$hf/mmproj-LFM2.5-VL-450m-Q8_0.gguf"
+  $hf = 'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8f'
+  curl.exe -fLS --retry 3 -o $model "$hf/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
+  curl.exe -fLS --retry 3 -o $vision "$hf/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
   $modelLog = Join-Path $scratch 'model.log'
-  $server = Start-Process -FilePath $exe.FullName -ArgumentList @('--host','127.0.0.1','--port',"$port",'-m',"`"$model`"",'--mmproj',"`"$vision`"",'--alias',$aliasName,'-c','4096','-np','1','-ngl','0') -RedirectStandardError $modelLog -RedirectStandardOutput (Join-Path $scratch 'server.out') -PassThru
+  $server = Start-Process -FilePath $exe.FullName -ArgumentList @('--host','127.0.0.1','--port',"$port",'-m',"`"$model`"",'--mmproj',"`"$vision`"",'--alias',$aliasName,'-c','4096','-np','1','-ngl','0','-t','4') -RedirectStandardError $modelLog -RedirectStandardOutput (Join-Path $scratch 'server.out') -PassThru
   Wait-Proof 'local vision model' {
     if ($server.HasExited) { Get-Content $modelLog -Tail 40 | Write-Host; throw "llama-server exited: $($server.ExitCode)" }
     try { (Invoke-RestMethod "http://127.0.0.1:$port/health" -NoProxy -TimeoutSec 2).status -eq 'ok' } catch { $false }
   } 120
-  Write-Host 'Actual LFM Q8 vision model is healthy on loopback.'
+  Write-Host 'Actual Qwen3-VL 2B vision model is healthy on loopback.'
   $env:LOCALAPPDATA = Join-Path $scratch 'local'
   $env:USERPROFILE = Join-Path $scratch 'home'
   $env:CU_NO_AUTOSTART = '1'
