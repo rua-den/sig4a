@@ -221,9 +221,10 @@ try {
     [ProofWin]::Find($pickerClass) -eq [IntPtr]::Zero -and
     [ProofWin]::Find($popupClass) -eq [IntPtr]::Zero
   })
+  [void](Wait-Proof 'first picker child actually exits' { !(Get-Process -Id $childOwner -ErrorAction SilentlyContinue) } 8)
   Start-Sleep -Milliseconds 500
   Assert-Proof (!$watcher.Seen -and $watcher.Samples -gt 15 -and !(Visible $popupClass) -and !(Visible $dashClass)) 'Empty popup visible after first Escape'
-  Write-Host "OCRPOP-WIN-1: Ctrl+Alt+O presented native region picker, Esc closed fresh picker with no visible popup/dashboard across $($watcher.Samples) samples; first picker observed in ${coldMs} ms."
+  Write-Host "OCRPOP-WIN-1: Ctrl+Alt+O presented native region picker, Esc closed fresh picker and child PID $childOwner with no visible popup/dashboard across $($watcher.Samples) samples; first picker observed in ${coldMs} ms."
   $watcher.Dispose();$watcher=$null
 
   Foreground $fh

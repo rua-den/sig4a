@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 env:
-  PRODUCT_SHA: 5df69fa6d33f6821847b2f4136880a92b69dc8cf
+  PRODUCT_SHA: eba1c42646327c55e9944fef1ec41e38dad8039c
 jobs:
   anchored-popup:
     runs-on: windows-2025
