@@ -145,29 +145,20 @@ function Foreground([IntPtr]$hwnd) {
   [void](Wait-Proof "foreground $hwnd" { [ProofWin]::GetForegroundWindow() -eq $hwnd } 5)
 }
 function Button-Click($target,[IntPtr]$hwnd) {
-  Assert-Proof ($target.source -ceq 'uia-screen') 'Unexpected native screen coordinate source'
-  Assert-Proof ((Root-At $target.x $target.y) -eq $hwnd) "Physical click ($($target.x),$($target.y)) does not hit expected popup"
-  Mouse-At $target.x $target.y
+  $point = [ProofWin+Point]::new([int]$target.x,[int]$target.y)
+  Assert-Proof ([ProofWin]::ClientToScreen($hwnd,[ref]$point)) 'ClientToScreen failed'
+  Assert-Proof ((Root-At $point.X $point.Y) -eq $hwnd) "Physical click ($($point.X),$($point.Y)) does not hit expected popup"
+  Mouse-At $point.X $point.Y
   [ProofWin]::mouse_event(2,0,0,0,[IntPtr]::Zero)
   [ProofWin]::mouse_event(4,0,0,0,[IntPtr]::Zero)
 }
-function Probe([string]$mode,[IntPtr]$hwnd) {
-  for($attempt=0;$attempt -lt 5;$attempt++){
-    $seconds = if($attempt -eq 0){45}else{5}
-    $target = powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "$PSScriptRoot/uia.ps1" -PopupHwnd ($hwnd.ToInt64()) -Mode $mode -TimeoutSeconds $seconds | ConvertFrom-Json
-    if($target.found -and (Root-At $target.x $target.y) -eq $hwnd){return $target}
-    $bounds=[ProofWin+Rect]::new()
-    Assert-Proof ([ProofWin]::GetWindowRect($hwnd,[ref]$bounds)) "Missing popup while looking for $mode"
-    # Scroll only inside our proven HWND, with a physical wheel event.
-    $x=[int](($bounds.Left+$bounds.Right)/2);$y=[int](($bounds.Top+$bounds.Bottom)/2)
-    Assert-Proof ((Root-At $x $y) -eq $hwnd) 'Cannot scroll popup at its physical center'
-    Mouse-At $x $y
-    $wheel=if($mode -eq 'translated-copy'){[uint32]4294967056}else{[uint32]240}
-    [ProofWin]::mouse_event(0x0800,0,0,$wheel,[IntPtr]::Zero)
-    Start-Sleep -Milliseconds 150
-  }
-  throw "Could not locate a physically clickable popup button: $mode"
+function Stage([string]$name) {
+  $stagePath="$scratch/view.result.$name"
+  [void](Wait-Proof "WebView observation $name" { (Test-Path $stagePath) -or (Test-Path "$scratch/view.result") } 47)
+  if(!(Test-Path $stagePath)) { throw "Observation failed before ${name}: $(Get-Content -Raw "$scratch/view.result")" }
+  return (Get-Content -Raw $stagePath | ConvertFrom-Json)
 }
+function Next-Stage([string]$name) { New-Item -ItemType File "$scratch/view.result.$name.go" | Out-Null }
 function Compare-Clipboard($expected) {
   try { (Get-Clipboard -Raw -ErrorAction Stop) -ceq $expected } catch { $false }
 }
@@ -198,7 +189,7 @@ try {
   $env:CU_NO_REPAIR = '1'
   Remove-Item Env:CU_E2E_VISIBLE,Env:HOMEDRIVE,Env:HOMEPATH,Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
   # Narrow runner-only switch: explicitly expose Chromium controls to native UI Automation.
-  $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--force-renderer-accessibility'
+
   $data=Join-Path $env:LOCALAPPDATA 'claude-usage'
   New-Item -ItemType Directory -Force -Path $data,$env:USERPROFILE | Out-Null
   @{ profiles=@(); autostart=$false; widget_enabled=$false; notify_enabled=$false; token_refresh=$false; local_ai_endpoint="http://127.0.0.1:$port"; local_ai_backend='llama_cpp'; local_ai_model=$aliasName; local_ai_managed=$false } |
@@ -212,6 +203,16 @@ try {
   $f=Get-Content -Raw $fixtureReady | ConvertFrom-Json
   $fh=[IntPtr]$f.hwnd
   Assert-Proof ((Owner $fh) -eq $fixture.Id) 'Fixture owner mismatch'
+  # Transparent test launcher preserves the real tray entry point and product binaries.
+  # It appends the pre-existing E2E observer flags to the real dashboard only.
+  $bin=Join-Path $root 'rust/target/debug'
+  $real=Join-Path $bin 'product-real'
+  New-Item -ItemType Directory -Force -Path $real | Out-Null
+  Move-Item (Join-Path $bin 'claude-usage-dashboard.exe') $real
+  rustc +stable --edition=2021 "$PSScriptRoot/launcher.rs" -o (Join-Path $bin 'claude-usage-dashboard.exe')
+  $env:SIG4A_PROOF_DIR=$scratch
+  $env:SIG4A_PROOF_SCRIPT=Join-Path $PSScriptRoot 'observed-popup.js'
+  $env:CU_E2E_VISIBLE='1'
   $tray=Start-Process (Join-Path $root 'rust/target/debug/claude-usage.exe') -ArgumentList '--hidden' -PassThru
   $trayWindow=Wait-Proof 'real tray window' { if($tray.HasExited){throw "Tray exited before creating its window: $($tray.ExitCode)"};$w=[ProofWin]::Find($trayClass); if($w -ne [IntPtr]::Zero){$w} }
   Assert-Proof ((Owner $trayWindow) -eq $tray.Id) 'Tray owner mismatch'
@@ -278,34 +279,28 @@ try {
   Write-Host "Bounds (physical px): capture=[$x1,$y1,$x2,$y2] popup=[$($r.Left),$($r.Top),$($r.Right),$($r.Bottom)] work=[$($wa.Left),$($wa.Top),$($wa.Right),$($wa.Bottom)] DPI=$dpi"
 
   Foreground $popup
-  # No Recognize action: an enabled Copy button and the unique fixture text on
-  # the real clipboard prove that automatic OCR actually ran on the selected image.
-  $copy=Probe 'copy' $popup
+  $copy=Stage 'copy'
   $ocrMs=$popupClock.ElapsedMilliseconds
+  Assert-Proof ($copy.ocr -match '(?i)^close the door[.!]?$' -and $copy.width -eq 460 -and $copy.height -eq 110 -and $copy.dark -gt 100 -and $copy.white -gt 20000) "Automatic OCR or physical fixture pixels incorrect: $($copy | ConvertTo-Json -Compress)"
+  $ocr=$copy.ocr
   Set-Clipboard -Value 'SIG4A-popup-clipboard-before-copy'
-  Button-Click $copy $popup
-  $ocr=Wait-Proof 'recognized fixture text in actual clipboard' {
-    try {
-      $value=Get-Clipboard -Raw -ErrorAction Stop
-      if($value -match '(?i)^close the door[.!]?$'){return $value}
-    } catch {}
-  } 8
+  Button-Click $copy.point $popup
+  [void](Wait-Proof 'recognized text in actual clipboard' { Compare-Clipboard $ocr } 8)
+  Next-Stage 'copy'
 
-  $translate=Probe 'translate' $popup
-  Button-Click $translate $popup
-  $viCopy=Probe 'translated-copy' $popup
+  $translate=Stage 'translate'
+  Button-Click $translate.point $popup
+  Next-Stage 'translate'
+  $translated=Stage 'translated-copy'
+  $vi=$translated.vi
+  Assert-Proof ($vi -match '(?i)đóng' -and $vi -match '(?i)cửa' -and $translated.ocr -ceq $ocr) "Wrong or non-inline Vietnamese translation: $($translated | ConvertTo-Json -Compress)"
   Assert-Proof ((Visible $popupClass) -eq $popup -and !(Visible $dashClass)) 'Translation opened a different native window'
   Set-Clipboard -Value 'SIG4A-popup-clipboard-before-translation-copy'
-  Button-Click $viCopy $popup
-  $vi=Wait-Proof 'semantically correct inline Vietnamese on actual clipboard' {
-    try {
-      $value=Get-Clipboard -Raw -ErrorAction Stop
-      if($value -match '(?i)đóng' -and $value -match '(?i)cửa'){return $value}
-    } catch {}
-  } 8
-  Write-Host "Native UIA buttons + physical clicks copied OCR '$ocr' and inline Vietnamese '$vi' from HWND $popup."
-  # A second hotkey while the popup is open must hide it during selection,
-  # then Esc must restore the same HWND, text and inline translation.
+  Button-Click $translated.point $popup
+  [void](Wait-Proof 'Vietnamese result in actual clipboard' { Compare-Clipboard $vi } 8)
+  Next-Stage 'translated-copy'
+  $old=Stage 'warm-cancel-copy'
+
   Foreground $popup
   Send-Keys @(17,18,79)
   $picker=Wait-Proof 'recapture from an open popup' { Visible $pickerClass }
@@ -313,16 +308,19 @@ try {
   Foreground $picker
   Send-Keys @(27)
   [void](Wait-Proof 'recapture cancellation restores the previous popup' { (Visible $popupClass) -eq $popup -and !(Visible $pickerClass) })
-  $copyAfter=Probe 'copy' $popup
+  Assert-Proof ($old.ocr -ceq $ocr -and $old.vi -ceq $vi) 'Unexpected state before warm Escape'
   Set-Clipboard -Value 'SIG4A-popup-after-escape-before-ocr-copy'
-  Button-Click $copyAfter $popup
+  Button-Click $old.point $popup
   [void](Wait-Proof 'same OCR value copied after warm Escape' { Compare-Clipboard $ocr } 8)
-  $viCopyAfter=Probe 'translated-copy' $popup
+  Next-Stage 'warm-cancel-copy'
+  $preserved=Stage 'warm-cancel-vi'
+  Assert-Proof ($preserved.ocr -ceq $ocr -and $preserved.vi -ceq $vi) 'Warm Escape altered OCR or translation'
   Set-Clipboard -Value 'SIG4A-popup-after-escape-before-translation-copy'
-  Button-Click $viCopyAfter $popup
+  Button-Click $preserved.point $popup
   [void](Wait-Proof 'same inline translation copied after warm Escape' { Compare-Clipboard $vi } 8)
+  Next-Stage 'warm-cancel-vi'
   Write-Host 'Recapture Esc restored the same popup, OCR text and inline translation.'
-  Write-Host ("OCRPOP-WIN-2: " + (@{ native=$true; product=$revision; backend='llama_cpp'; model=$aliasName; instrumentation='uia-physical-pointer'; ocr=$ocr; inlineVietnamese=$vi; copiedOcr=$true; copiedVietnamese=$true; samePopup=$true; recaptureEscapePreserved=$true; hotkeyToPickerMs=$coldMs; selectionToVisibleMs=$panelMs; selectionToOcrObservedMs=$ocrMs } | ConvertTo-Json -Compress))
+  Write-Host ("OCRPOP-WIN-2: " + (@{native=$true;product=$revision;backend='llama_cpp';model=$aliasName;ocr=$ocr;inlineVietnamese=$vi;copiedOcr=$true;copiedVietnamese=$true;samePopup=$true;recaptureEscapePreserved=$true;hotkeyToPickerMs=$coldMs;selectionToVisibleMs=$panelMs;selectionToOcrObservedMs=$ocrMs} | ConvertTo-Json -Compress))
 
 } catch {
   if (Test-Path "$data/events.log") { Get-Content "$data/events.log" -Tail 40 | Write-Host }
