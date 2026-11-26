@@ -19,7 +19,8 @@ public static class ProofWin {
    public Point(int x,int y) { X=x;Y=y; }
  }
  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
- [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);
+ public static IntPtr Find(string cls) { return FindWindow(cls, null); }
  [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point p);
  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr window, uint flags);
  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr window, ref Point p);
@@ -121,7 +122,7 @@ function Wait-Proof([string]$label,[scriptblock]$check,[int]$seconds=30) {
   throw "Timed out waiting for $label"
 }
 function Visible([string]$cls) {
-  $hwnd = [ProofWin]::FindWindow($cls,$null)
+  $hwnd = [ProofWin]::Find($cls)
   if ($hwnd -ne [IntPtr]::Zero -and [ProofWin]::IsWindowVisible($hwnd)) { return $hwnd }
 }
 function Owner([IntPtr]$hwnd) {
@@ -190,7 +191,7 @@ try {
   @{ profiles=@(); autostart=$false; widget_enabled=$false; notify_enabled=$false; token_refresh=$false; local_ai_endpoint="http://127.0.0.1:$port"; local_ai_backend='llama_cpp'; local_ai_model=$aliasName; local_ai_managed=$false } |
     ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $data 'config.json')
   foreach($cls in @($trayClass,$popupClass,$dashClass,$pickerClass)){
-    Assert-Proof ([ProofWin]::FindWindow($cls,$null) -eq [IntPtr]::Zero) "Unexpected existing window: $cls"
+    Assert-Proof ([ProofWin]::Find($cls) -eq [IntPtr]::Zero) "Unexpected existing window: $cls"
   }
   $fixtureReady = Join-Path $scratch 'fixture.json'
   $fixture = Start-Process powershell.exe -ArgumentList @('-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',"`"$PSScriptRoot/fixture.ps1`"",'-Ready',"`"$fixtureReady`"") -RedirectStandardError (Join-Path $scratch 'fixture-error.log') -PassThru
@@ -199,7 +200,7 @@ try {
   $fh=[IntPtr]$f.hwnd
   Assert-Proof ((Owner $fh) -eq $fixture.Id) 'Fixture owner mismatch'
   $tray=Start-Process (Join-Path $root 'rust/target/debug/claude-usage.exe') -ArgumentList '--hidden' -PassThru
-  $trayWindow=Wait-Proof 'real tray window' { $w=[ProofWin]::FindWindow($trayClass,$null); if($w -ne [IntPtr]::Zero){$w} }
+  $trayWindow=Wait-Proof 'real tray window' { if($tray.HasExited){throw "Tray exited before creating its window: $($tray.ExitCode)"};$w=[ProofWin]::Find($trayClass); if($w -ne [IntPtr]::Zero){$w} }
   Assert-Proof ((Owner $trayWindow) -eq $tray.Id) 'Tray owner mismatch'
   Start-Sleep -Milliseconds 500
   Foreground $fh
@@ -217,8 +218,8 @@ try {
   Foreground $picker
   Send-Keys @(27)
   [void](Wait-Proof 'cancelled fresh picker and popup closed' {
-    [ProofWin]::FindWindow($pickerClass,$null) -eq [IntPtr]::Zero -and
-    [ProofWin]::FindWindow($popupClass,$null) -eq [IntPtr]::Zero
+    [ProofWin]::Find($pickerClass) -eq [IntPtr]::Zero -and
+    [ProofWin]::Find($popupClass) -eq [IntPtr]::Zero
   })
   Start-Sleep -Milliseconds 500
   Assert-Proof (!$watcher.Seen -and $watcher.Samples -gt 15 -and !(Visible $popupClass) -and !(Visible $dashClass)) 'Empty popup visible after first Escape'
@@ -296,6 +297,7 @@ try {
   Write-Host ("OCRPOP-WIN-2: " + (@{ native=$true; product=$revision; backend='llama_cpp'; model=$aliasName; width=$ocr.width; height=$ocr.height; dark=$ocr.dark; white=$ocr.white; ocr=$ocr.text; inlineVietnamese=$vi.text; copiedOcr=$true; copiedVietnamese=$true; samePopup=$true; recaptureEscapePreserved=$true; hotkeyToPickerMs=$coldMs; selectionToVisibleMs=$panelMs; selectionToOcrObservedMs=$ocrMs } | ConvertTo-Json -Compress))
 } catch {
   if (Test-Path "$data/events.log") { Get-Content "$data/events.log" -Tail 40 | Write-Host }
+  if ($tray) { [ProofWin]::WindowsFor($tray.Id) | Write-Host }
   if ($childOwner) { [ProofWin]::WindowsFor($childOwner) | Write-Host }
   if ($modelLog -and (Test-Path $modelLog)) { Get-Content $modelLog -Tail 20 | Write-Host }
   throw
