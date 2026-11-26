@@ -2,6 +2,7 @@
 const quickMode = window.__QUICK_MODE__;
 const originalApi = window.pywebview.api;
 const requests = [];
+const readiness = [];
 let capture;
 window.pywebview.api = new Proxy(originalApi, {
   get(target, key) {
@@ -9,6 +10,7 @@ window.pywebview.api = new Proxy(originalApi, {
       return data => new Promise(resolve => requests.push({ data, resolve }));
     }
     if (key === 'ocr_capture') return () => new Promise(resolve => { capture = resolve; });
+    if (key === 'local_models') return (...data) => new Promise(resolve => readiness.push({ data, resolve }));
     return target[key];
   },
 });
@@ -28,6 +30,23 @@ const paste = async (marker) => {
 };
 try {
   window.__QUICK_MODE__ = false;
+  toolTab('localai');
+  node('ai-endpoint').value = 'http://127.0.0.1:11434';
+  node('ai-model').value = 'fixture-vision';
+  const staleCheck = checkAi();
+  await tick();
+  check(readiness.length === 1, 'readiness check did not call the local model endpoint');
+  node('ai-endpoint').value = 'http://127.0.0.1:18081';
+  readiness[0].resolve({ models: ['fixture-vision'] });
+  await staleCheck; await tick();
+  check(node('ai-status').textContent.includes('Đang kiểm tra'), 'stale readiness response overwrote a changed endpoint');
+  node('ai-endpoint').value = 'http://127.0.0.1:11434';
+  const emptyCheck = checkAi(); await tick();
+  readiness[1].resolve({ models: [] }); await emptyCheck; await tick();
+  check(node('ai-status').textContent.includes('chưa có model local'), 'empty model list did not give an actionable diagnosis');
+  const readyCheck = checkAi(); await tick();
+  readiness[2].resolve({ models: ['fixture-vision'] }); await readyCheck; await tick();
+  check(node('ai-status').textContent.includes('Sẵn sàng'), 'reachable selected model was not reported ready');
   toolTab('ocr');
   const first = await paste('first');
   node('ocr-run').click();
