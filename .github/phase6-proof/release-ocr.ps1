@@ -181,7 +181,8 @@ function Compare-Clipboard($expected) {
 }
 $port=18080
 $aliasName='qwen3-vl-2b'
-$server=$fixture=$tray=$watcher=$null
+$server=$fixture=$tray=$watcher=$data=$null
+Assert-Proof (!(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)) 'Fixture model port is already in use; refusing to interact with it'
 try {
   $archive = Join-Path $scratch 'llama.zip'
   curl.exe -fLS --retry 3 -o $archive 'https://github.com/ggml-org/llama.cpp/releases/download/b12776/llama-b12776-bin-win-cpu-x64.zip'
@@ -199,6 +200,7 @@ try {
     if ($server.HasExited) { Get-Content $modelLog -Tail 40 | Write-Host; throw "llama-server exited: $($server.ExitCode)" }
     try { (Invoke-RestMethod "http://127.0.0.1:$port/health" -NoProxy -TimeoutSec 2).status -eq 'ok' } catch { $false }
   } 120
+  Assert-Proof (@(Get-NetTCPConnection -LocalPort $port -State Listen).OwningProcess -contains $server.Id) 'The expected local model process does not own the listening port'
   $preflight=@{model=$aliasName;messages=@(@{role='user';content='Reply with OK.'});temperature=0;max_tokens=8}|ConvertTo-Json -Depth 5
   $prime=Invoke-RestMethod "http://127.0.0.1:$port/v1/chat/completions" -Method Post -ContentType 'application/json' -Body $preflight -NoProxy -TimeoutSec 30
   Assert-Proof ([bool]$prime.choices[0].message.content) 'Local model warm-up did not return a real response'
@@ -241,7 +243,7 @@ try {
   $picker=Wait-Proof 'first native picker from Ctrl+Alt+O' { Visible $pickerClass }
   $coldMs=$coldClock.ElapsedMilliseconds
   $childOwner=Owner $picker
-  Assert-Proof ($childOwner -ne 0 -and (Get-Process -Id $childOwner).ProcessName -ceq 'claude-usage-dashboard') 'Picker not owned by product dashboard binary'
+  Assert-Proof ($childOwner -ne 0 -and (Get-Process -Id $childOwner).Path -ieq $realDashboard) 'Picker not owned by product dashboard binary'
   Start-Sleep -Milliseconds 300
   Assert-Proof (!$watcher.Seen -and !(Visible $popupClass) -and !(Visible $dashClass)) 'Popup/dashboard visible during first picker'
   Foreground $picker
@@ -280,7 +282,7 @@ try {
   $popupClock=[Diagnostics.Stopwatch]::StartNew()
   $popup=Wait-Proof 'anchored popup after selected drag' { Visible $popupClass } 75
   $panelMs=$popupClock.ElapsedMilliseconds
-  Assert-Proof ((Owner $popup) -eq $childOwner -and !(Visible $pickerClass) -and !(Visible $dashClass)) 'Wrong process/window after capture'
+  Assert-Proof ((Owner $popup) -eq $childOwner -and (Get-Process -Id $childOwner).Path -ieq $realDashboard -and !(Visible $pickerClass) -and !(Visible $dashClass)) 'Wrong process/window after capture'
   $r=[ProofWin+Rect]::new()
   Assert-Proof ([ProofWin]::GetWindowRect($popup,[ref]$r)) 'Could not get physical popup bounds'
   $wa=[ProofWin]::WorkAt([int](($x1+$x2)/2),[int](($y1+$y2)/2))
@@ -318,7 +320,7 @@ try {
   $vi=Wait-Proof 'semantically correct inline Vietnamese on actual clipboard' {
     try {
       $value=Get-Clipboard -Raw -ErrorAction Stop
-      if($value -match '(?i)đóng' -and $value -match '(?i)cửa'){return $value}
+      if($value -match '(?i)^(?:Vui lòng )?đóng (?:cái )?cửa[.!]?$'){return $value}
     } catch {}
   } 8
   Write-Host "Native UIA buttons + physical clicks copied OCR '$ocr' and inline Vietnamese '$vi' from HWND $popup."
@@ -377,6 +379,7 @@ try {
   $warmText=Wait-Proof 'new warm OCR in Windows clipboard' {
     try { $v=Get-Clipboard -Raw -ErrorAction Stop; if($v -match '(?i)^open the window[.!]?$'){return $v} } catch {}
   } 8
+  Assert-Proof (!$server.HasExited -and (@(Get-NetTCPConnection -LocalPort $port -State Listen).OwningProcess -contains $server.Id)) 'The pinned model server changed during timing'
   Write-Host ("P6-RELEASE-OCR: " + (@{
       standardRelease=$true;product=$revision;model=$aliasName;backend='llama_cpp';modelUnchangedBetweenRuns=$true;modelServerPid=$server.Id;monDpi=$dpi;
       cold=@{hotkeyToPickerMs=$coldCapturePickerMs;mouseReleaseToPanelMs=$panelMs;panelToOcrObservedMs=$ocrMs-$panelMs;ocr=$ocr;translated=$vi};
@@ -385,7 +388,7 @@ try {
   }|ConvertTo-Json -Depth 5 -Compress))
 
 } catch {
-  if (Test-Path "$data/events.log") { Get-Content "$data/events.log" -Tail 40 | Write-Host }
+  if ($data -and (Test-Path "$data/events.log")) { Get-Content "$data/events.log" -Tail 40 | Write-Host }
   if ($tray) { [ProofWin]::WindowsFor($tray.Id) | Write-Host }
   if ($childOwner) { [ProofWin]::WindowsFor($childOwner) | Write-Host }
   if ($modelLog -and (Test-Path $modelLog)) { Get-Content $modelLog -Tail 20 | Write-Host }

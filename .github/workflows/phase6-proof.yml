@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 env:
-  PRODUCT_SHA: 41868363ed07a64aaecc8b1f0c6fa13e3c84ff5c
+  PRODUCT_SHA: db1e68419f11ece6c912df39d5516b36ccddd566
 jobs:
   full-workspace:
     runs-on: windows-2025
