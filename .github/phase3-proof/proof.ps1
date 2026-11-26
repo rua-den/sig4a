@@ -181,6 +181,7 @@ try {
   if(!$result.cancelPreserved -or !$result.lateDiscarded -or $result.pasteTranslationInput -cne $c2.text){throw 'OCR paste/cancellation/in-flight safety was not verified'}
   if(($result.translatedPaste -notmatch '(?i)mở') -or ($result.translatedPaste -notmatch '(?i)cửa sổ')){throw 'Pasted OCR was not translated into Vietnamese'}
   if (($result.translated -notmatch '(?i)đóng') -or ($result.translated -notmatch '(?i)cửa')) { throw 'Live model did not translate the fixture into Vietnamese' }
+  if($result.translatedRepeat -cne $result.translated){throw 'Repeating the same capture translation returned different text'}
 } catch {
   if ($dashboard) {
     Write-Host "Dashboard owner PID: $($dashboard.Id), session: $($dashboard.SessionId)"

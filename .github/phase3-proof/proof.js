@@ -86,6 +86,8 @@ await until(() => !document.getElementById('translation-run').disabled, 'Transla
 const translated = document.getElementById('translation-out').textContent.trim();
 const captureTranslationInput = document.getElementById('translation-in').value;
 if(captureTranslationInput!==text)throw Error('Capture OCR was not handed to Translate');
+await runTool('translation');
+const translatedRepeat = document.getElementById('translation-out').textContent.trim();
 toolTab('ocr');
 const priorSrc = img.getAttribute('src');
 document.getElementById('ocr-in').focus();
@@ -115,4 +117,4 @@ const late=runTool('ocr');
 removeOcr();
 await late;
 if(img.getAttribute('src')||!copy.disabled||!document.querySelector('#tool-ocr [data-quick-translate]').disabled||document.getElementById('ocr-out').textContent.includes(pastedText))throw Error('Removing in-flight image allowed late result');
-return {width:sample.width,height:sample.height,dark,white,text,translated,translationInput:captureTranslationInput,pastedText,translatedPaste,pasteTranslationInput,cancelPreserved:true,lateDiscarded:true};
+return {width:sample.width,height:sample.height,dark,white,text,translated,translatedRepeat,translationInput:captureTranslationInput,pastedText,translatedPaste,pasteTranslationInput,cancelPreserved:true,lateDiscarded:true};
