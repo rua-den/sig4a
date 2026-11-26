@@ -1,0 +1,66 @@
+name: SIG4A Phase 6 exact Windows release acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/phase6-proof.yml', '.github/phase6-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: 41868363ed07a64aaecc8b1f0c6fa13e3c84ff5c
+jobs:
+  full-workspace:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          persist-credentials: false
+      - working-directory: rust
+        name: Locked workspace all targets
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne $env:PRODUCT_SHA) { throw 'wrong product revision' }
+          cargo check --locked --workspace --all-targets
+      - working-directory: rust
+        name: Ordinary locked release build, no test-only feature
+        run: |
+          cargo build --locked --release --workspace
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Get-FileHash -Algorithm SHA256 target/release/claude-usage.exe,target/release/claude-usage-dashboard.exe
+      - working-directory: rust
+        name: Serialized full workspace and native GUI integration tests
+        run: |
+          $old=(Get-TimeZone).Id
+          try {
+            Set-TimeZone -Id 'SE Asia Standard Time'
+            if ((Get-TimeZone).Id -ne 'SE Asia Standard Time') { throw 'wrong parity fixture timezone' }
+            cargo test --locked --workspace -- --test-threads=1 --show-output
+            $code=$LASTEXITCODE
+          } finally { Set-TimeZone -Id $old }
+          if ($code) { exit $code }
+      - working-directory: rust
+        name: Explicit DPI and responsive native Windows regression
+        run: |
+          cargo test --locked -p cu-core --test dpi_scale
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked -p claude-usage-dashboard --test dashboard_responsive -- --test-threads=1
+  release-ocr:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - working-directory: product/rust
+        name: Build unmodified named Windows release executables
+        run: cargo build --locked --release --workspace
+      - name: Native OCR and translation with a healthy real local vision model
+        shell: pwsh
+        run: ./proof/.github/phase6-proof/release-ocr.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA
