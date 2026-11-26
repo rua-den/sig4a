@@ -87,7 +87,7 @@ fn defaults_exact_keys_and_order() {
     assert!(pos("cleaner_roots") + 1 == pos("cleaner_skip_recent_days"));
     assert!(pos("cleaner_skip_recent_days") + 1 == pos("cleaner_dups_min_kb"));
     assert!(pos("cleaner_dups_min_kb") + 1 == pos("widget_cx"));
-    assert_eq!(d["cleaner_roots"], json!(["D:\\stu"]));
+    assert_eq!(d["cleaner_roots"], json!([]));
     assert_eq!(d["cleaner_skip_recent_days"], json!(0));
     assert_eq!(d["cleaner_dups_min_kb"], json!(0));
     assert!(d["dash_rect"].is_null() && d["widget_cx"].is_null() && d["widget_cy"].is_null());
@@ -100,6 +100,18 @@ fn load_missing_file_gives_defaults_and_detection() {
     let cfg = load_config(&p, &home);
     assert_eq!(cfg["interval_sec"], json!(180));
     assert_eq!(cfg["profiles"], json!([]));
+}
+
+#[test]
+fn explicit_cleaner_roots_survive_the_empty_default_migration() {
+    let (t, paths) = sandbox();
+    let home = t.path().join("home");
+    let explicit = json!([r"D:\stu", r"C:\workspace"]);
+    fs::write(&paths.config, json!({"cleaner_roots": &explicit}).to_string()).unwrap();
+    let saved = load_config(&paths, &home);
+    assert_eq!(saved["cleaner_roots"], explicit);
+    save_config(&paths, &saved).unwrap();
+    assert_eq!(load_config(&paths, &home)["cleaner_roots"], explicit);
 }
 
 #[test]

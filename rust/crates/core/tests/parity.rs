@@ -329,6 +329,8 @@ fn detect_profiles_parity() {
 
 #[test]
 fn load_config_parity() {
+    // The fixture has one deliberate safety departure from the historical Python
+    // defaults: missing cleaner_roots no longer opts into scanning D:\stu.
     let mut r = Report::new("load_config");
     for c in load("load_config") {
         let i = &c["input"];

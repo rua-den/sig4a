@@ -129,11 +129,18 @@ pub fn scan(opts: &ScanOptions, fs: &dyn FsView) -> Manifest {
         out_of_budget: false,
     };
     scanner.manifest.created_at = opts.now_secs;
-    for raw in &opts.roots {
+    let validated: Vec<PathBuf> = opts.roots.iter().filter_map(|raw| scanner.validated_root(raw)).collect();
+    for (i, root) in validated.iter().enumerate() {
         if scanner.out_of_budget {
             break;
         }
-        scanner.add_root(raw);
+        let already_covered = validated.iter().enumerate().any(|(j, other)| {
+            i != j && path_contains(other, root) && (j < i || !path_contains(root, other))
+        });
+        if !already_covered {
+            scanner.manifest.roots.push(display(root));
+            scanner.walk(root.clone());
+        }
     }
     // UI wants the top items first. Sorting does not change total/matched.
     scanner
@@ -290,7 +297,7 @@ fn dir_has_trx(fs: &dyn FsView, dir: &Path) -> bool {
     false
 }
 
-fn is_recent(newest: Option<u64>, days: u64, now: u64) -> bool {
+pub(crate) fn is_recent(newest: Option<u64>, days: u64, now: u64) -> bool {
     let Some(newest) = newest else { return false };
     let window = days.saturating_mul(86_400);
     newest.saturating_add(window) > now
@@ -332,20 +339,20 @@ impl<'a> Scanner<'a> {
         true
     }
 
-    fn add_root(&mut self, raw: &Path) {
+    fn validated_root(&mut self, raw: &Path) -> Option<PathBuf> {
         if !raw.is_absolute() {
             self.error(format!(
                 "invalid root '{}': root is not absolute",
                 display(raw)
             ));
-            return;
+            return None;
         }
         if is_unc(raw) {
             self.error(format!(
                 "invalid root '{}': UNC paths are not scanned",
                 display(raw)
             ));
-            return;
+            return None;
         }
         // A drive root (e.g. `D:\`) is a valid scan root: the caller opts in explicitly through
         // `opts.roots`. Only UNC, blocked drive types, reparse points and forbidden subtrees are
@@ -353,7 +360,7 @@ impl<'a> Scanner<'a> {
         // canonicalize is only meaningful for real, existing paths; in-memory views keep the input.
         if crate::has_reparse_component(raw, self.fs) {
             self.error(format!("invalid root '{}': reparse points are not scanned", display(raw)));
-            return;
+            return None;
         }
         let canonical = std::fs::canonicalize(raw).ok().map(|p| strip_verbatim(&p));
         let path = canonical.clone().unwrap_or_else(|| raw.to_path_buf());
@@ -362,21 +369,21 @@ impl<'a> Scanner<'a> {
                 "invalid root '{}': path is missing or unreadable",
                 display(&path)
             ));
-            return;
+            return None;
         };
         if attrs & REPARSE_POINT != 0 {
             self.error(format!(
                 "invalid root '{}': reparse points are not scanned",
                 display(&path)
             ));
-            return;
+            return None;
         }
         if self.fs.is_real_fs() && canonical.is_some() && is_removable(&path) {
             self.error(format!(
                 "invalid root '{}': removable media is not scanned",
                 display(&path)
             ));
-            return;
+            return None;
         }
         for forbidden_path in &self.forbidden {
             if path_contains(forbidden_path, &path) {
@@ -385,11 +392,10 @@ impl<'a> Scanner<'a> {
                     display(&path),
                     display(forbidden_path)
                 ));
-                return;
+                return None;
             }
         }
-        self.manifest.roots.push(display(&path));
-        self.walk(path);
+        Some(path)
     }
 
     /// Recursive byte count of a matched directory, plus its newest mtime and `.trx` presence.

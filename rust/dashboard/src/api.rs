@@ -344,10 +344,18 @@ fn reviewed_selection(manifest: &Manifest, ids: &[Value]) -> Option<(Vec<String>
     if exact.windows(2).any(|pair| pair[0] == pair[1]) {
         return None;
     }
-    let bytes = exact.iter().try_fold(0u64, |bytes, id| {
-        let item = manifest.items.iter().take(12).find(|item| &item.id == id)?;
-        bytes.checked_add(item.size)
-    })?;
+    let approved = exact.iter().map(|id| manifest.items.iter().take(12).find(|item| &item.id == id))
+        .collect::<Option<Vec<_>>>()?;
+    for (i, item) in approved.iter().enumerate() {
+        let a = std::path::Path::new(&item.path);
+        if approved[i + 1..].iter().any(|other| {
+            let b = std::path::Path::new(&other.path);
+            path_contains(a, b) || path_contains(b, a)
+        }) {
+            return None;
+        }
+    }
+    let bytes = approved.iter().try_fold(0u64, |bytes, item| bytes.checked_add(item.size))?;
     Some((exact, bytes))
 }
 
@@ -826,6 +834,7 @@ impl Core {
             // Bind deletion to the canonical roots observed by the scanner instead of
             // allowing changed symlinks or raw scope aliases to enlarge the approved boundary.
             opts.roots = manifest.roots.iter().map(PathBuf::from).collect();
+            opts.now_secs = now_secs();
             st.phase = CleanPhase::Cleaning { run_id: manifest.run_id.clone() };
             st.started_at = now_millis();
             st.outcomes.clear();
@@ -1302,6 +1311,22 @@ mod tests {
             .to_string(),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn review_rejects_recursively_overlapping_selected_items() {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path().join("node_modules");
+        let child = parent.join(".vs");
+        let sibling = dir.path().join("obj");
+        let mut manifest = Manifest::new();
+        let make = |path: &std::path::Path, kind| cu_cleaner::Item::new(path.to_string_lossy().into_owned(), 10, kind);
+        let a = make(&parent, cu_cleaner::RuleKind::NodeModules);
+        let b = make(&child, cu_cleaner::RuleKind::Vs);
+        let c = make(&sibling, cu_cleaner::RuleKind::Obj);
+        manifest.items = vec![a.clone(), b.clone(), c.clone()];
+        assert!(reviewed_selection(&manifest, &[json!(a.id), json!(b.id)]).is_none());
+        assert_eq!(reviewed_selection(&manifest, &[json!(a.id), json!(c.id)]).unwrap().1, 20);
     }
 
     #[test]

@@ -9,7 +9,8 @@
 //! can use the [`clean`] convenience wrapper, which injects [`RealFs`].
 
 use crate::model::{FsView, Item, Manifest, Mode, RealFs, ScanOptions};
-use crate::{new_run_id, now_unix_secs, validate_item_kind, validate_target_with};
+use crate::scan::is_recent;
+use crate::{new_run_id, now_unix_secs, path_contains, validate_item_kind, validate_target_with, REPARSE_POINT};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
@@ -183,6 +184,47 @@ fn snapshot(
     journal.record(&record).is_ok()
 }
 
+/// Recheck the current target tree against the review's age filter. Unknown
+/// timestamps, unreadable directories and a partial traversal cannot authorize deletion.
+fn revalidate_age(item: &Item, opts: &ScanOptions, fs: &dyn FsView) -> Result<(), String> {
+    if opts.skip_recent_days == 0 {
+        return Ok(());
+    }
+    let age_unknown = || format!("cannot verify build age of target '{}'; rescan before deleting", item.path);
+    let check = |modified: Option<u64>| {
+        let modified = modified.ok_or_else(age_unknown)?;
+        if is_recent(Some(modified), opts.skip_recent_days, opts.now_secs) {
+            return Err(format!("target '{}' contains a recent build; rescan before deleting", item.path));
+        }
+        Ok(())
+    };
+    let path = Path::new(&item.path);
+    let parent = path.parent().ok_or_else(age_unknown)?;
+    let entry = fs.entries(parent).map_err(|_| age_unknown())?.into_iter()
+        .find(|entry| path_contains(path, &entry.path) && path_contains(&entry.path, path))
+        .ok_or_else(age_unknown)?;
+    if !entry.is_dir || entry.attrs & REPARSE_POINT != 0 {
+        return Err(age_unknown());
+    }
+    check(entry.modified)?;
+    let mut pending = vec![path.to_path_buf()];
+    let mut examined = 0usize;
+    while let Some(dir) = pending.pop() {
+        if examined >= opts.max_dirs {
+            return Err(age_unknown());
+        }
+        examined += 1;
+        for entry in fs.entries(&dir).map_err(|_| age_unknown())? {
+            check(entry.modified)?;
+            // Never follow symbolic links or junctions to prove this target is old.
+            if entry.is_dir && entry.attrs & REPARSE_POINT == 0 {
+                pending.push(entry.path);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Re-validate one manifest item right before deletion. `validate_target_with` covers roots,
 /// forbidden subtrees, reparse points and blocked drives; `validate_item_kind` additionally checks
 /// the rule name **and** its guard (project marker / `package.json` / `.trx`) through the same
@@ -196,7 +238,7 @@ fn revalidate(item: &Item, opts: &ScanOptions, fs: &dyn FsView) -> Result<(), St
             item.kind, item.path
         ));
     }
-    Ok(())
+    revalidate_age(item, opts, fs)
 }
 
 /// Delete the manifest items whose `id` appears in `ids`, in that exact order.

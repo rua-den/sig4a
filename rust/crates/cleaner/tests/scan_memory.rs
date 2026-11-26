@@ -454,3 +454,20 @@ fn budget_limits_produce_a_truncation_error() {
         m.errors
     );
 }
+
+#[test]
+fn overlapping_and_duplicate_roots_do_not_offer_overlapping_items_or_double_bytes() {
+    let mut fs = MemoryFs::new();
+    fs.dir(r"D:\scope")
+        .dir(r"D:\scope\app")
+        .file(r"D:\scope\app\package.json", 1)
+        .dir(r"D:\scope\app\node_modules")
+        .file(r"D:\scope\app\node_modules\payload", 8)
+        .dir(r"D:\scope\app\node_modules\.vs")
+        .file(r"D:\scope\app\node_modules\.vs\cache", 3);
+    let m = scan(&opts(&[r"D:\scope\app\node_modules", r"D:\scope", r"D:\scope", r"D:\scope\app"]), &fs);
+    assert_eq!(m.roots, [r"D:\scope"]);
+    assert_eq!(m.matched, 1, "{m:?}");
+    assert_eq!(m.total, 11);
+    assert_eq!(m.items[0].path, r"D:\scope\app\node_modules");
+}
