@@ -1,7 +1,7 @@
 {
   "phase": 5,
   "title": "Grammar, Translation and Claude Usage",
-  "status": "in_progress",
+  "status": "passed",
   "goal": "Align the two text tools and improve multi-profile quota scanability while preserving existing behavior.",
   "dependencies": [
     "Phase 4 has gate.status = passed and all required evidence recorded"
@@ -26,24 +26,24 @@
         "case": "Text flow, copy and keyboard fallback",
         "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1",
         "expected": "Grammar and Translation open correctly with and without selected input, can retry on failure, and copy edited text. OCR handoff still arrives.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Exact native WebView2 dashboard_ui suite passed. Covers selected and blank shortcut state, draft/edit preservation against stale success/failure, retry, output copying and OCR handoff. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121564138"
       },
       {
         "id": "P5-AUTO-002",
         "case": "Profile status and compatibility",
         "run": "cargo test --locked -p cu-core; cargo test --locked -p claude-usage-dashboard --test dashboard_legacy -- --test-threads=1",
         "expected": "Attention ordering, reset windows and status labels match fixture values. Saving unrelated settings preserves widget and hook config and unknown keys.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Core compatibility 65 tests plus real dashboard_legacy passed. Separate windows and null quotas, exact 429 stale row with cached values and live retry, deterministic priority, and settings preservation. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121564138"
       },
       {
         "id": "P5-AUTO-003",
         "case": "Existing hook parity",
         "run": "cargo test --locked -p claude-usage --test hook_cli",
         "expected": "Existing opted-in hook behavior remains correct. Threshold status alone does not claim prompts are blocked.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Hook CLI six tests and dashboard API 30 tests passed: real cached policy, enabled executable vs unavailable hook, threshold-only states and cfg/cache pending mismatch. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121564138"
       }
     ],
     "real_ui": [
@@ -52,24 +52,24 @@
         "case": "Grammar and Translation",
         "steps": "Run both tools from Dashboard and hotkey. Test selected text, no selection, paste, destination selection, editing and copying.",
         "expected": "Correct tool opens and can complete each path. Copy contains user-edited output.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Actual Windows tray Ctrl+Alt+G/T both selected text and no-selection; native Ctrl+V, native clicks and editable Grammar/Translation outputs in dashboard and quick panel. Default VI, English target and actual Windows clipboard checked with a deterministic loopback fixture. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121563638"
       },
       {
         "id": "P5-UI-002",
         "case": "10-profile glance test",
         "steps": "Open the fixture with ten profiles covering 5h/7d, a near-threshold profile, stale and login error. Time finding the most urgent profile from open.",
         "expected": "Target is within 5 seconds. Reset periods and stale, refreshing, login failure and active blocking are distinguishable.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Ten synthetic profiles with actual executable-configured hook, failed login, stale, refresh, missing/dead/disabled hooks and separate 5h/7d resets. Highest urgency visible without scrolling 181 ms after HWND visible (launch-to-visible 6081 ms separately). Hosted mechanical measurement, not a human usability study. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121563638"
       },
       {
         "id": "P5-UI-003",
         "case": "Compatibility",
         "steps": "Open a legacy fixture with widget preferences and hooks. Navigate and reopen after saving an unrelated setting.",
         "expected": "Existing values render and persist. No actual credentials are used.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Real native settings tabs and unrelated accent change saved and reopened. Widget label/font/opacity/lock, unknown value and all hook settings file SHA-256 preserved. No credentials. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121563638"
       }
     ]
   },
@@ -78,39 +78,50 @@
       "id": "P5-TEST-1",
       "owner": "Phase Luna (gpt-5.6-luna, medium)",
       "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Luna implemented text and quota changes, ran Node syntax, extracted JS mock regressions and diff checks; Rust exact Windows suites completed in CI. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121564138"
     },
     {
       "id": "P5-TEST-2",
       "owner": "Continuous advisor",
       "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Independent GPT-6.2 Astra approved exact UI 81198ed9, API 90648031, hookinstall a2e347dd and reviewed corrected stale fixture test blob 7f6daa0c."
     },
     {
       "id": "P5-TEST-3",
       "owner": "Orchestrator",
       "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Root verified exact independent native and automated result logs, fixture safe, readout timing and clipboard. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121564138 https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121563638"
     },
     {
       "id": "P5-TEST-4",
       "owner": "Phase Luna, continuous advisor and orchestrator",
       "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "After source review fixes, framed current fixture for real hook parity and corrected stale row assertion; all required suites and actual Windows native proof reran on exact final candidate plus standard Windows check. https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121564138 https://github.com/rua-den/sig4a/actions/runs/45881461545/job/140121563638 https://github.com/rua-den/sig4a/actions/runs/45881397448"
     }
   ],
   "test_notes": [
     "Record the ten-profile task timing and fixture context. Automated ordering asserts correctness, while a separate timed UI check records the usability target.",
     "Use isolated synthetic profile and text fixtures, no real credentials. Native proof uses actual Windows shortcut, clipboard/edit gestures and timed urgency readout; fix/retest exact candidate before pass."
   ],
-  "findings": [],
+  "findings": [
+    {
+      "status": "resolved",
+      "title": "Hook preview must reflect executable and authoritative saved-cache decision",
+      "resolution": "Exact runnable tray command and PE check, no claim from threshold-only; saved/current policy separated, partial quota view handles missing periods."
+    },
+    {
+      "status": "resolved",
+      "title": "Rate-limited legacy fixture retained cached values and retry",
+      "resolution": "Scope the 429 regression to its own row, both cached windows and nonzero countdown."
+    }
+  ],
   "gate": {
-    "status": "pending",
-    "closed_at": null,
+    "status": "passed",
+    "closed_at": "2026-11-26T19:13:01.460Z",
     "required": [
       "implementation complete",
       "all required acceptance cases passed with evidence",
@@ -122,5 +133,6 @@
     "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
   },
   "baseline": "0843876b73a41b99dff8c7eea6eb4fc06a17d3b1",
-  "started_at": "2026-11-26T18:50:31.948Z"
+  "started_at": "2026-11-26T18:50:31.948Z",
+  "tested_product": "e8ae8d53d19f971f5421f0b37ad2e5677dffbffe"
 }
