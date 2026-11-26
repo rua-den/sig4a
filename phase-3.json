@@ -1,7 +1,7 @@
 {
   "phase": 3,
   "title": "Local AI and OCR",
-  "status": "pending",
+  "status": "passed",
   "goal": "Complete a real OCR vertical slice and give all AI tools a usable readiness/recovery path.",
   "dependencies": [
     "Phase 2 has gate.status = passed and all required evidence recorded"
@@ -26,24 +26,24 @@
         "case": "Backend contracts",
         "run": "cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard",
         "expected": "Loopback policy intact. Both provider request paths use suitable text/image inputs. Invalid or absent image/model yields a helpful error instead of a stale result.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Exact Windows candidate b79846c7473821eba4129d2c00acf2576670ada2: cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard, exit 0, 25/25. Loopback, Ollama/llama.cpp payloads, deterministic precision options, image payload limits, and errors. https://github.com/rua-den/sig4a/actions/runs/45855027019/job/140031026099"
       },
       {
         "id": "P3-AUTO-002",
         "case": "OCR result lifecycle",
         "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1",
         "expected": "Concurrent replacement and removal cannot publish stale text. Cancelled capture, copy, and OCR-to-Translation behaviors match the accepted UI.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1, exit 0, real WebView2 passed. Includes readiness race, generation guards, model diagnosis and result lifecycle. https://github.com/rua-den/sig4a/actions/runs/45855027019/job/140031026099"
       },
       {
         "id": "P3-AUTO-003",
         "case": "Real local OCR fixture",
         "run": "Use the installed Ollama vision model or equivalent pinned local llama.cpp vision model against a synthetic legible phrase. Record backend, model ID, expected text, observed output, and whether clipboard and translation were checked.",
         "expected": "The real app produces expected normalized text for both capture/paste paths and passes it to copy/Translation. Substituted API responses do not satisfy this case.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Windows Server 2025 x64, llama.cpp b12776 CPU, Qwen3-VL 2B Instruct Q4_K_M + Q8_0 vision on 127.0.0.1:18080. Native capture recognized Close the door.; different native Ctrl+V bitmap recognized Open the window. Both Copied exactly to the native clipboard; VI results were Đóng cửa. (identical on repeat) and Vui lòng mở cửa sổ. respectively. https://github.com/rua-den/sig4a/actions/runs/45855074813/job/140031190498"
       }
     ],
     "real_ui": [
@@ -52,24 +52,24 @@
         "case": "Local AI setup and recovery",
         "steps": "Open built dashboard and use a reachable endpoint plus a temporary invalid/unavailable endpoint in sandbox. Select model and check diagnosis, then restore valid test config.",
         "expected": "Ready and failure states are distinguishable and offer a concrete next step. Entered input survives recovery navigation within the session.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Visible real WebView2 dashboard: unavailable loopback endpoint showed actionable unreachable state; restored server then discovered the model, ran real sample vision Test to Ready, saved sandbox config and preserved unsent Grammar input across route changes. The setup stage is required before OCR proof can proceed. https://github.com/rua-den/sig4a/actions/runs/45855074813/job/140031190498"
       },
       {
         "id": "P3-UI-002",
         "case": "Native image capture and paste",
         "steps": "Capture a controlled sample area via the app, recognize it, copy it and send to Dịch. Repeat with a synthetic pasted image.",
         "expected": "The preview belongs to the image processed. Clipboard/result and translation input contain the current OCR text.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Actual native Windows drag acquired a valid 460×110 PNG; after capture Copy/Translate, actual clipboard bitmap + native Ctrl+V replaced the image/invalidated previous actions. Real model recognized both examples; exact native text clipboard and matching Vietnamese handoff verified. https://github.com/rua-den/sig4a/actions/runs/45855074813/job/140031190498"
       },
       {
         "id": "P3-UI-003",
         "case": "Stale output and cancellation",
         "steps": "Start OCR, replace or remove the image before completion, then try copy/dịch. Cancel a capture with Esc.",
         "expected": "Late old output stays inactive. An intentional cancel does not overwrite the current image.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Sent native Escape to the picker after successful pasted OCR; verified the existing image, text and Copy action remained. Removed an image during a real pending request and verified the late result did not return or enable Copy/Translate. https://github.com/rua-den/sig4a/actions/runs/45855074813/job/140031190498"
       }
     ]
   },
@@ -78,38 +78,43 @@
       "id": "P3-TEST-1",
       "owner": "Phase Luna (gpt-5.6-luna, medium)",
       "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Luna ran both required Windows suites on exact b79846c7473821eba4129d2c00acf2576670ada2; API 25/25 and WebView2 1/1 passed, no skips. https://github.com/rua-den/sig4a/actions/runs/45855027019/job/140031026099"
     },
     {
       "id": "P3-TEST-2",
       "owner": "Continuous advisor",
       "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Continuous Advisor independently approved exact b79846c7473821eba4129d2c00acf2576670ada2, reviewing the four files and the follow-up API precision fix, preserving grammar behavior and loopback policy. No unresolved code blockers."
     },
     {
       "id": "P3-TEST-3",
       "owner": "Orchestrator",
       "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Orchestrator independently verified exact product tree plus five disposable harness-only paths (proof head 103ee2eee7a26fb42ea6a207ac8c09715913c998), with native capture/bitmap, real model, OS clipboard, VI translation, ready/recovery, Escape and stale result. https://github.com/rua-den/sig4a/actions/runs/45855074813/job/140031190498"
     },
     {
       "id": "P3-TEST-4",
       "owner": "Phase Luna, continuous advisor and orchestrator",
       "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Initial real model run returned an inaccurate capture translation (Vặn lại cửa.). Luna constrained OCR/translation sampling and clarified general prompt, Advisor reviewed the exact fix, and both required suites and both native inputs were rerun. Capture translation repeated exactly, without lowering the expected meaning. https://github.com/rua-den/sig4a/actions/runs/45855027019/job/140031026099 https://github.com/rua-den/sig4a/actions/runs/45855074813/job/140031190498"
     }
   ],
   "test_notes": [
     "Observed prerequisites on this Windows machine: Ollama loopback API and a cached LiquidAI LFM2.5 vision model. Check readiness again at phase start. Use only synthetic input and fixtures."
   ],
-  "findings": [],
+  "findings": [
+    {
+      "status": "resolved",
+      "detail": "Initial native translation was inaccurate. Revised generic faithful prompt and explicit temperature 0 restored correct translations on both synthetic fixtures; repeated capture output matched. This is scoped sample evidence, not a general guarantee."
+    }
+  ],
   "gate": {
-    "status": "pending",
-    "closed_at": null,
+    "status": "passed",
+    "closed_at": "2026-11-26T16:05:50.104Z",
     "required": [
       "implementation complete",
       "all required acceptance cases passed with evidence",
@@ -118,6 +123,13 @@
       "no unresolved blocking defects",
       "affected tests re-passed after any fix"
     ],
-    "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
+    "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded.",
+    "next_phase": 4
+  },
+  "handoff": {
+    "status": "phase_3_accepted",
+    "tested_product_commit": "b79846c7473821eba4129d2c00acf2576670ada2",
+    "native_proof": "https://github.com/rua-den/sig4a/actions/runs/45855074813/job/140031190498",
+    "windows_suite": "https://github.com/rua-den/sig4a/actions/runs/45855027019/job/140031026099"
   }
 }
