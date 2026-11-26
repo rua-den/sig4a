@@ -14,8 +14,17 @@ const spin = document.querySelectorAll('.acc .spin');
 check('spinner shown for the account being fetched', spin.length === 1 && spin[0].parentElement.textContent.includes('claude-da'));
 check("footer shows 'updating' state while busy", $('stat').textContent.includes('đang cập nhật'));
 check('refresh button stays clickable while the app polls in the background', $('rbtn').disabled === false);
-const bt = document.body.innerText;
-check('429 account shows cached value + warning + countdown', bt.includes('dữ liệu cũ') && bt.includes('thử lại sau'));
+const limited = accs().find(row => row.dataset.n === 'claude-hn');
+const limitedState = limited?.querySelector('.usage-state');
+const retry = limited?.querySelector('[data-k="until"]');
+check('429 account shows cached quota in both windows, stale warning and live retry countdown',
+  limited?.querySelector('[data-window="5h"] .pct')?.textContent === '60%' &&
+  limited?.querySelector('[data-window="7d"] .pct')?.textContent === '50%' &&
+  limitedState?.dataset.kind === 'stale' && limitedState.textContent === 'Dữ liệu cũ' &&
+  limited?.querySelector('.usage-error')?.textContent.includes('HTTP 429') &&
+  limited?.textContent.includes('thử lại sau') &&
+  Number(retry?.dataset.t) > Date.now()/1000 && /^[1-9]\d*[sm]$/.test(retry?.textContent),
+  limited?.textContent.trim());
 let g = geo();
 check('NO scrollbar needed', noScroll(g), JSON.stringify(g));
 check('default width = initial_width for 4 profiles (760)', Math.abs(innerWidth - 760) <= 2, innerWidth);
