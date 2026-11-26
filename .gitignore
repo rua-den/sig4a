@@ -1,0 +1,9 @@
+# Rust build output
+/rust/target/
+
+# Local/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+

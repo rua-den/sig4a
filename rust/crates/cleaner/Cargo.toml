@@ -1,0 +1,16 @@
+[package]
+name = "cu-cleaner"
+version.workspace = true
+edition.workspace = true
+description = "Read-only scanner for build artefacts (bin/obj/.vs/node_modules/TestResults). Never deletes."
+
+[lib]
+name = "cu_cleaner"
+
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.140"
+sha2 = "=0.10.9"
+
+[dev-dependencies]
+tempfile = "=3.20.0"
