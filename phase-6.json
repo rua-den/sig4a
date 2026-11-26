@@ -1,0 +1,122 @@
+{
+  "phase": 6,
+  "title": "Windows release acceptance",
+  "status": "pending",
+  "goal": "Verify the integrated release through actual Windows entry points, old and fresh data, and current documentation.",
+  "dependencies": [
+    "Phase 5 has gate.status = passed and all required evidence recorded"
+  ],
+  "preserve": [
+    "Existing package names and colocated tray/dashboard binaries",
+    "Cargo.lock and Windows CI checks",
+    "Validated defaults, preferences and features from phases 1–5"
+  ],
+  "implementation": [
+    "Build locked workspace in release mode. Run the full required Windows tests serialized for native GUI.",
+    "Smoke run both binaries colocated in an isolated test location. Validate startup, restart, tray, desktop popup, WebView2 and settings persistence.",
+    "Exercise the complete journey with a real local AI vision model and isolated cleaner fixtures. Test fresh and pre-change configuration.",
+    "Verify keyboard, narrow width, reported DPI/geometry and typical Windows scaling. Run deterministic DPI tests where desktop scaling is fixed.",
+    "Update README with startup, default black–orange interface, color setting, hotkeys, Local AI requirements and cleaner behaviors."
+  ],
+  "acceptance": {
+    "automated": [
+      {
+        "id": "P6-AUTO-001",
+        "case": "Locked build and complete test suite",
+        "run": "cargo check --locked --workspace --all-targets; cargo build --locked --release --workspace; cargo test --locked --workspace -- --test-threads=1",
+        "expected": "All required Windows build/tests exit 0. Any failure or excluded required check must be resolved and rerun before marking passed.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P6-AUTO-002",
+        "case": "Windows profile and config migration",
+        "run": "Run config, dashboard and tray tests on both a fresh location and saved 2.3.0 fixture.",
+        "expected": "Old keys and widget/hook behavior survive. Fresh defaults and selected accent after restart work.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P6-AUTO-003",
+        "case": "DPI and responsiveness",
+        "run": "cargo test --locked -p cu-core --test dpi_scale; cargo test --locked -p claude-usage-dashboard --test dashboard_responsive -- --test-threads=1",
+        "expected": "DPI calculations and actual responsive Windows UI preserve access to primary actions and maintain capped fit behavior.",
+        "status": "pending",
+        "evidence": null
+      }
+    ],
+    "real_ui": [
+      {
+        "id": "P6-UI-001",
+        "case": "Release smoke",
+        "steps": "Run colocated release binaries with isolated profile/config. Open dashboard from tray, use hotkeys and restart. Verify no duplicate instance from repeated opening.",
+        "expected": "Tray, dashboard, popup and WebView2 work in the release build. Theme and preferences persist.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P6-UI-002",
+        "case": "Complete workflows",
+        "steps": "Try real OCR and Translation, view multi-profile quotas, and use synthetic cleaner and duplicate report. Verify with keyboard and a narrow window.",
+        "expected": "All expected outputs appear, errors remain actionable and deletion review is explicit.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P6-UI-003",
+        "case": "README and screenshots",
+        "steps": "Follow build/startup instructions against the release output and inspect the visible app at narrow and normal widths.",
+        "expected": "Instructions match release behavior and user-visible labels. No runtime test is silently skipped.",
+        "status": "pending",
+        "evidence": null
+      }
+    ]
+  },
+  "test_milestones": [
+    {
+      "id": "P6-TEST-1",
+      "owner": "Phase Luna (gpt-5.6-luna, medium)",
+      "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P6-TEST-2",
+      "owner": "Continuous advisor",
+      "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P6-TEST-3",
+      "owner": "Orchestrator",
+      "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P6-TEST-4",
+      "owner": "Phase Luna, continuous advisor and orchestrator",
+      "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
+      "status": "pending",
+      "evidence": null
+    }
+  ],
+  "test_notes": [
+    "Native tests must use isolated fixture state. Existing user tray/dashboard instances should not be stopped or modified by release verification without authorization. If their global window class blocks required tests, use a permitted isolated Windows session or record the blocker and hold the gate."
+  ],
+  "findings": [],
+  "gate": {
+    "status": "pending",
+    "closed_at": null,
+    "required": [
+      "implementation complete",
+      "all required acceptance cases passed with evidence",
+      "advisor approval of current diff",
+      "independent orchestrator verification and real UI evidence",
+      "no unresolved blocking defects",
+      "affected tests re-passed after any fix"
+    ],
+    "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
+  }
+}

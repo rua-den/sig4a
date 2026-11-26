@@ -45,6 +45,14 @@ pub fn fit_rect(cur: [i32; 4], h_css: f64, scale: f64, screen_h: i32) -> [i32; 4
     [cur[0], cur[1], cur[2], h as i32]
 }
 
+/// Fit content inside the work area of the monitor containing the window, including its origin.
+pub fn fit_rect_in_area(cur: [i32; 4], h_css: f64, scale: f64, area: [i32; 4]) -> [i32; 4] {
+    let fitted = fit_rect(cur, h_css, scale, area[3]);
+    let h = fitted[3];
+    let y = cur[1].clamp(area[1], area[1] + (area[3] - h).max(0));
+    [cur[0], y, cur[2], h]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

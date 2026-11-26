@@ -9,7 +9,8 @@
 use serde_json::{json, Value};
 use std::fs;
 use std::path::Path;
-use std::process::{Child, Command};
+use std::io::Write;
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::HWND;
 use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_CLOSE};
@@ -57,6 +58,22 @@ fn spawn(local: &Path, home: &Path, script: Option<(&Path, &Path)>) -> Guard {
     Guard(c.spawn().expect("spawn dashboard"))
 }
 
+fn spawn_quick(local: &Path, home: &Path, script: (&Path, &Path), text: &str) -> Guard {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_claude-usage-dashboard"));
+    c.arg("--quick-tool").arg("grammar").arg("--e2e").arg(script.0).arg(script.1)
+        .stdin(Stdio::piped())
+        .env("LOCALAPPDATA", local)
+        .env("USERPROFILE", home)
+        .env_remove("HOMEDRIVE")
+        .env_remove("HOMEPATH")
+        .env_remove("CLAUDE_CONFIG_DIR")
+        .env("CU_NO_AUTOSTART", "1")
+        .env("CU_NO_REPAIR", "1");
+    let mut child = c.spawn().expect("spawn quick dashboard");
+    child.stdin.take().unwrap().write_all(text.as_bytes()).unwrap();
+    Guard(child)
+}
+
 fn run_script(local: &Path, home: &Path, dir: &Path, name: &str, body: &str) -> (Guard, Value) {
     let s = dir.join(format!("{name}.js"));
     let o = dir.join(format!("{name}.out"));
@@ -77,15 +94,35 @@ out.init = !!window.__INIT__;
 out.accs = $('accs').innerText;
 out.sub = $('sub').textContent;
 out.hookst = $('hookst').textContent;
+out.routes = [...document.querySelectorAll('.toolnav button')].map(b => b.dataset.tool);
+out.ai_tools = [...document.querySelectorAll('.ai-subnav button')].map(b => b.dataset.ai);
+toolTab('usage'); out.usage_visible = $('usage-accounts').getBoundingClientRect().height > 0 && $('settings-box').getBoundingClientRect().height === 0;
+toolTab('cleaner'); out.cleaner_visible = $('clean').hidden === false && $('usage-accounts').getBoundingClientRect().height === 0;
+toolTab('settings'); tab('gen'); const settingsGen = !$('gen').hidden && $('gen').getBoundingClientRect().height > 0; tab('look'); const settingsLook = !$('look').hidden && $('look').getBoundingClientRect().height > 0; out.settings_visible = settingsGen && settingsLook && $('settings-box').getBoundingClientRect().height > 0 && $('clean').hidden;
+toolTab('localai'); out.localai_settings = document.querySelector('.toolnav button[data-tool="settings"]').getAttribute('aria-current') === 'page' && $('tool-localai').classList.contains('on') && getComputedStyle($('settings-box')).display === 'none' && getComputedStyle($('ai-subnav-wrap')).display === 'none'; toolTab('settings');
+toolTab('ai'); document.querySelector('.toolnav button[data-tool="ai"]').focus(); document.querySelector('.toolnav button[data-tool="ai"]').dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}));
+out.keyboard_route = document.querySelector('.toolnav button.on').dataset.tool;
+toolTab('overview');
 out.state = await api.state();
 out.win0 = await api.win_state();
+out.accent_initial = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
 out.fit_first = await api.fit(520);
 out.rect_fit = await api.rect();
+out.fit_narrow = await api.fit(420);
+out.rect_narrow = await api.rect();
+const titleBox = document.querySelector('.title').getBoundingClientRect();
+const pickerBox = document.querySelector('.accent-picker').getBoundingClientRect();
+out.title_layout = {titleHeight: titleBox.height, pickerTop: pickerBox.top, pickerBottom: pickerBox.bottom, titleBottom: titleBox.bottom, pickerRight: pickerBox.right, titleRight: titleBox.right};
 out.dpr = window.devicePixelRatio;
 // settings go through the page's own save(): fields -> api.save -> config.json
 $('warn').value = '77';
 $('interval').value = '30';
+$('accent').value = 'purple'; $('accent').dispatchEvent(new Event('change', {bubbles:true})); await accentSaving;
+$('wlabel').value = 'short';
+$('wfont').value = '135';
 await save(true);
+out.accent_before_restart = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+out.widget_text_before_restart = {label: $('wlabel').value, font: $('wfont').value};
 await api.refresh();
 await api.test_notify();
 out.hook_install = await api.hook_install();
@@ -110,8 +147,21 @@ return out;
 
 const SCRIPT2: &str = r#"
 await new Promise(r => setTimeout(r, 500));
-const out = { win: await api.win_state(), rect: await api.rect() };
+const out = { win: await api.win_state(), rect: await api.rect(), accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(), widget_label: $('wlabel').value, widget_font: $('wfont').value };
 setTimeout(() => api.hide(), 50);       // the page's own close path
+return out;
+"#;
+
+const SCRIPT_QUICK: &str = r#"
+await new Promise(r => setTimeout(r, 700));
+const out = {
+  quick: !!window.__QUICK_MODE__ && document.body.classList.contains('quick'),
+  grammar: $('tool-grammar').classList.contains('on'),
+  payload: $('grammar-in').value,
+  pickerHidden: getComputedStyle($('accent').closest('.accent-picker')).display === 'none',
+  accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
+};
+setTimeout(() => api.hide(), 50);
 return out;
 "#;
 
@@ -132,7 +182,7 @@ fn dashboard_process_end_to_end() {
     fs::create_dir_all(&data).unwrap();
     fs::write(
         data.join("config.json"),
-        json!({"profiles": [{"name": "p1", "path": prof.to_string_lossy()}], "autostart": false})
+        json!({"profiles": [{"name": "p1", "path": prof.to_string_lossy()}], "autostart": false, "widget_theme": "light", "accent_test_sentinel": "keep"})
             .to_string(),
     )
     .unwrap();
@@ -154,14 +204,25 @@ fn dashboard_process_end_to_end() {
     let (mut main, r) = run_script(&local, &home, tmp.path(), "s1", SCRIPT1);
     assert!(r.get("error").is_none(), "{r}");
     assert_eq!(r["init"], true, "state inlined into the page");
+    assert_eq!(r["accent_initial"], "#fab283", "missing accent migrates to orange");
     assert!(r["accs"].as_str().unwrap().contains("p1"), "{r}");
     assert!(r["accs"].as_str().unwrap().contains("42%"), "{r}");
+    assert_eq!(r["routes"], json!(["overview", "ai", "usage", "cleaner", "settings"]));
+    assert_eq!(r["ai_tools"], json!(["grammar", "translation", "ocr"]));
+    assert_eq!(r["usage_visible"], true);
+    assert_eq!(r["cleaner_visible"], true);
+    assert_eq!(r["settings_visible"], true);
+    assert_eq!(r["localai_settings"], true);
+    assert_eq!(r["keyboard_route"], "usage");
     assert!(r["sub"].as_str().unwrap().contains("1 accounts"), "{r}");
     assert_eq!(r["state"]["cfg"]["warn_pct"], 80);
     assert_eq!(r["state"]["version"], env!("CARGO_PKG_VERSION"));
     assert_eq!(r["hookst"], "hook: đã cài 0/1 profile");
     assert_eq!(r["win0"], json!({"user_sized": false, "maximized": false}));
     assert_eq!(r["fit_first"], true);
+    assert!(r["title_layout"]["pickerTop"].as_f64().unwrap() >= r["title_layout"]["titleHeight"].as_f64().unwrap() * 0.0);
+    assert!(r["title_layout"]["pickerBottom"].as_f64().unwrap() <= r["title_layout"]["titleBottom"].as_f64().unwrap() + 1.0, "picker clipped by title bar: {r}");
+    assert!(r["title_layout"]["pickerRight"].as_f64().unwrap() <= r["title_layout"]["titleRight"].as_f64().unwrap() + 1.0, "picker overflows title bar: {r}");
     assert_eq!(
         r["rect_fit"][3].as_i64().unwrap(),
         (520.0 * r["dpr"].as_f64().unwrap()) as i64,
@@ -173,6 +234,11 @@ fn dashboard_process_end_to_end() {
     assert_eq!(cfg["warn_pct"], 77, "save() from the page");
     assert_eq!(cfg["interval_sec"], 90, "interval floor");
     assert_eq!(cfg["widget_locked"], false, "widget_unlock");
+    assert_eq!(cfg["dashboard_accent"], "purple", "accent persisted independently");
+    assert_eq!(cfg["widget_label"], "short", "widget text setting preserved");
+    assert_eq!(cfg["widget_font"], 135, "widget font setting preserved");
+    assert_eq!(cfg["widget_theme"], "light", "widget theme remains independent");
+    assert_eq!(cfg["accent_test_sentinel"], "keep", "unknown config key preserved");
     assert!(data.join("refresh.flag").exists() && data.join("notify_test.flag").exists());
     assert_eq!(r["hook_install"], json!([["p1", "đã cài"]]));
     assert_eq!(r["hook_status"], json!([["p1", true]]));
@@ -232,10 +298,33 @@ fn dashboard_process_end_to_end() {
         "{r2}"
     );
     assert_eq!(r2["rect"], json!([50, 60, 900, 700]), "{r2}");
+    assert_eq!(r2["accent"], "#c7a0ff", "accent survives dashboard restart");
+    assert_eq!(r2["widget_label"], "short", "widget text survives accent restart");
+    assert_eq!(r2["widget_font"], "135", "widget font survives accent restart");
     wait_for("process exit on hide()", 10, || {
         main2.0.try_wait().unwrap().is_some()
     });
     wait_for("window gone", 5, || window().is_null());
+
+    // ---- run quick hotkey popup with piped stdin: same persisted theme, real quick class and payload ----
+    let quick_script = tmp.path().join("quick.js");
+    let quick_out = tmp.path().join("quick.out");
+    fs::write(&quick_script, SCRIPT_QUICK).unwrap();
+    let mut quick = spawn_quick(
+        &local,
+        &home,
+        (&quick_script, &quick_out),
+        "sample grammar payload",
+    );
+    wait_for("quick script result", 40, || quick_out.exists());
+    let quick_result: Value = serde_json::from_str(&fs::read_to_string(&quick_out).unwrap()).unwrap();
+    assert_eq!(quick_result["quick"], true, "quick dashboard class");
+    assert_eq!(quick_result["grammar"], true, "quick opens grammar panel");
+    assert_eq!(quick_result["payload"], "sample grammar payload", "quick stdin payload");
+    assert_eq!(quick_result["pickerHidden"], true, "quick hides picker only");
+    assert_eq!(quick_result["accent"], "#c7a0ff", "quick inherits persisted purple accent");
+    wait_for("quick process exit", 10, || quick.0.try_wait().unwrap().is_some());
+    wait_for("quick window gone", 5, || window().is_null());
 
     // ---- run 3: result actions follow the active OCR image (mock model, real WebView) ----
     let (_ocr, result) = run_script(

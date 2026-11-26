@@ -1,0 +1,129 @@
+{
+  "phase": 1,
+  "title": "TUI restoration and dashboard accent selector",
+  "status": "passed",
+  "scope": [
+    "Restore black-orange terminal visual language: #0a0a0a background, #141414 panels, #fab283 primary accent, Cascadia Mono typography.",
+    "Add a dashboard accent selector with orange as the migration/default value and blue/purple preview variants.",
+    "Apply the persisted accent to the existing hotkey popup (the popup inherits the dashboard preference) and persist it across dashboard/application restart.",
+    "Keep widget text/font setting independent from dashboard accent selection."
+  ],
+  "preserve": [
+    "Existing config keys, unknown-key round trips, APIs, hotkey fallback behavior, OCR guards, and profile handling.",
+    "Existing widget text setting semantics and all non-Phase-1 dashboard tools."
+  ],
+  "implementation_steps": [
+    "Map the approved mock to the existing ui.html and Rust dashboard bridge without replacing stable APIs.",
+    "Add a normalized accent preference with orange migration default and blue/purple values.",
+    "Apply accent tokens to title, controls, focus, charts, and popup while leaving widget text configuration separate.",
+    "Persist the preference through the normal config path and reload it on fresh process startup.",
+    "Add focused Rust/JS regression coverage, including real WebView2 dashboard, narrow layout, migration, restart, popup, and widget-text cases."
+  ],
+  "acceptance": {
+    "automated": [
+      {
+        "id": "P1-AUTO-001",
+        "case": "Run core defaults/config migration test with a config missing dashboard_accent; expect orange and unchanged unrelated keys",
+        "status": "passed",
+        "evidence": "Real dashboard_ui WebView2 legacy fixture has no accent and starts at #fab283. Unknown accent_test_sentinel stays keep. cu-core 64 checks passed in Luna runs."
+      },
+      {
+        "id": "P1-AUTO-002",
+        "case": "In dashboard_ui WebView2 script select blue then purple; expect root accent token changes and config dashboard_accent only changes for this setting",
+        "status": "passed",
+        "evidence": "Independent temporary WebView2 --e2e fixture dispatched blue then purple change. Computed CSS changed immediately to #8bb8ff then #c7a0ff, both preferences persisted, widget_theme=light and sentinel unchanged."
+      },
+      {
+        "id": "P1-AUTO-003",
+        "case": "Save purple, close/relaunch dashboard, then launch --quick-tool popup; expect the popup to inherit purple title/control accent values",
+        "status": "passed",
+        "evidence": "dashboard_process_end_to_end passed with normal dashboard relaunch and actual --quick-tool grammar using piped fixture input, compact mode, hidden picker, and purple inherited."
+      },
+      {
+        "id": "P1-AUTO-004",
+        "case": "Set widget_label/widget_font, change accent, reload config; expect widget_label/widget_font byte-semantic values unchanged",
+        "status": "passed",
+        "evidence": "dashboard_ui asserts widget_theme light, widget_label short and widget_font 135 with unknown config preserved across restart. Independently ran widget parity (2 passed) and app widget canvas tests (3 passed)."
+      },
+      {
+        "id": "P1-AUTO-005",
+        "case": "Run dashboard_ui real WebView2 at 520px and 420px fit and inspect computed tokens; expect no JS errors and readable narrow layout",
+        "status": "passed",
+        "evidence": "dashboard_ui WebView2 checks 520/420 fitted windows and title bounds passed final rerun. Diff check passed."
+      }
+    ],
+    "real_ui": [
+      {
+        "id": "P1-UI-001",
+        "case": "Launch dashboard, invoke auto-fit/narrow 520px window, and visually check black #0a0a0a, panel #141414, Cascadia Mono, and orange #fab283",
+        "status": "passed",
+        "evidence": "Visible native WebView2 dashboard at 430×520 showed orange on black, Cascadia Mono, Vietnamese labels, and full picker/button row after fixing clipped label."
+      },
+      {
+        "id": "P1-UI-002",
+        "case": "Change accent in dashboard, close it, open/reopen the hotkey popup, and visually check inherited title/control accent",
+        "status": "passed",
+        "evidence": "Changed Cam to Tím from the visible dashboard via keyboard. Opened real --quick-tool grammar in the same isolated config and observed purple title, focus ring and action, Grammar input and paste fallback with picker hidden."
+      },
+      {
+        "id": "P1-UI-003",
+        "case": "Restart dashboard after changing accent and widget text; expect selected accent restored while widget text remains the chosen value",
+        "status": "passed",
+        "evidence": "Closed/reopened visible dashboard, observed Tím selected, then opened widget appearance and observed Chữ tối. Isolated config dashboard_accent=purple, widget_theme=light, review_sentinel=unchanged."
+      }
+    ]
+  },
+  "dependencies": [
+    "Base 6cb0d55",
+    "User-approved black–orange T.U.I mock"
+  ],
+  "gate": {
+    "required": [
+      "implementation",
+      "automated tests",
+      "real UI evidence",
+      "advisor review",
+      "fix/retest"
+    ],
+    "orchestrator_verification": "independent UI and test verification required",
+    "status": "passed",
+    "closed_at": "2026-11-26 15:08:12 UTC",
+    "next_phase": 2
+  },
+  "test_milestones": [
+    {
+      "id": "P1-TEST-1",
+      "owner": "Phase 1 Luna",
+      "status": "passed",
+      "evidence": "cargo test -p cu-core: 64 passed. cargo test -p claude-usage-dashboard --test dashboard_ui -- --nocapture: 1 passed including real quick process assertions."
+    },
+    {
+      "id": "P1-TEST-2",
+      "owner": "Continuous UI advisor",
+      "status": "passed",
+      "evidence": "Initial review requested migration, widget independence and actual quick tests. Advisor approved final scoped diff after fixes."
+    },
+    {
+      "id": "P1-TEST-3",
+      "owner": "Orchestrator",
+      "status": "passed",
+      "evidence": "Independent cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1 passed. Native dashboard observed interactively at 430×520, changed accent by keyboard, restarted, verified widget setting, opened actual Grammar popup. Independent blue and purple bridge/persistence check passed."
+    },
+    {
+      "id": "P1-TEST-4",
+      "owner": "Phase 1 Luna, continuous UI advisor, orchestrator",
+      "status": "passed",
+      "evidence": "Moved picker to title and isolated save, added restart/widget/quick checks, fixed visible label clipping, repeated WebView2 test and independent dashboard plus popup verification on final source."
+    }
+  ],
+  "findings": [
+    {
+      "status": "resolved",
+      "detail": "Picker above title bounds on first visible check; fixed title row and rechecked actual window."
+    },
+    {
+      "status": "baseline",
+      "detail": "Existing dashboard_responsive test 39/40 before Phase 1 due to native work-area cap with 14 profiles. Tracked in Phase 2. Phase 1 actual 420px bounds and 430px visual check passed."
+    }
+  ]
+}

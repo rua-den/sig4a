@@ -1,0 +1,140 @@
+{
+  "phase": 2,
+  "title": "Navigation and overview",
+  "status": "in_progress",
+  "goal": "Ship the approved five-tab T.U.I shell with quota first and explicit tool routing.",
+  "dependencies": [
+    "Phase 1 has gate.status = passed and all required evidence recorded"
+  ],
+  "preserve": [
+    "Phase 1 palette, persisted accent and widget text color",
+    "Tray launch and single-instance behavior",
+    "All three native hotkeys, selected-text and paste/capture fallback",
+    "Existing account polling and cleaner backend",
+    "Saved dashboard geometry and working 420 px minimum width"
+  ],
+  "implementation": [
+    "Add five labeled primary routes: Tổng quan, Trợ lý AI, Claude Usage, Dọn ổ and Cài đặt. Keep three labeled AI tools under Trợ lý AI.",
+    "Put 5-hour and 7-day quota and profiles needing attention at the top of Tổng quan. Add direct tool links with current hotkeys and a Local AI readiness link.",
+    "Move the cleaner UI into its own primary destination. Expose settings at their own destination with no duplicate config authority.",
+    "Keep complete keyboard operation, active state, keyboard focus and predictable Escape behavior across normal and quick windows.",
+    "Diagnose the baseline auto-fit test at native work-area limits. Preserve auto-fit within the available screen and vertical content scrolling when the work-area cap is reached."
+  ],
+  "acceptance": {
+    "automated": [
+      {
+        "id": "P2-AUTO-001",
+        "case": "Five routes and AI subnav",
+        "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1",
+        "expected": "All five primary controls open exactly one intended destination. Each AI leaf and direct Home shortcut opens the correct tool. Cleaner is independent of Usage.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P2-AUTO-002",
+        "case": "Compact layout and auto-fit",
+        "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_responsive -- --test-threads=1",
+        "expected": "At minimum and normal width no horizontal clipping. Auto-fit flushes saved size, fits when possible, and exposes vertical scroll when content exceeds the work-area limit.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P2-AUTO-003",
+        "case": "Tray route and existing behavior",
+        "run": "cargo test --locked -p claude-usage-dashboard --test tray_opens_dashboard -- --test-threads=1; cargo test --locked -p claude-usage-dashboard --test dashboard_legacy -- --test-threads=1",
+        "expected": "Tray opens the dashboard and prior account, widget and route behavior stays functional in isolated fixtures.",
+        "status": "pending",
+        "evidence": null
+      }
+    ],
+    "real_ui": [
+      {
+        "id": "P2-UI-001",
+        "case": "Dashboard and hotkeys on Windows",
+        "steps": "Open the built dashboard via an isolated tray. Open Grammar, Translation and OCR with Ctrl+Alt+G/T/O and confirm tool/selection behavior.",
+        "expected": "Tray opens Tổng quan. Each hotkey opens the correct compact tool and existing Escape behavior still works.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P2-UI-002",
+        "case": "320/420 px equivalent reflow and keyboard",
+        "steps": "Use the supported minimum window size and navigate all five destinations via Tab and Enter. Inspect the AI tabs, long labels and CTA visibility.",
+        "expected": "No clipped controls or horizontal scrolling at the supported minimum. Focus remains visible and Escape behaves predictably.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P2-UI-003",
+        "case": "Overview priority and theme",
+        "steps": "Seed sample profiles with a near-limit 5h entry and a stale 7d entry. Check the first viewport and change accent.",
+        "expected": "Quota appears above shortcuts, both windows are labeled and statuses are understandable without color alone. The Phase 1 palette still applies.",
+        "status": "pending",
+        "evidence": null
+      }
+    ]
+  },
+  "test_milestones": [
+    {
+      "id": "P2-TEST-1",
+      "owner": "Phase Luna (gpt-5.6-luna, medium)",
+      "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P2-TEST-2",
+      "owner": "Continuous advisor",
+      "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P2-TEST-3",
+      "owner": "Orchestrator",
+      "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P2-TEST-4",
+      "owner": "Phase Luna, continuous advisor and orchestrator",
+      "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
+      "status": "pending",
+      "evidence": null
+    }
+  ],
+  "test_notes": [
+    "Known baseline on 1872×1200 work area: dashboard_responsive 39/40 against 6cb0d55. After auto-fit at 980 px width, content height was 1104, main client height 1094, and dash_rect cleared. Determine real geometry cap and correctness before changing the assertion.",
+    "Run GUI suites sequentially to avoid singleton window collisions. Keep the user's active tray instance untouched."
+  ],
+  "findings": [
+    {
+      "status": "addressed_pending_ui_retest",
+      "detail": "On the actual Windows dashboard, the Home Local AI shortcut opened Settings but its helper text still referenced Trợ lý AI. The final fix points to Settings and resets the main scroll position on route changes. Desktop interaction ended before the independent retest."
+    }
+  ],
+  "gate": {
+    "status": "pending",
+    "closed_at": null,
+    "required": [
+      "implementation complete",
+      "all required acceptance cases passed with evidence",
+      "advisor approval of current diff",
+      "independent orchestrator verification and real UI evidence",
+      "no unresolved blocking defects",
+      "affected tests re-passed after any fix"
+    ],
+    "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
+  },
+  "handoff": {
+    "status": "ready_for_independent_testing",
+    "automated_latest": "cargo check --locked -p claude-usage-dashboard and cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1 passed after the helper text and route scroll fix. The latter ran in real WebView2 on an isolated Windows desktop.",
+    "previous_revision": "Legacy, responsive (40/40), dashboard UI, and opening the dashboard from the tray passed before the last two UI changes. The advisor approved that revision.",
+    "remaining": [
+      "Verify the final build at minimum width on real Windows.",
+      "From a scrolled Home view, open Local AI and confirm Settings is selected and the view starts at the top.",
+      "Record final independent UI evidence and advisor signoff before marking the Phase 2 gate passed."
+    ]
+  }
+}

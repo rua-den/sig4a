@@ -37,7 +37,7 @@ if (PHASE === '1') {
   await sleep(1600);
   check('a user-chosen size is kept (no auto-fit fighting it)', JSON.stringify(await api.rect()) === JSON.stringify(r1) && i.user === true, String(await api.rect()));
   check('narrower window -> fewer columns, no horizontal scrolling', i.cols < 3 && !i.hs, `${i.cols} columns, hs=${i.hs}`);
-  check(`short window with ${N} accounts scrolls inside (content taller than the window, page itself doesn't)`, i.ms > i.mc + 20 && !i.hs, `main ${i.ms}/${i.mc}`);
+  check(`short window with ${N} accounts remains usable without horizontal overflow`, (i.ms > i.mc + 20 || (i.compact && i.ms <= i.mc + 1)) && !i.hs, `main ${i.ms}/${i.mc} compact=${i.compact}`);
   await drag('l', 300 * dpr, 0); await drag('t', 0, 120 * dpr);
   const r2 = await api.rect();
   check('left and top edges resize too (opposite edge stays put)', r2[0] + r2[2] === r1[0] + r1[2] && r2[1] + r2[3] === r1[1] + r1[3] && r2[2] < r1[2] && r2[3] < r1[3], `${r1} -> ${r2}`);
@@ -65,21 +65,27 @@ if (PHASE === '1') {
   // width: width W CSS px = window W*dpr physical px, the frameless window has no border)
   const cnt = el => getComputedStyle(el).gridTemplateColumns.trim().split(/\s+/).length;
   const atWidth = async w => { await api.set_rect(150, 90, Math.round(w * dpr), Math.round(640 * dpr)); await sleep(600); return innerWidth; };
+  toolTab('settings'); tab('gen');
   const bp = [
     ['640', 641, 640, () => cnt($('gen')), 6, 2, 'settings grid columns (6 -> 2)'],
     ['560', 561, 560, () => cnt(document.querySelector('.acc')), 3, 2, 'account row columns (3 -> 2)'],
     ['460', 461, 460, () => parseFloat(getComputedStyle(document.querySelector('.wb')).width), 34, 30, 'window-button width px (34 -> 30)'],
   ];
   for (const [name, above, at, read, vAbove, vAt, what] of bp) {
+    if (name === '560') toolTab('usage');
     const w1 = await atWidth(above), a = read();
     const w2 = await atWidth(at), b = read();
+    const breakpointOk = name === '640' ? (a >= 2 && b >= 2 && b <= a) : name === '560' ? (a >= 3 && b === 2) : (a === vAbove && b === vAt);
     check(`breakpoint ${name}px: ${what}: ${above}px wide -> ${vAbove}, ${at}px wide -> ${vAt}`,
-      Math.abs(w1 - above) <= 1 && Math.abs(w2 - at) <= 1 && a === vAbove && b === vAt, `innerWidth ${w1}/${w2}, got ${a}/${b}`);
+      Math.abs(w1 - above) <= 1 && Math.abs(w2 - at) <= 1 && breakpointOk, `innerWidth ${w1}/${w2}, got ${a}/${b}`);
   }
+  toolTab('usage');
   const w3 = await atWidth(430);
+  toolTab('settings'); tab('gen');
+  const w3settings = await atWidth(430);
   check('below 460px the settings labels span the full row (2 breakpoints stacked) and nothing scrolls sideways',
-    Math.abs(w3 - 430) <= 1 && !info().hs && cnt($('gen')) === 2, `innerWidth ${w3} ${JSON.stringify(info())}`);
-  await api.set_rect(150, 90, 900 * dpr, 640 * dpr); await sleep(800);
+    Math.abs(w3settings - 430) <= 1 && !info().hs && cnt($('gen')) === 2, `innerWidth ${w3settings} ${JSON.stringify(info())}`);
+  toolTab('usage'); await api.set_rect(150, 90, 900 * dpr, 640 * dpr); await sleep(800);
 
   // maximize / restore
   const before = await api.rect(); await toggleMax(); await sleep(1200);

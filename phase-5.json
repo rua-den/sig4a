@@ -1,0 +1,122 @@
+{
+  "phase": 5,
+  "title": "Grammar, Translation and Claude Usage",
+  "status": "pending",
+  "goal": "Align the two text tools and improve multi-profile quota scanability while preserving existing behavior.",
+  "dependencies": [
+    "Phase 4 has gate.status = passed and all required evidence recorded"
+  ],
+  "preserve": [
+    "English Grammar, Vietnamese-default Translation with English option, editable result",
+    "Dashboard and hotkey input, UI Automation fallback to paste, clipboard behavior",
+    "Existing profile IDs, quota windows, alerts, token refresh, widget styles, locks and hook settings",
+    "Theme and Local AI setup from prior phases"
+  ],
+  "implementation": [
+    "Use consistent input/output, processing, retry and copy states. Preserve user edits and input across recoverable errors.",
+    "Maintain selected-text quick popup when available and clear manual paste fallback. Keep OCR text handoff intact.",
+    "Order Claude Usage attention states deterministically. Show quota and reset separately for 5h and 7d, last refresh, stale/error and actual hook state.",
+    "Surface widget/alerts/hook settings separately from account list while preserving all keys and existing behaviors."
+  ],
+  "acceptance": {
+    "automated": [
+      {
+        "id": "P5-AUTO-001",
+        "case": "Text flow, copy and keyboard fallback",
+        "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1",
+        "expected": "Grammar and Translation open correctly with and without selected input, can retry on failure, and copy edited text. OCR handoff still arrives.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P5-AUTO-002",
+        "case": "Profile status and compatibility",
+        "run": "cargo test --locked -p cu-core; cargo test --locked -p claude-usage-dashboard --test dashboard_legacy -- --test-threads=1",
+        "expected": "Attention ordering, reset windows and status labels match fixture values. Saving unrelated settings preserves widget and hook config and unknown keys.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P5-AUTO-003",
+        "case": "Existing hook parity",
+        "run": "cargo test --locked -p claude-usage --test hook_cli",
+        "expected": "Existing opted-in hook behavior remains correct. Threshold status alone does not claim prompts are blocked.",
+        "status": "pending",
+        "evidence": null
+      }
+    ],
+    "real_ui": [
+      {
+        "id": "P5-UI-001",
+        "case": "Grammar and Translation",
+        "steps": "Run both tools from Dashboard and hotkey. Test selected text, no selection, paste, destination selection, editing and copying.",
+        "expected": "Correct tool opens and can complete each path. Copy contains user-edited output.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P5-UI-002",
+        "case": "10-profile glance test",
+        "steps": "Open the fixture with ten profiles covering 5h/7d, a near-threshold profile, stale and login error. Time finding the most urgent profile from open.",
+        "expected": "Target is within 5 seconds. Reset periods and stale, refreshing, login failure and active blocking are distinguishable.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P5-UI-003",
+        "case": "Compatibility",
+        "steps": "Open a legacy fixture with widget preferences and hooks. Navigate and reopen after saving an unrelated setting.",
+        "expected": "Existing values render and persist. No actual credentials are used.",
+        "status": "pending",
+        "evidence": null
+      }
+    ]
+  },
+  "test_milestones": [
+    {
+      "id": "P5-TEST-1",
+      "owner": "Phase Luna (gpt-5.6-luna, medium)",
+      "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P5-TEST-2",
+      "owner": "Continuous advisor",
+      "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P5-TEST-3",
+      "owner": "Orchestrator",
+      "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P5-TEST-4",
+      "owner": "Phase Luna, continuous advisor and orchestrator",
+      "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
+      "status": "pending",
+      "evidence": null
+    }
+  ],
+  "test_notes": [
+    "Record the ten-profile task timing and fixture context. Automated ordering asserts correctness, while a separate timed UI check records the usability target."
+  ],
+  "findings": [],
+  "gate": {
+    "status": "pending",
+    "closed_at": null,
+    "required": [
+      "implementation complete",
+      "all required acceptance cases passed with evidence",
+      "advisor approval of current diff",
+      "independent orchestrator verification and real UI evidence",
+      "no unresolved blocking defects",
+      "affected tests re-passed after any fix"
+    ],
+    "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
+  }
+}

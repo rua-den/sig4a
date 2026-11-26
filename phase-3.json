@@ -1,0 +1,123 @@
+{
+  "phase": 3,
+  "title": "Local AI and OCR",
+  "status": "pending",
+  "goal": "Complete a real OCR vertical slice and give all AI tools a usable readiness/recovery path.",
+  "dependencies": [
+    "Phase 2 has gate.status = passed and all required evidence recorded"
+  ],
+  "preserve": [
+    "Ollama and llama.cpp backend contracts",
+    "Optional managed LFM runtime and loopback policy",
+    "OCR clipboard, capture and 6 MB/type checks",
+    "Result invalidation on image changes and safe OCR-to-Translation handoff"
+  ],
+  "implementation": [
+    "Expose useful setup steps in one place: backend, connection check, available model, test and Save.",
+    "Make common readiness and error states actionable across AI tools: missing configuration, starting, server unreachable, missing/incompatible model and timed out.",
+    "Keep runtime progress truthful. Managed service may show observable starting, ready or failure states.",
+    "Maintain OCR lifecycle for paste and native capture. On change or removal, immediately invalidate previous output. Cancellation preserves the current image and output when appropriate.",
+    "Verify OCR to copy and Translation using synthetic text and a real local vision model. Keep retries independent from stale responses."
+  ],
+  "acceptance": {
+    "automated": [
+      {
+        "id": "P3-AUTO-001",
+        "case": "Backend contracts",
+        "run": "cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard",
+        "expected": "Loopback policy intact. Both provider request paths use suitable text/image inputs. Invalid or absent image/model yields a helpful error instead of a stale result.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P3-AUTO-002",
+        "case": "OCR result lifecycle",
+        "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1",
+        "expected": "Concurrent replacement and removal cannot publish stale text. Cancelled capture, copy, and OCR-to-Translation behaviors match the accepted UI.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P3-AUTO-003",
+        "case": "Real local OCR fixture",
+        "run": "Use the installed Ollama vision model or equivalent pinned local llama.cpp vision model against a synthetic legible phrase. Record backend, model ID, expected text, observed output, and whether clipboard and translation were checked.",
+        "expected": "The real app produces expected normalized text for both capture/paste paths and passes it to copy/Translation. Substituted API responses do not satisfy this case.",
+        "status": "pending",
+        "evidence": null
+      }
+    ],
+    "real_ui": [
+      {
+        "id": "P3-UI-001",
+        "case": "Local AI setup and recovery",
+        "steps": "Open built dashboard and use a reachable endpoint plus a temporary invalid/unavailable endpoint in sandbox. Select model and check diagnosis, then restore valid test config.",
+        "expected": "Ready and failure states are distinguishable and offer a concrete next step. Entered input survives recovery navigation within the session.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P3-UI-002",
+        "case": "Native image capture and paste",
+        "steps": "Capture a controlled sample area via the app, recognize it, copy it and send to Dịch. Repeat with a synthetic pasted image.",
+        "expected": "The preview belongs to the image processed. Clipboard/result and translation input contain the current OCR text.",
+        "status": "pending",
+        "evidence": null
+      },
+      {
+        "id": "P3-UI-003",
+        "case": "Stale output and cancellation",
+        "steps": "Start OCR, replace or remove the image before completion, then try copy/dịch. Cancel a capture with Esc.",
+        "expected": "Late old output stays inactive. An intentional cancel does not overwrite the current image.",
+        "status": "pending",
+        "evidence": null
+      }
+    ]
+  },
+  "test_milestones": [
+    {
+      "id": "P3-TEST-1",
+      "owner": "Phase Luna (gpt-5.6-luna, medium)",
+      "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P3-TEST-2",
+      "owner": "Continuous advisor",
+      "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P3-TEST-3",
+      "owner": "Orchestrator",
+      "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
+      "status": "pending",
+      "evidence": null
+    },
+    {
+      "id": "P3-TEST-4",
+      "owner": "Phase Luna, continuous advisor and orchestrator",
+      "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
+      "status": "pending",
+      "evidence": null
+    }
+  ],
+  "test_notes": [
+    "Observed prerequisites on this Windows machine: Ollama loopback API and a cached LiquidAI LFM2.5 vision model. Check readiness again at phase start. Use only synthetic input and fixtures."
+  ],
+  "findings": [],
+  "gate": {
+    "status": "pending",
+    "closed_at": null,
+    "required": [
+      "implementation complete",
+      "all required acceptance cases passed with evidence",
+      "advisor approval of current diff",
+      "independent orchestrator verification and real UI evidence",
+      "no unresolved blocking defects",
+      "affected tests re-passed after any fix"
+    ],
+    "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
+  }
+}

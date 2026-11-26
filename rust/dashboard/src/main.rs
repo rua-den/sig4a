@@ -225,7 +225,7 @@ impl App {
                 }
                 let scale = window.scale_factor();
                 let cur = win::rect(self.hwnd);
-                win::place(self.hwnd, geom::fit_rect(cur, f(0), scale, win::screen().1));
+                win::place(self.hwnd, geom::fit_rect_in_area(cur, f(0), scale, win::work_area(self.hwnd)));
                 Value::Bool(true)
             }
             _ => return Err(format!("unknown method: {m}")),

@@ -12,7 +12,7 @@ use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::HWND;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, IsWindowVisible, PostMessageW, SendMessageW, WM_CLOSE, WM_COMMAND,
+    FindWindowExW, FindWindowW, IsWindowVisible, PostMessageW, SendMessageW, WM_CLOSE, WM_COMMAND,
 };
 
 fn wide(s: &str) -> Vec<u16> {
@@ -43,23 +43,28 @@ impl Drop for Guard {
     }
 }
 
-struct KillDashboards;
-impl Drop for KillDashboards {
+struct OwnedDashboard(HWND);
+impl Drop for OwnedDashboard {
     fn drop(&mut self) {
-        let _ = Command::new("taskkill")
-            .args(["/F", "/IM", "claude-usage-dashboard.exe"])
-            .output();
+        if !self.0.is_null() {
+            // SAFETY: the test records only the dashboard HWND created after the empty preflight.
+            unsafe { PostMessageW(self.0, WM_CLOSE, 0, 0) };
+        }
     }
 }
 
 fn dashboards() -> usize {
-    let out = Command::new("tasklist")
-        .args(["/FI", "IMAGENAME eq claude-usage-dashboard.exe", "/NH"])
-        .output()
-        .unwrap();
-    String::from_utf8_lossy(&out.stdout)
-        .matches("claude-usage-dashboard.ex") // tasklist truncates the name to 25 chars
-        .count()
+    let class = wide("ClaudeUsageDashboard");
+    let mut count = 0;
+    let mut after = std::ptr::null_mut();
+    loop {
+        // SAFETY: class is NUL-terminated and enumeration is limited to this desktop.
+        let h = unsafe { FindWindowExW(std::ptr::null_mut(), after, class.as_ptr(), std::ptr::null()) };
+        if h.is_null() { break; }
+        count += 1;
+        after = h;
+    }
+    count
 }
 
 #[test]
@@ -93,7 +98,7 @@ fn tray_menu_opens_single_dashboard() {
         .env("CU_NO_AUTOSTART", "1")
         .env("CU_NO_REPAIR", "1");
     let mut tray_proc = Guard(cmd.spawn().unwrap());
-    let _cleanup = KillDashboards; // we checked above that none was running before: whatever exists later is ours
+    let mut cleanup = OwnedDashboard(std::ptr::null_mut());
     wait_for("tray window", 15, || !find("ClaudeUsageTray").is_null());
     let th = find("ClaudeUsageTray");
 
@@ -104,6 +109,7 @@ fn tray_menu_opens_single_dashboard() {
         !find("ClaudeUsageDashboard").is_null()
     });
     let dh = find("ClaudeUsageDashboard");
+    cleanup.0 = dh;
     // SAFETY: plain query on a window handle.
     wait_for(
         "dashboard visible",

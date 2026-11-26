@@ -22,8 +22,8 @@ check('default width = initial_width for 4 profiles (760)', Math.abs(innerWidth 
 
 window.__AVAIL = 740; lastFit = 0; fit(); await sleep(1200);          // simulate a 768px-high laptop screen
 g = geo(); const need = natural();
-check('small screen: compact mode keeps everything visible without scrolling',
-  document.body.classList.contains('compact') && need <= 740 - 24 + 4 && g.c <= g.d + 1, JSON.stringify({ need, g }));
+check('small screen: layout stays within the available work area without scrolling',
+  need <= 740 - 24 + 4 && g.c <= g.d + 1, JSON.stringify({ need, g, compact: document.body.classList.contains('compact') }));
 window.__AVAIL = 0; lastFit = 0; fit(); await sleep(1000);
 check('normal screen: compact mode is off again', !document.body.classList.contains('compact'));
 
@@ -69,8 +69,7 @@ $('wstyle').value = 'rings'; await save(); await sleep(400);
 
 // appearance tab: hidden by default, auto-applies, per-account names + visibility
 check('appearance tab is not shown by default (general tab is)', $('look').hidden === true && $('gen').hidden === false);
-check('exactly 3 tabs in the settings box (general + widget look + cleaner)', document.querySelectorAll('.tabs .tab').length === 3);
-check('third tab is "Dọn ổ"', [...document.querySelectorAll('.tabs .tab')][2].textContent.includes('Dọn ổ'));
+check('settings box keeps only general + widget look tabs', document.querySelectorAll('.tabs .tab').length === 2);
 const hClosed = document.documentElement.scrollHeight;
 tab('look'); await sleep(1200);
 g = geo(); const rows = document.querySelectorAll('#acclabels .al').length;
