@@ -7,7 +7,7 @@
 //!
 //! ```no_run
 //! use cu_cleaner::{scan, RealFs, ScanOptions};
-//! use std::path::PathBuf;
+//! use std::path::{Path, PathBuf};
 //!
 //! let opts = ScanOptions {
 //!     roots: vec![PathBuf::from(r"C:\work\myproj")],
@@ -42,11 +42,11 @@ pub use model::{
 };
 pub use recycle::{
     build_double_nul_buffer, ShellDeleter, ShellFn, ShellOp, ShellStatus, FOF_ALLOWUNDO,
-    FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, RECYCLE_FLAGS,
+    FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOF_WANTNUKEWARNING, RECYCLE_FLAGS,
 };
 pub use scan::{rule_matches_name, scan, validate_item_kind};
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Seconds since the Unix epoch — used for `created_at`.
@@ -57,13 +57,23 @@ pub fn now_unix_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// Unique-enough run identifier from nanoseconds + pid, without pulling in a UUID dependency.
+/// Run identifier from timestamp, PID and a process-local sequence (also unique within one clock tick).
 pub fn new_run_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_RUN: AtomicU64 = AtomicU64::new(0);
+    let sequence = NEXT_RUN.fetch_add(1, Ordering::Relaxed);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("{nanos:x}-{}", std::process::id())
+    format!("{nanos:x}-{}-{sequence:x}", std::process::id())
+}
+
+/// Check the original spelling and each ancestor before following links.
+pub(crate) fn has_reparse_component(path: &Path, fs: &dyn FsView) -> bool {
+    path.ancestors().filter(|p| !p.as_os_str().is_empty()).any(|p| {
+        fs.attrs(p).is_some_and(|attrs| attrs & REPARSE_POINT != 0)
+    })
 }
 
 /// Re-validate one manifest item against the current filesystem **immediately before** any
@@ -97,6 +107,9 @@ pub fn validate_target_with(
     if is_unc(&path) {
         return Err(format!("target '{}' is a UNC path", item.path));
     }
+    if has_reparse_component(&path, fs) {
+        return Err(format!("target '{}' has a reparse point in its path", item.path));
+    }
     let canonical = std::fs::canonicalize(&path)
         .ok()
         .map(|p| strip_verbatim(&p));
@@ -116,19 +129,20 @@ pub fn validate_target_with(
         return Err(format!("target '{}' is on a blocked drive type", item.path));
     }
     for forbidden in &opts.forbidden {
-        let forbidden = canonical_for(forbidden);
-        if path_contains(&forbidden, &target) {
-            return Err(format!(
-                "target '{}' lies inside forbidden path '{}'",
-                item.path,
-                forbidden.display()
-            ));
+        let canonical_forbidden = canonical_for(forbidden);
+        for boundary in [forbidden.as_path(), canonical_forbidden.as_path()] {
+            if path_contains(boundary, &target) || path_contains(boundary, &path) {
+                return Err(format!("target '{}' lies inside forbidden path '{}'", item.path, boundary.display()));
+            }
+            if path_contains(&target, boundary) || path_contains(&path, boundary) {
+                return Err(format!("target '{}' contains forbidden path '{}'", item.path, boundary.display()));
+            }
         }
     }
     let inside_root = opts
         .roots
         .iter()
-        .any(|root| path_contains(&canonical_for(root), &target));
+        .any(|root| !has_reparse_component(root, fs) && path_contains(&canonical_for(root), &target));
     if !inside_root {
         return Err(format!(
             "target '{}' is not inside any configured root",

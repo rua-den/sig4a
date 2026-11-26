@@ -189,7 +189,7 @@ fn failure_on_a_middle_id_does_not_stop_the_loop() {
 }
 
 #[test]
-fn journal_gets_one_snapshot_per_item_plus_the_final_done() {
+fn journal_gets_initial_snapshot_per_item_snapshots_and_final_done() {
     let root = temp_root();
     let a = rule_dir(&root, &["app1", "bin"]);
     let b = rule_dir(&root, &["app2", "TestResults"]);
@@ -213,14 +213,10 @@ fn journal_gets_one_snapshot_per_item_plus_the_final_done() {
     );
 
     let records = journal.records.lock().unwrap().clone();
-    assert_eq!(records.len(), 3);
-    assert_eq!(records[0].phase, PHASE_CLEANING);
-    assert_eq!(records[1].phase, PHASE_CLEANING);
-    assert_eq!(records[2].phase, PHASE_DONE);
-    assert_eq!(records[0].outcomes.len(), 1);
-    assert_eq!(records[1].outcomes.len(), 2);
-    assert_eq!(records[2].outcomes.len(), 2);
-    assert_eq!(records[0].run_id, records[2].run_id);
+    assert_eq!(records.len(), 4);
+    assert_eq!(records.iter().map(|r| r.phase.as_str()).collect::<Vec<_>>(), vec![PHASE_CLEANING, PHASE_CLEANING, PHASE_CLEANING, PHASE_DONE]);
+    assert_eq!(records.iter().map(|r| r.outcomes.len()).collect::<Vec<_>>(), vec![0, 1, 2, 2]);
+    assert_eq!(records[0].run_id, records[3].run_id);
     assert_eq!(records[0].mode, Mode::Permanent);
 }
 
@@ -305,7 +301,7 @@ fn rule_that_no_longer_matches_the_name_is_rejected() {
 }
 
 #[test]
-fn journal_failure_stops_the_loop_and_appends_an_error_outcome() {
+fn initial_journal_failure_prevents_all_removals() {
     let root = temp_root();
     let a = rule_dir(&root, &["app1", "bin"]);
     let b = rule_dir(&root, &["app2", "obj"]);
@@ -329,8 +325,8 @@ fn journal_failure_stops_the_loop_and_appends_an_error_outcome() {
         &FailingJournal,
     );
 
-    assert_eq!(deleter.calls.lock().unwrap().len(), 1);
-    assert_eq!(outcomes.len(), 2);
+    assert!(deleter.calls.lock().unwrap().is_empty());
+    assert_eq!(outcomes.len(), 1);
     let last = outcomes.last().unwrap();
     assert_eq!(last.id, "");
     assert!(!last.ok);

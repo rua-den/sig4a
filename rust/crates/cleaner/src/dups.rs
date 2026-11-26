@@ -129,6 +129,10 @@ fn collect_root(
     // `opts.roots`. Only UNC, blocked drive types, reparse points and forbidden subtrees are
     // rejected below. `is_root_dir` still protects *deletion* targets elsewhere in the crate.
     // canonicalize is only meaningful for real, existing paths; in-memory views keep the input.
+    if crate::has_reparse_component(raw, fs) {
+        error(report, format!("invalid root '{}': reparse points are not scanned", display(raw)));
+        return;
+    }
     let canonical = std::fs::canonicalize(raw).ok().map(|p| strip_verbatim(&p));
     let path = canonical.clone().unwrap_or_else(|| raw.to_path_buf());
     let Some(attrs) = fs.attrs(&path) else {
@@ -297,7 +301,7 @@ fn restat(fs: &dyn FsView, c: &Candidate) -> Option<(u64, Option<u64>, Option<Fi
 /// Find duplicate files without modifying the filesystem.
 pub fn find_duplicates(opts: &DupsOptions, fs: &dyn FsView) -> DupsReport {
     let mut report = DupsReport::default();
-    let forbidden: Vec<PathBuf> = opts.forbidden.iter().map(|p| canonical_for(p)).collect();
+    let forbidden: Vec<PathBuf> = opts.forbidden.iter().flat_map(|p| [p.clone(), canonical_for(p)]).collect();
 
     // 1. Collect candidate files (read-only walk, budgeted by max_files).
     let mut candidates: Vec<Candidate> = Vec::new();

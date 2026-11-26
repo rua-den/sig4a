@@ -9,7 +9,8 @@
 //! can use the [`clean`] convenience wrapper, which injects [`RealFs`].
 
 use crate::model::{FsView, Item, Manifest, Mode, RealFs, ScanOptions};
-use crate::{new_run_id, now_unix_secs, validate_item_kind, validate_target_with};
+use crate::scan::is_recent;
+use crate::{new_run_id, now_unix_secs, path_contains, validate_item_kind, validate_target_with, REPARSE_POINT};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
@@ -183,6 +184,44 @@ fn snapshot(
     journal.record(&record).is_ok()
 }
 
+/// Recheck the current target tree against the review's age filter. Unknown
+/// timestamps, unreadable directories and a partial traversal cannot authorize deletion.
+fn revalidate_age(item: &Item, opts: &ScanOptions, fs: &dyn FsView) -> Result<(), String> {
+    let age_unknown = || format!("cannot verify build age of target '{}'; rescan before deleting", item.path);
+    let check = |modified: Option<u64>| {
+        let modified = modified.ok_or_else(age_unknown)?;
+        if is_recent(Some(modified), opts.skip_recent_days, opts.now_secs) {
+            return Err(format!("target '{}' contains a recent build; rescan before deleting", item.path));
+        }
+        Ok(())
+    };
+    let path = Path::new(&item.path);
+    let parent = path.parent().ok_or_else(age_unknown)?;
+    let entry = fs.strict_entries(parent).map_err(|_| age_unknown())?.into_iter()
+        .find(|entry| path_contains(path, &entry.path) && path_contains(&entry.path, path))
+        .ok_or_else(age_unknown)?;
+    if !entry.is_dir || entry.attrs & REPARSE_POINT != 0 {
+        return Err(age_unknown());
+    }
+    check(entry.modified)?;
+    let mut pending = vec![path.to_path_buf()];
+    let mut examined = 0usize;
+    while let Some(dir) = pending.pop() {
+        if examined >= opts.max_dirs || crate::has_reparse_component(&dir, fs) {
+            return Err(age_unknown());
+        }
+        examined += 1;
+        for entry in fs.strict_entries(&dir).map_err(|_| age_unknown())? {
+            check(entry.modified)?;
+            // Never follow symbolic links or junctions to prove this target is old.
+            if entry.is_dir && entry.attrs & REPARSE_POINT == 0 {
+                pending.push(entry.path);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Re-validate one manifest item right before deletion. `validate_target_with` covers roots,
 /// forbidden subtrees, reparse points and blocked drives; `validate_item_kind` additionally checks
 /// the rule name **and** its guard (project marker / `package.json` / `.trx`) through the same
@@ -196,6 +235,12 @@ fn revalidate(item: &Item, opts: &ScanOptions, fs: &dyn FsView) -> Result<(), St
             item.kind, item.path
         ));
     }
+    if opts.skip_recent_days > 0 {
+        revalidate_age(item, opts, fs)?;
+        // Traversal may take time. Re-check the original selected path and protected
+        // roots now, immediately before handing it to the deleter.
+        validate_target_with(item, opts, fs)?;
+    }
     Ok(())
 }
 
@@ -203,7 +248,7 @@ fn revalidate(item: &Item, opts: &ScanOptions, fs: &dyn FsView) -> Result<(), St
 ///
 /// Every id is re-validated (id in manifest -> `validate_target_with` -> `validate_item_kind`)
 /// through the injected `fs` before the deleter is called; a rejected id yields an error outcome
-/// and the loop continues. A snapshot is written after **every** id and once more with
+/// and the loop continues. A snapshot is written before the first delete, after **every** id, and with
 /// `phase = "done"`. If a journal write fails, remaining items are skipped and a single
 /// `{ id: "", err: "không ghi được journal" }` outcome is appended.
 pub fn clean_with(
@@ -217,6 +262,9 @@ pub fn clean_with(
 ) -> Vec<DeleteOutcome> {
     let run_id = new_run_id();
     let mut outcomes: Vec<DeleteOutcome> = Vec::with_capacity(ids.len());
+    if !snapshot(journal, &run_id, mode, &outcomes, PHASE_CLEANING) {
+        return vec![journal_error_outcome()];
+    }
 
     for id in ids {
         let outcome = match manifest

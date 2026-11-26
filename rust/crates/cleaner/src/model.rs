@@ -114,6 +114,13 @@ pub struct EntryInfo {
 /// Minimal filesystem abstraction: the scanner only ever reads through this trait.
 pub trait FsView: Send + Sync {
     fn entries(&self, dir: &Path) -> io::Result<Vec<EntryInfo>>;
+
+    /// Complete enumeration for destructive verification. Views which tolerate
+    /// missing entries during discovery must override this to return errors.
+    fn strict_entries(&self, dir: &Path) -> io::Result<Vec<EntryInfo>> {
+        self.entries(dir)
+    }
+
     fn attrs(&self, path: &Path) -> Option<u32>;
 
     /// Stable physical identity (volume + index) used to collapse hard links. Defaults to `None`
