@@ -1,0 +1,64 @@
+name: SIG4A Phase 5 independent Windows acceptance
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/phase5-proof.yml', '.github/phase5-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: abebf9ea69b0329ca50813024e735422025d29c4
+jobs:
+  automated:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          persist-credentials: false
+      - working-directory: rust
+        name: Verify locked workspace for the exact product
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne $env:PRODUCT_SHA) { throw 'wrong product revision' }
+          cargo check --locked --workspace --all-targets
+      - working-directory: rust
+        name: Core compatibility including versioned local-time parity
+        run: |
+          $old=(Get-TimeZone).Id
+          try {
+            Set-TimeZone -Id 'SE Asia Standard Time'
+            if ((Get-TimeZone).Id -ne 'SE Asia Standard Time') { throw 'wrong fixture timezone' }
+            cargo test --locked -p cu-core; $code=$LASTEXITCODE
+          } finally { Set-TimeZone -Id $old }
+          if ($code) { exit $code }
+      - working-directory: rust
+        name: Hook CLI compatibility
+        run: cargo test --locked -p claude-usage --test hook_cli
+      - working-directory: rust
+        name: Dashboard API, profile urgency and hook claims
+        run: cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard
+      - working-directory: rust
+        name: Real WebView Dashboard and legacy compatibility suites
+        run: |
+          cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked -p claude-usage-dashboard --test dashboard_legacy -- --test-threads=1
+  native:
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - working-directory: product/rust
+        run: cargo build --locked -p claude-usage -p claude-usage-dashboard
+      - name: Actual hotkeys, clipboard, quota priority and legacy settings
+        shell: pwsh
+        run: ./proof/.github/phase5-proof/windows.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA
