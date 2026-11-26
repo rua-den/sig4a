@@ -1,0 +1,36 @@
+name: SIG4A Phase 2 Windows gate
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/phase2-proof.yml', '.github/phase2-proof/**']
+permissions:
+  contents: read
+jobs:
+  suites:
+    name: Required Windows regression suites
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { persist-credentials: false }
+      - run: cargo build --locked -p claude-usage -p claude-usage-dashboard
+      - run: cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1 --nocapture
+      - if: always()
+        run: cargo test --locked -p claude-usage-dashboard --test dashboard_responsive -- --test-threads=1 --nocapture
+      - if: always()
+        run: cargo test --locked -p claude-usage-dashboard --test tray_opens_dashboard -- --test-threads=1 --nocapture
+      - if: always()
+        run: cargo test --locked -p claude-usage-dashboard --test dashboard_legacy -- --test-threads=1 --nocapture
+  native:
+    name: Independent visible Windows UI
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { persist-credentials: false }
+      - working-directory: rust
+        run: cargo build --locked -p claude-usage -p claude-usage-dashboard
+      - run: ./.github/phase2-proof/run.ps1
