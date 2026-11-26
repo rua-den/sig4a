@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 env:
-  PRODUCT_SHA: abebf9ea69b0329ca50813024e735422025d29c4
+  PRODUCT_SHA: aaa141416d25de282c6e2eb816076a66640ca350
 jobs:
   automated:
     runs-on: windows-2025

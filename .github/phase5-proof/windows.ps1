@@ -114,7 +114,8 @@ foreach($name in $names){
 }
 $entries['active-hook'].five=98;$entries['limit-without-hook'].five=99;$entries['dead-hook'].week=98;$entries['disabled-hook'].five=99
 $entries['near-5h'].five=84;$entries['stale-quota'].fetched_at=$now-1300;$entries['stale-quota'].err='HTTP 429'
-$entries['login-needed'].err='HTTP 401';$entries['login-needed'].Remove('five');$entries['login-needed'].Remove('week')
+$entries['login-needed'].err='HTTP 401 (login required)';$entries['login-needed'].status=401;$entries['login-needed'].Remove('five');$entries['login-needed'].Remove('week')
+$entries['ordinary-b'].week=$null;$entries['ordinary-b'].week_reset=$null
 $configPath=Join-Path $data 'config.json'
 @{profiles=$profiles;autostart=$false;interval_sec=180;warn_pct=80;block_pct=95;block_enabled=$true;widget_enabled=$false;notify_enabled=$false;widget_label='Legacy fixture badge';widget_font=124;widget_opacity=81;widget_locked=$true;dashboard_accent='orange';compat_sentinel='preserve me';local_ai_backend='ollama';local_ai_endpoint='http://127.0.0.1:18229';local_ai_model='sig4a-fixture';local_ai_managed=$false} | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $configPath
 @{ts=$now;block_enabled=$true;warn_pct=80;block_pct=95;busy=@('refreshing');refresh=$null;profiles=$entries}|ConvertTo-Json -Depth 8|Set-Content -Encoding utf8 "$data/usage_cache.json"

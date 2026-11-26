@@ -59,7 +59,7 @@ check('toast has pointer-events:none', getComputedStyle($('toast')).pointerEvent
 const actual = await api.state();
 const now = Date.now()/1000;
 const quota = (five,week,more={}) => ({five,week,five_reset:'2035-01-01Z',week_reset:'2035-02-01Z',fetched_at:now,...more});
-const ten = {normal:quota(22,24), refresh:{}, near:quota(84,13), stale:quota(10,98,{err:'HTTP 429',retry_at:now+99}),
+const ten = {normal:quota(22,24), refresh:{}, near:quota(84,null,{week_reset:null}), stale:quota(10,98,{err:'HTTP 429',retry_at:now+99}),
  'tie-z':quota(95,21),'tie-a':quota(21,95), login:{status:401,err:'token hết hạn'}, urgent:quota(96,96),
  waiting:{}, error:{err:'Timeout'}};
 apply({...actual,cache:{...actual.cache,profiles:ten,busy:['refresh']},usage_hooks:{urgent:'blocking','tie-a':'missing','tie-z':'unusable'}});
@@ -72,6 +72,11 @@ check('threshold without usable hook only signals threshold', row('tie-a').datas
 check('last load and separate 5h/7d reset values remain inspectable', row('urgent').querySelectorAll('.usage-reset').length===2&&
  row('urgent').querySelector('[data-window="5h"] [data-k=reset]').dataset.t!==row('urgent').querySelector('[data-window="7d"] [data-k=reset]').dataset.t&&
  row('urgent').textContent.includes('lần tải gần nhất'));
+check('partial quota keeps the other window, missing reset and tooltip intact',
+ row('near').querySelector('[data-window="5h"]').textContent.includes('84%')&&
+ row('near').querySelector('[data-window="7d"]').textContent.includes('—')&&
+ row('near').title.includes('5 giờ: 84%')&&row('near').title.includes('7 ngày: —')&&
+ row('near').querySelector('[data-window="7d"] .usage-reset').textContent.includes('—'));
 check('refreshing, login, stale and active hook labels distinct',row('refresh').querySelector('.spin')&&
  row('login').querySelector('.usage-state').dataset.kind==='login'&&row('stale').classList.contains('stale')&&
  row('urgent').querySelector('.usage-hook').dataset.kind==='blocking');
@@ -174,7 +179,7 @@ await stage('hook_uninstalled');
 // widget buttons
 tab('look');document.querySelector('#look button[onclick*="widget_unlock"]').click(); await sleep(600);
 check('unlock widget button', (await cfgNow()).widget_locked === false);
-document.querySelector('#gen button[onclick*="widget_reset"]').click(); await sleep(600);
+document.querySelector('#look button[onclick*="widget_reset"]').click(); await sleep(600);
 c = await cfgNow(); check('reset widget button', c.widget_locked === true && c.widget_cx === null && c.widget_size === 36);
 
 // title bar: a mousemove WITHOUT the primary button pressed must not start a window drag (the real drag is a native

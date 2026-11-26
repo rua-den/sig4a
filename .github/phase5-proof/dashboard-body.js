@@ -11,7 +11,9 @@ assert(r.top>=0&&r.top<innerHeight,'Priority profile is not visible without scro
 assert(/chặn|block/i.test(rowInfo[0].hook||''),'Actual configured hook did not say it would block on submit');
 const byName=n=>rowInfo.find(x=>x.name===n);
 assert(byName('limit-without-hook')&&!/đang chặn|sẽ chặn|would block/i.test(byName('limit-without-hook').hook||''),'Usage alone claimed a missing hook was blocking');
-assert(byName('login-needed')?.state!==byName('stale-quota')?.state,'Stale and login states were indistinguishable');
+assert(byName('login-needed')?.state==='login'&&byName('stale-quota')?.state==='stale','Stale and login states were not explicit');
+assert(byName('refreshing')?.state==='refreshing','Refreshing profile did not have its own state');
+assert(rows[0].querySelector('[data-window="5h"] .usage-reset')&&rows[0].querySelector('[data-window="7d"] .usage-reset'),'The two reset windows were not separately rendered');
 assert(/5h/i.test(rowInfo[0].labels)&&/7d/i.test(rowInfo[0].labels),'Both reset windows were not visible');
 await stage('usage-priority',{rowInfo,visible:true});
 

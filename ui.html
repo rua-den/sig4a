@@ -129,7 +129,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
  <section class="toolpanel" id="tool-ocr"><div class="box"><div class="lbl">OCR</div><p class="hint">Dán ảnh trực tiếp hoặc chụp vùng bằng nút bên dưới. Chỉ nhận PNG, JPEG, WebP (tối đa 6 MB).</p><textarea id="ocr-in" readonly placeholder="Chưa có ảnh — hãy dán ảnh hoặc chụp một vùng màn hình..." style="min-height:56px;margin-top:8px"></textarea><img id="ocr-preview" class="ocr-preview" alt="Xem trước ảnh OCR"><div class="toolactions"><button class="b" id="ocr-capture" onclick="captureOcr()">Chụp vùng màn hình</button><button class="b" id="ocr-remove" onclick="removeOcr()" disabled>Xoá ảnh</button><button class="b p" id="ocr-run" onclick="runTool('ocr')" disabled>Nhận chữ</button><button class="b" id="ocr-copy" onclick="copyResult('ocr-out')" disabled>Sao chép</button><button class="b" data-quick-translate onclick="translateOcr()" disabled>Dịch</button></div><span class="hint" id="ocr-status" role="status">Chưa có ảnh.</span><button hidden class="b" id="ocr-recovery" onclick="openAiRecovery('ocr')">Cài đặt Local AI</button><div class="result" id="ocr-out" contenteditable="true" role="textbox" aria-label="Kết quả OCR">Kết quả OCR sẽ hiển thị ở đây.</div><section class="ocr-inline" id="ocr-inline" aria-label="Bản dịch tiếng Việt" hidden><div class="lbl">Bản dịch tiếng Việt</div><div class="result" id="ocr-translation-out" tabindex="0" role="status"></div><div class="toolactions"><button class="b" id="ocr-translation-copy" onclick="copyResult('ocr-translation-out')" disabled>Sao chép bản dịch</button></div></section></div></section>
  <section class="toolpanel" id="tool-localai"><div class="box"><div class="lbl">LOCAL AI</div><label>Endpoint loopback<input id="ai-endpoint" type="text" value="http://127.0.0.1:11434"></label><label style="max-width:240px;margin-top:8px">Backend<select id="ai-backend"><option value="ollama">Ollama</option><option value="llama_cpp">llama.cpp server</option></select></label><label style="max-width:420px;margin-top:8px">Model<input id="ai-model" list="ai-models" value="hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0" autocomplete="off"><datalist id="ai-models"></datalist></label><div class="modelcard"><b>LiquidAI LFM2.5-VL-450M-GGUF</b><br><span class="hint">Ollama HF pattern Q4: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q4_K_M</code>; Q8: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0</code>.<br>llama.cpp chọn ID thực từ <code>/v1/models</code>; khởi chạy server ngoài với listen loopback và model path phù hợp.</span></div><div class="toolactions"><button class="b" id="ai-check" onclick="checkAi()">Kiểm tra kết nối</button><button class="b" id="model-list" onclick="listModels()">Lấy model</button><button class="b" id="ai-test" onclick="testAi()">Thử model với ảnh mẫu</button><button class="b p" id="ai-save" onclick="saveAi()">Lưu Local AI</button></div><div class="result" id="ai-status" role="status" data-state="unchecked">Chưa kiểm tra. Chọn backend, endpoint và model rồi kiểm tra.</div><div id="ai-save-status" role="status" class="hint"></div><button hidden class="b" id="ai-back" onclick="returnToAi()">Quay lại công cụ</button></div></section>
  <section class="toolpanel" id="tool-usage">
- <div class="box" id="usage-accounts"><div class="lbl">CLAUDE USAGE</div><div class="usage-actions"><button class="b" id="rbtn" onclick="refresh()">refresh</button></div><div id="accs"></div></div>
+ <div class="box" id="usage-accounts"><div class="lbl">CLAUDE USAGE</div><div class="usage-actions"><button class="b" id="rbtn" onclick="refresh()">refresh</button> <span id="usage-policy-status" class="hint" role="status" hidden></span></div><div id="accs"></div></div>
  <div class="box" id="settings-box"><div class="lbl" id="settings-label">SETTINGS</div><div class="lbl" id="clean-label">DỌN Ổ</div>
   <div class="tabs"><button class="tab on" id="t-gen" onclick="tab('gen')">Chung</button><button class="tab" id="t-look" onclick="tab('look')">Widget</button><button class="tab" id="t-alerts" onclick="tab('alerts')">Cảnh báo</button><button class="tab" id="t-hooks" onclick="tab('hooks')">Hook CLI</button><button class="b" id="settings-ai" onclick="toolTab('localai')">Local AI readiness</button></div>
   <div class="set" id="gen">
@@ -148,7 +148,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
   <div class="set" id="hooks" hidden>
    <label class="chk"><input type="checkbox" id="blocksw">Bật chính sách chặn prompt CLI</label>
    <div class="grp">Chạm ngưỡng không đồng nghĩa với đang chặn. Chính sách cần hook dùng được và cache còn hiệu lực.</div>
-   <div class="grp"><button class="b" onclick="hook('install')">Cài hook vào các profile</button><button class="b" onclick="hook('uninstall')">Gỡ hook</button><span id="hookst" role="status"></span></div>
+   <div class="grp"><button class="b" onclick="hook('install')">Cài hook vào các profile</button><button class="b" onclick="hook('uninstall')">Gỡ hook</button><span id="hookst" role="status"></span></div><div class="grp" id="settings-hook-policy-status" role="status" hidden></div>
   </div>
   <div class="set" id="look" hidden>
    <label class="chk"><input type="checkbox" id="wen">Hiện widget trên taskbar</label>
@@ -283,16 +283,24 @@ function moveResize(ev){if(!rs||rs.raf)return;rs.raf=requestAnimationFrame(()=>{
  api.set_rect(Math.round(x),Math.round(y),Math.round(w),Math.round(h));userSized=true;$('autofit').style.display=''})}
 function endResize(){window.removeEventListener('pointermove',moveResize);rs=null;setTimeout(()=>{syncWin()},120)}
 window.addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(fit,60)});
-function tipText(n,p){if(p.five===undefined)return n+'\n'+(p.err||'chưa có dữ liệu');
- const L=[n+(p.plan?'  ('+p.plan+')':''),'5 giờ: '+p.five.toFixed(0)+'%  · reset sau '+reset(p.five_reset),'7 ngày: '+p.week.toFixed(0)+'%  · reset sau '+reset(p.week_reset)];
- (p.scoped||[]).forEach(s=>L.push(s.name+' (riêng, 7 ngày): '+Math.round(s.pct)+'%'));
- L.push(p.extra?'Credit dùng thêm: $'+p.extra.used.toFixed(2)+' / $'+p.extra.limit.toFixed(2)+' ('+(p.extra.pct||0).toFixed(1)+'%)':'Credit dùng thêm: chưa bật');
- L.push(p.err?p.err+' · dữ liệu cũ ('+ago(p.fetched_at)+')':'cập nhật '+ago(p.fetched_at));return L.join('\n')}
+function tipText(n,p){
+ const win=(label,value,at)=>label+': '+(Number.isFinite(value)?value.toFixed(0)+'%':'—')+' · reset sau '+reset(at);
+ const L=[n+(p.plan?'  ('+p.plan+')':''),win('5 giờ',p.five,p.five_reset),win('7 ngày',p.week,p.week_reset)];
+ for(const s of Array.isArray(p.scoped)?p.scoped:[]){
+  if(s&&Number.isFinite(s.pct))L.push(String(s.name||'')+' (riêng, 7 ngày): '+Math.round(s.pct)+'%');
+ }
+ const extra=p.extra;
+ L.push(Number.isFinite(extra?.used)&&Number.isFinite(extra?.limit)?
+  'Credit dùng thêm: $'+extra.used.toFixed(2)+' / $'+extra.limit.toFixed(2)+' ('+(Number.isFinite(extra.pct)?extra.pct:0).toFixed(1)+'%)':'Credit dùng thêm: chưa bật');
+ const fetched=Number.isFinite(p.fetched_at)&&p.fetched_at>0?ago(p.fetched_at):'chưa có lần tải thành công';
+ L.push(p.err?p.err+' · '+fetched:'cập nhật: '+fetched);
+ return L.join('\n');
+}
 function toast(t,ms){const e=$('toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),ms||2200)}
 async function poll(){let delay=2000;try{delay=apply(await api.state())}catch(e){}schedule(delay)}
 function schedule(d){clearTimeout(timer);timer=setTimeout(poll,d)}
 const ATTENTION={blocking:0,login:1,threshold:2,stale:3,error:3,near:4,refreshing:5,normal:6,waiting:7};
-const HOOK_LABELS={blocking:'Hook sẽ chặn theo cache',ready:'Hook dùng được · không chặn',policy_off:'Hook: chính sách chặn tắt',missing:'Chưa cài hook',unreadable:'Không đọc được cấu hình hook',disabled:'Hook đã tắt trong profile',unusable:'Hook không chạy được',unknown:'Chưa xác minh hook'};
+const HOOK_LABELS={blocking:'Hook sẽ chặn theo cache',ready:'Hook dùng được · không chặn',policy_off:'Hook: cache đang tắt chặn',cache_unusable:'Hook: cache chưa có hoặc đã hết hiệu lực',missing:'Chưa cài hook',unreadable:'Không đọc được cấu hình hook',disabled:'Hook đã tắt trong profile',unusable:'Hook cũ hoặc không xác minh được',unknown:'Chưa xác minh hook'};
 function usageRows(cache,cfg,hooks,now=Date.now()/1000){
  const warn=cache.warn_pct??cfg.warn_pct??80,block=cache.block_pct??cfg.block_pct??95;
  const staleAfter=Math.max(90,cfg.interval_sec||180)*2+30,busy=new Set(cache.busy||[]);
@@ -344,6 +352,10 @@ function apply(s){if(!s)return 2000;
   $('blocksw').checked=cfg.block_enabled;$('wsize').value=cfg.widget_size;$('wstyle').value=cfg.widget_style||'rings';$('wen').checked=cfg.widget_enabled;$('autosw').checked=cfg.autostart;$('trefsw').checked=cfg.token_refresh!==false;
   $('wlabel').value=cfg.widget_label||'alias';$('wfont').value=cfg.widget_font||100;$('wopac').value=cfg.widget_opacity||100;$('wtheme').value=cfg.widget_theme||'auto';$('wplate').checked=!!cfg.widget_plate;const on=(k,d)=>cfg[k]===undefined?d:!!cfg[k];$('sl').checked=on('widget_show_label',true);$('s5').checked=on('widget_show_5h',true);$('s7').checked=on('widget_show_7d',true);const rm=on('widget_reset',true);$('r5').checked=rm&&on('widget_show_reset5',true);$('r7').checked=rm&&on('widget_show_reset7',true);$('wtip').checked=on('widget_tooltip',true);$('wsort').value=cfg.widget_sort||'config';$('wmax').value=cfg.widget_max_cells||0;$('nen').checked=cfg.notify_enabled;$('nwarn').checked=cfg.notify_warn;$('nblock').checked=cfg.notify_block;loaded=true;loadCleanConfig(cfg);settingsBaseline=collectSettings()}
  $('ver').textContent='v'+(s.version||'');
+ for(const id of ['usage-policy-status','settings-hook-policy-status']){
+  $(id).hidden=!s.usage_policy_pending;
+  setText(id,s.usage_policy_pending?'Chính sách đã lưu khác cache hiện hành. Hook vẫn dùng cache cho đến lần cập nhật tiếp theo.':'');
+ }
  const c=s.cache;if(!c){lastAccs='';setHTML('overview-quota','<div class="hdr">đang poll lần đầu...</div>');$('accs').innerHTML='<div class="hdr">đang poll lần đầu...</div>';return 700}
  if(!labelsBuilt){buildLabels(Object.keys(c.profiles),s.cfg);labelsBuilt=true;Object.assign(settingsBaseline,collectWidgetProfiles())}
  const busy=new Set(c.busy||[]);
@@ -370,7 +382,7 @@ function setHTML(id,html){const e=$(id);if(e._h!==html){e.innerHTML=html;e._h=ht
 const LIVE={ago:t=>+t?ago(+t):'chưa có',until:t=>until(+t),reset:t=>reset(t)};
 function fillLive(profiles){
  document.querySelectorAll('#accs .v,#overview-quota .v').forEach(e=>{const t=LIVE[e.dataset.k](e.dataset.t);if(e.textContent!==t)e.textContent=t});
- document.querySelectorAll('#accs .acc[data-n]').forEach(e=>{const p=profiles[e.dataset.n];if(p&&p.five!==undefined){const t=tipText(e.dataset.n,p);if(e.title!==t)e.title=t}})}
+ document.querySelectorAll('#accs .acc[data-n]').forEach(e=>{const p=profiles[e.dataset.n];if(p){const t=tipText(e.dataset.n,p);if(e.title!==t)e.title=t}})}
 let labelsBuilt=false,autoT=null;
 const esc=t=>String(t).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function buildLabels(names,cfg){const al=cfg.aliases||{},hid=cfg.widget_hidden||[];widgetProfilesSeed={aliases:al,hidden:hid};
