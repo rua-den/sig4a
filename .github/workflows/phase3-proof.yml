@@ -1,0 +1,21 @@
+name: SIG4A Phase 3 independent Windows proof
+on:
+  pull_request:
+    branches: [dot/phase2-verified]
+    paths: ['.github/workflows/phase3-proof.yml', '.github/phase3-proof/**']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.head_ref == 'dot/phase3-independent-proof'
+    runs-on: windows-2025
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Build dashboard on Windows
+        working-directory: rust
+        run: cargo build --locked -p claude-usage-dashboard
+      - name: Native capture and native clipboard proof
+        run: ./.github/phase3-proof/proof.ps1
