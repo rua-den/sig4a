@@ -1,7 +1,7 @@
 {
   "phase": 2,
   "title": "Navigation and overview",
-  "status": "in_progress",
+  "status": "passed",
   "goal": "Ship the approved five-tab T.U.I shell with quota first and explicit tool routing.",
   "dependencies": [
     "Phase 1 has gate.status = passed and all required evidence recorded"
@@ -27,24 +27,24 @@
         "case": "Five routes and AI subnav",
         "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1",
         "expected": "All five primary controls open exactly one intended destination. Each AI leaf and direct Home shortcut opens the correct tool. Cleaner is independent of Usage.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1 --nocapture: exit 0, 1 passed. Real WebView2 test plus the independent visible run opened all five primary destinations, all seven Home shortcuts and the three AI destinations, with one visible destination each. https://github.com/rua-den/sig4a/actions/runs/45851224639/job/140017795347 https://github.com/rua-den/sig4a/actions/runs/45852441167/job/140022017928"
       },
       {
         "id": "P2-AUTO-002",
         "case": "Compact layout and auto-fit",
         "run": "cargo test --locked -p claude-usage-dashboard --test dashboard_responsive -- --test-threads=1",
         "expected": "At minimum and normal width no horizontal clipping. Auto-fit flushes saved size, fits when possible, and exposes vertical scroll when content exceeds the work-area limit.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "cargo test --locked -p claude-usage-dashboard --test dashboard_responsive -- --test-threads=1 --nocapture: exit 0, 40/40 checks. On 1024×720 actual work area, restored 980px viewport auto-fit capped at 680px and scrolled to the end (622px content / 614px client), cleared dash_rect, and had no horizontal overflow. https://github.com/rua-den/sig4a/actions/runs/45851224639/job/140017795347"
       },
       {
         "id": "P2-AUTO-003",
         "case": "Tray route and existing behavior",
         "run": "cargo test --locked -p claude-usage-dashboard --test tray_opens_dashboard -- --test-threads=1; cargo test --locked -p claude-usage-dashboard --test dashboard_legacy -- --test-threads=1",
         "expected": "Tray opens the dashboard and prior account, widget and route behavior stays functional in isolated fixtures.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Built both binaries. tray_opens_dashboard passed without skip and dashboard_legacy passed 60/60, both --locked and --test-threads=1, exit 0. https://github.com/rua-den/sig4a/actions/runs/45851224639/job/140017795347"
       }
     ],
     "real_ui": [
@@ -53,24 +53,24 @@
         "case": "Dashboard and hotkeys on Windows",
         "steps": "Open the built dashboard via an isolated tray. Open Grammar, Translation and OCR with Ctrl+Alt+G/T/O and confirm tool/selection behavior.",
         "expected": "Tray opens Tổng quan. Each hotkey opens the correct compact tool and existing Escape behavior still works.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Native tray opened Overview in its own process. Actual Ctrl+Alt+G carried selected synthetic WPF text via UIA. Ctrl+Alt+T focused empty compact input without a selection and native clipboard paste worked. Ctrl+Alt+O opened native picker; Esc cancelled it and Esc closed the compact popup. No live account, screen content or AI fixture data. https://github.com/rua-den/sig4a/actions/runs/45852441167/job/140022017928"
       },
       {
         "id": "P2-UI-002",
         "case": "320/420 px equivalent reflow and keyboard",
         "steps": "Use the supported minimum window size and navigate all five destinations via Tab and Enter. Inspect the AI tabs, long labels and CTA visibility.",
         "expected": "No clipped controls or horizontal scrolling at the supported minimum. Focus remains visible and Escape behaves predictably.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "At actual 420 CSS px, traversed all five destinations with native Tab and Enter, verified visible orange focus, exactly one expected destination, no horizontal overflow, all direct Home and AI buttons. Scrolled Home at 698px opened Local AI under Settings, scroll 0 and focus on Settings. https://github.com/rua-den/sig4a/actions/runs/45852441167/job/140022017928"
       },
       {
         "id": "P2-UI-003",
         "case": "Overview priority and theme",
         "steps": "Seed sample profiles with a near-limit 5h entry and a stale 7d entry. Check the first viewport and change accent.",
         "expected": "Quota appears above shortcuts, both windows are labeled and statuses are understandable without color alone. The Phase 1 palette still applies.",
-        "status": "pending",
-        "evidence": null
+        "status": "passed",
+        "evidence": "Quota first: fixture showed 5h 88% with “gần giới hạn” and 7d 51% with “dữ liệu cũ: HTTP 429” first. Verified #0a0a0a, #141414, #fab283, Cascadia Mono CSS, visible G/T/O labels and purple #c7a0ff persisted. https://github.com/rua-den/sig4a/actions/runs/45852441167/job/140022017928"
       }
     ]
   },
@@ -79,29 +79,29 @@
       "id": "P2-TEST-1",
       "owner": "Phase Luna (gpt-5.6-luna, medium)",
       "scope": "Run phase checks against the implementation and record exact commands, exit codes, results and environment",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Orchestrator reran Phase Luna's complete required suite after the final product fixes (Windows Server 2025 x64 hosted runner, real Win32 and WebView2, isolated synthetic profile), exit 0 across four test binaries. https://github.com/rua-den/sig4a/actions/runs/45851224639/job/140017795347"
     },
     {
       "id": "P2-TEST-2",
       "owner": "Continuous advisor",
       "scope": "Review the code and test evidence. Report blocking findings or explicitly approve the reviewed diff",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Continuous Advisor (GPT-6.2 Astra) approved UI blob e6807086 and responsive-test blob 57034a73 on b4c505b after reviewing quota statuses, focus and native work-area acceptance. Reviewed blobs match required-suite and independent-native runs; signoff contingent on Windows evidence, now passed."
     },
     {
       "id": "P2-TEST-3",
       "owner": "Orchestrator",
       "scope": "Independently inspect the diff, rerun the required checks and test the real Windows UI on isolated test data",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Independent orchestrator ran native Tab/Enter at 420 px, verified scrolled Home → Local AI, quota and theme, real G/T/O, selected text, native clipboard fallback and Escape. https://github.com/rua-den/sig4a/actions/runs/45852441167/job/140022017928"
     },
     {
       "id": "P2-TEST-4",
       "owner": "Phase Luna, continuous advisor and orchestrator",
       "scope": "For a fix, rerun affected tests and regressions, re-review the fix and repeat impacted independent UI checks",
-      "status": "pending",
-      "evidence": null
+      "status": "passed",
+      "evidence": "Fixed Home shortcut labels, stale/near-limit prioritization, focus restoration and cap-aware responsive assertion. Rebuilt and reran required suites and independent native UI after changes; Advisor re-reviewed same product blobs. Earlier proof failures were harness-only (debugger setup, launcher toolchain). https://github.com/rua-den/sig4a/actions/runs/45851224639/job/140017795347 https://github.com/rua-den/sig4a/actions/runs/45852441167/job/140022017928"
     }
   ],
   "test_notes": [
@@ -110,13 +110,17 @@
   ],
   "findings": [
     {
-      "status": "addressed_pending_ui_retest",
-      "detail": "On the actual Windows dashboard, the Home Local AI shortcut opened Settings but its helper text still referenced Trợ lý AI. The final fix points to Settings and resets the main scroll position on route changes. Desktop interaction ended before the independent retest."
+      "status": "resolved",
+      "detail": "On the actual Windows dashboard, the Home Local AI shortcut opened Settings but its helper text still referenced Trợ lý AI. The final fix points to Settings and resets the main scroll position on route changes. Desktop interaction ended before the independent retest. Independently retested: scrolled Home 698 → 0, Settings highlight and keyboard focus at 420px."
+    },
+    {
+      "status": "resolved",
+      "detail": "Added visible Home hotkeys, prioritized near-limit/stale quota in text and restored focus from a hidden shortcut. Verified on native Windows and re-reviewed."
     }
   ],
   "gate": {
-    "status": "pending",
-    "closed_at": null,
+    "status": "passed",
+    "closed_at": "2026-11-26T15:50:17.342Z",
     "required": [
       "implementation complete",
       "all required acceptance cases passed with evidence",
@@ -125,16 +129,15 @@
       "no unresolved blocking defects",
       "affected tests re-passed after any fix"
     ],
-    "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
+    "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded.",
+    "next_phase": 3
   },
   "handoff": {
-    "status": "ready_for_independent_testing",
-    "automated_latest": "cargo check --locked -p claude-usage-dashboard and cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1 passed after the helper text and route scroll fix. The latter ran in real WebView2 on an isolated Windows desktop.",
-    "previous_revision": "Legacy, responsive (40/40), dashboard UI, and opening the dashboard from the tray passed before the last two UI changes. The advisor approved that revision.",
-    "remaining": [
-      "Verify the final build at minimum width on real Windows.",
-      "From a scrolled Home view, open Local AI and confirm Settings is selected and the view starts at the top.",
-      "Record final independent UI evidence and advisor signoff before marking the Phase 2 gate passed."
-    ]
+    "status": "phase_2_accepted",
+    "environment": "Windows Server 2025 x64 hosted runner, real Win32 and WebView2, isolated synthetic profile",
+    "product_proof_sha": "47e66ccd370c788796d8b81330cc3e7c3b29efb1",
+    "proof_diff": "The successful suites head b4c505b and native proof head 47e66cc differ only in disposable harness files. The production tree contains none of those harness files.",
+    "native_proof": "https://github.com/rua-den/sig4a/actions/runs/45852441167/job/140022017928",
+    "regression_suites": "https://github.com/rua-den/sig4a/actions/runs/45851224639/job/140017795347"
   }
 }

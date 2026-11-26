@@ -1,7 +1,6 @@
 // Port of tests/e2e_responsive.py: 14 profiles, resizing from the 8 edge handles with the page's own pointer logic,
 // maximize / restore / double-click, remembered size. PHASE ('1' | '2') and N are defined by the test.
 const dpr = devicePixelRatio;
-const sh = screen.height * dpr;
 toolTab('usage'); await sleep(100); document.querySelector('.toolnav').style.display='none';
 const info = () => {
   const m = document.querySelector('main'), d = document.documentElement, a = [...document.querySelectorAll('.acc')];
@@ -19,6 +18,19 @@ const drag = async (edge, dx, dy) => {
   window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 })); await sleep(900);
 };
 
+async function autoFitUsable(i) {
+  const r = await api.rect(), wa = await api.work_area();
+  const maxH = wa[3] - Math.trunc(40 * dpr);
+  const inside = r[1] >= wa[1] - 2 && r[1] + r[3] <= wa[1] + wa[3] + 2 && r[3] <= maxH + 2;
+  if (!inside || i.hs) return false;
+  if (i.ms <= i.mc + 1) return true;
+  if (r[3] < maxH - 2) return false;  // Overflow is allowed only at the native work-area cap.
+  const m = document.querySelector('main');
+  m.scrollTop = m.scrollHeight;
+  const reachesEnd = Math.abs(m.scrollHeight - m.clientHeight - m.scrollTop) <= 1;
+  m.scrollTop = 0;
+  return reachesEnd;
+}
 await waitFor(() => document.querySelectorAll('.acc').length === N, 8000);
 await sleep(1800);
 
@@ -28,8 +40,8 @@ if (PHASE === '1') {
   check('the 8 resize handles exist', ['l', 'r', 't', 'b', 'tl', 'tr', 'bl', 'br'].every(e => document.querySelector('.rz.' + e)));
   const want = Math.min(1480, screen.width - 80);
   check(`default window width = initial_width (${N} profiles -> ${want})`, Math.abs(i.iw - want) <= 2, i.iw);
-  check('default window is wide for many accounts and shows several columns', i.iw >= 1100 && i.cols >= 3, `width=${i.iw} columns=${i.cols}`);
-  check('auto-fit: nothing to scroll, window fits the screen', i.ms <= i.mc + 1 && !i.hs && (await api.rect())[3] <= sh, JSON.stringify(i) + ' rect=' + (await api.rect()));
+  check('default window is wide for many accounts and shows several columns', i.iw >= want-2 && i.cols >= (want >= 1100 ? 3 : 2), `width=${i.iw} columns=${i.cols}`);
+  check('auto-fit: fits the work area or scrolls to the end at its native cap', await autoFitUsable(i), JSON.stringify(i) + ' rect=' + (await api.rect()));
   const r0 = await api.rect();
   await drag('br', -(r0[2] - 760 * dpr), -(r0[3] - 520 * dpr));
   let r1 = await api.rect(); i = info();
@@ -125,7 +137,7 @@ if (PHASE === '1') {
   check("'tự vừa' button is visible once a size is remembered", $('autofit').style.display !== 'none');
   autoFit(); await sleep(2000);
   i = info(); const c = await cfgNow();
-  check("'tự vừa' forgets the size: window follows the content again", c.dash_rect === null && i.user === false && i.ms <= i.mc + 1, `${JSON.stringify(i)} dash_rect=${c.dash_rect}`);
+  check("'tự vừa' forgets the size: window follows the content again", c.dash_rect === null && i.user === false && await autoFitUsable(i), `${JSON.stringify(i)} dash_rect=${c.dash_rect}`);
   check("'tự vừa' button hidden again", $('autofit').style.display === 'none');
   await stage('phase2_done');
   document.querySelector('.wb.x').click(); await sleep(8000);
