@@ -23,6 +23,20 @@ public static class ProofWin {
  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumFn callback,IntPtr state);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr hwnd,System.Text.StringBuilder text,int max);
  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd,System.Text.StringBuilder text,int max);
+ public static IntPtr FindOwned(uint owner,string expectedClass) {
+   IntPtr result=IntPtr.Zero;
+   EnumWindows((hwnd,state) => {
+     uint found;
+     GetWindowThreadProcessId(hwnd,out found);
+     if (found!=owner || !IsWindowVisible(hwnd)) return true;
+     var cls=new System.Text.StringBuilder(256);
+     GetClassName(hwnd,cls,cls.Capacity);
+     if (cls.ToString()!=expectedClass) return true;
+     result=hwnd;
+     return false;
+   },IntPtr.Zero);
+   return result;
+ }
  public static string[] WindowsFor(uint owner) {
    var result=new System.Collections.Generic.List<string>();
    EnumWindows((hwnd,state) => {
@@ -105,10 +119,10 @@ try {
   Wait-Proof 'native region picker owned by dashboard' {
     if ($dashboard.HasExited) { throw "Dashboard exited: $($dashboard.ExitCode)" }
     if (Test-Path $out) { throw "Dashboard finished before opening picker: $(Get-Content -Raw $out)" }
-    $h = [ProofWin]::FindWindow('KaneRegion', $null)
+    $h = [ProofWin]::FindOwned($dashboard.Id, 'KaneRegion')
     (Owned-By $h $dashboard.Id) -and [ProofWin]::IsWindowVisible($h)
   } 50
-  $picker = [ProofWin]::FindWindow('KaneRegion',$null)
+  $picker = [ProofWin]::FindOwned($dashboard.Id, 'KaneRegion')
   $x1 = $f.x + 10; $y1 = $f.y + 10; $x2 = $x1 + 460; $y2 = $y1 + 110
   if ((Root-At $x1 $y1) -ne $picker -or (Root-At $x2 $y2) -ne $picker) { throw 'Picker does not own the intended drag area' }
   Mouse-At $x1 $y1
@@ -119,7 +133,7 @@ try {
   Wait-Proof 'model OCR and Copy UI stage' { (Test-Path "$out.copy") -or (Test-Path $out) } 95
   if (!(Test-Path "$out.copy")) { throw "OCR stage failed: $(Get-Content -Raw $out)" }
   $c = Get-Content -Raw "$out.copy" | ConvertFrom-Json
-  $hwnd = [ProofWin]::FindWindow('ClaudeUsageDashboard',$null)
+  $hwnd = [ProofWin]::FindOwned($dashboard.Id, 'ClaudeUsageDashboard')
   if (!(Owned-By $hwnd $dashboard.Id)) { throw 'Dashboard Copy target not found' }
   $p = [ProofWin+Point]::new($c.x,$c.y)
   if (![ProofWin]::ClientToScreen($hwnd,[ref]$p) -or (Root-At $p.X $p.Y) -ne $hwnd) { throw 'Copy point is not over dashboard' }
