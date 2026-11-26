@@ -423,7 +423,7 @@ function toolTab(t){
 async function copyResult(id){const el=$(id),text=(el.value!==undefined?el.value:el.innerText||'').trim();if(id!=='ocr-out'&&el.dataset.valid!=='true')return toast('Chưa có kết quả để sao chép');if(id==='ocr-out'&&!ocrResultValid)return toast('Chưa có kết quả OCR để sao chép');if(!text||text==='Kết quả sẽ hiển thị ở đây.'||text==='Đang xử lý…'||text.startsWith('Local AI chưa sẵn sàng'))return toast('Chưa có kết quả để sao chép');try{await navigator.clipboard.writeText(text);toast('Đã sao chép');return true}catch(e){const tmp=document.createElement('textarea');tmp.value=text;tmp.style.cssText='position:fixed;opacity:0';document.body.appendChild(tmp);tmp.select();const ok=document.execCommand('copy');tmp.remove();toast(ok?'Đã sao chép':'Không sao chép được');return ok}}
 const OCR_PLACEHOLDER='Kết quả OCR sẽ hiển thị ở đây.';
 let ocrImage=null,ocrImageVersion=0,ocrInputVersion=0,ocrBusy=false,ocrResultValid=false;
-let queuedOcr=null,ocrInlineBusy=false,ocrTextVersion=0;
+let queuedOcr=null,ocrInlineBusy=false,ocrTextVersion=0,regularAiRequests=0;
 function resetOcrTranslation(){
  ocrTextVersion++;
  $('ocr-inline').hidden=true;
@@ -432,28 +432,37 @@ function resetOcrTranslation(){
  $('ocr-translation-copy').disabled=true;
 }
 function drainOcr(){
- if(queuedOcr===null||ocrBusy||ocrInlineBusy)return;
+ if(queuedOcr===null||ocrBusy||ocrInlineBusy||regularAiRequests||aiCheckBusy)return;
  const version=queuedOcr;
  queuedOcr=null;
  if(version===ocrImageVersion&&document.body.classList.contains('ocr-popup')&&document.querySelector('#tool-ocr.on'))void runTool('ocr');
+ else syncOcrButtons();
 }
 function useQuickOcrImage(data){
  setOcrImage(data);
  queuedOcr=ocrImageVersion;
+ syncOcrButtons();
  drainOcr();
 }
-window.showQuickCapture=function(data,error){
+window.notifyQuickPresented=function(token){
+ if(!Number.isSafeInteger(token))return;
+ // Flush the current route's layout before the hidden native HWND is allowed to show.
+ document.querySelector('.toolpanel.on')?.getBoundingClientRect();
+ window.__cu_send?.('__quick_presented',[token]);
+};
+window.showQuickCapture=function(data,error,token){
  ++ocrInputVersion;
  document.body.classList.add('ocr-popup');
  toolTab('ocr');
  if(data)useQuickOcrImage(data);
  else {setOcrImage(null);setText('ocr-status',error==='selected region is too large'?'Vùng chụp quá lớn. Hãy chọn một vùng nhỏ hơn.':'Không chụp được vùng màn hình.');}
  $('ocr-capture').focus();
+ notifyQuickPresented(token);
 };
 $('ocr-out').addEventListener('input',()=>{if(ocrResultValid){resetOcrTranslation();syncOcrButtons()}});
 
 function syncOcrButtons(){
- $('ocr-run').disabled=!ocrImage||ocrBusy||ocrInlineBusy;
+ $('ocr-run').disabled=!ocrImage||ocrBusy||ocrInlineBusy||queuedOcr!==null;
  $('ocr-remove').disabled=!ocrImage;
  $('ocr-copy').disabled=!ocrResultValid;
  document.querySelector('#tool-ocr [data-quick-translate]').disabled=!ocrResultValid||ocrInlineBusy;
@@ -498,7 +507,7 @@ async function captureOcr(){
  setText('ocr-status','Đang mở công cụ chụp…');
  try{
   const data=await api.ocr_capture();
-  if(version!==ocrInputVersion)return;
+  if(version!==ocrInputVersion||data?.presenting===true)return;
   if(data){if(document.body.classList.contains('ocr-popup'))useQuickOcrImage(data);else {setOcrImage(data);if(window.__QUICK_MODE__)runTool('ocr')}}
   else setText('ocr-status','Đã huỷ chụp.');
  }catch(e){if(version===ocrInputVersion)setText('ocr-status','Không chụp được vùng màn hình.')}
@@ -521,7 +530,7 @@ async function runTool(kind,inline=false){
  const stillCurrent=()=>inline?imageVersion===ocrImageVersion&&textVersion===ocrTextVersion:!isOcr||imageVersion===ocrImageVersion;
  if(isOcr){resetOcrTranslation();ocrBusy=true;ocrResultValid=false;setText('ocr-status','Đang nhận chữ…');syncOcrButtons()}
  else if(inline){ocrInlineBusy=true;$('ocr-inline').hidden=false;$('ocr-translation-copy').disabled=true;syncOcrButtons()}
- else button.disabled=true;
+ else {regularAiRequests++;button.disabled=true}
  recovery.hidden=true;out.dataset.valid='false';out.textContent='Đang xử lý…';
  const failure=(code)=>{
   if(!stillCurrent())return;
@@ -541,7 +550,7 @@ async function runTool(kind,inline=false){
  finally{
   if(isOcr){ocrBusy=false;syncOcrButtons();drainOcr()}
   else if(inline){ocrInlineBusy=false;syncOcrButtons();drainOcr()}
-  else {button.disabled=false;drainOcr()}
+  else {regularAiRequests--;button.disabled=false;drainOcr()}
   fit();
  }
 }
@@ -622,7 +631,7 @@ async function inspectAi(test){
   }
   setAiStatus('ready','Sẵn sàng: model đã đọc đúng ảnh mẫu. Bấm Lưu Local AI để giữ cấu hình.');
  }catch(e){fail('bridge_error')}
- finally{aiCheckBusy=false;syncAiControls()}
+ finally{aiCheckBusy=false;syncAiControls();drainOcr()}
 }
 function checkAi(){return inspectAi(false)}
 function listModels(){return inspectAi(false)}
