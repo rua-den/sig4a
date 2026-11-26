@@ -1,7 +1,7 @@
 {
   "phase": 5,
   "title": "Grammar, Translation and Claude Usage",
-  "status": "pending",
+  "status": "in_progress",
   "goal": "Align the two text tools and improve multi-profile quota scanability while preserving existing behavior.",
   "dependencies": [
     "Phase 4 has gate.status = passed and all required evidence recorded"
@@ -16,7 +16,8 @@
     "Use consistent input/output, processing, retry and copy states. Preserve user edits and input across recoverable errors.",
     "Maintain selected-text quick popup when available and clear manual paste fallback. Keep OCR text handoff intact.",
     "Order Claude Usage attention states deterministically. Show quota and reset separately for 5h and 7d, last refresh, stale/error and actual hook state.",
-    "Surface widget/alerts/hook settings separately from account list while preserving all keys and existing behaviors."
+    "Surface widget/alerts/hook settings separately from account list while preserving all keys and existing behaviors.",
+    "Keep edited output copyable and do not let a stale or failed inference overwrite a newer draft or an edit made while it was running. Verify that quota priority does not claim active blocking without the real hook state."
   ],
   "acceptance": {
     "automated": [
@@ -103,7 +104,8 @@
     }
   ],
   "test_notes": [
-    "Record the ten-profile task timing and fixture context. Automated ordering asserts correctness, while a separate timed UI check records the usability target."
+    "Record the ten-profile task timing and fixture context. Automated ordering asserts correctness, while a separate timed UI check records the usability target.",
+    "Use isolated synthetic profile and text fixtures, no real credentials. Native proof uses actual Windows shortcut, clipboard/edit gestures and timed urgency readout; fix/retest exact candidate before pass."
   ],
   "findings": [],
   "gate": {
@@ -118,5 +120,7 @@
       "affected tests re-passed after any fix"
     ],
     "rule": "Only the orchestrator can mark passed. Start the next phase only after this gate passes. The fix/retest milestone is inapplicable only when no post-review fix was needed and this is recorded."
-  }
+  },
+  "baseline": "0843876b73a41b99dff8c7eea6eb4fc06a17d3b1",
+  "started_at": "2026-11-26T18:50:31.948Z"
 }
