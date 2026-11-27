@@ -75,6 +75,16 @@
           "status": "failed_exploratory_targets",
           "case": "Identical clean English input independently translated and graded blind: current Marian preserved 61/122 facts and 2/7 critical negations clearly; current LFM preserved 25/122 and 1/7. Neither is selected. This clean-text diagnostic isolates translation errors independent of speech recognition. Next evaluate a stronger dedicated offline MT engine and alternative low-latency ASR; thresholds remain unchanged.",
           "evidence": "https://github.com/rua-den/sig4a/actions/runs/45981066971/artifacts/15188619626"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Alternative June English Zipformer: 48/48 utterances, 46/48 exact first words, p95 797 ms ASR-only on exact existing PCM, zero observed hallucinations in two silence controls. Tiny.en p95 996 ms with both silence cases nonempty. Oracle segments only, not live VAD or device proof.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45983133617/job/140451838363"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Official HY-MT Q4_K_M local text translation ran with p95 1178 ms on the original 48 clean references and 1695 ms on the new 24 technical reference inputs. Blind accuracy, full pipeline with real endpointing and physical Windows input still pending.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45983335033/job/140452517457"
         }
       ]
     },
