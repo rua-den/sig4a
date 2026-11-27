@@ -37,8 +37,17 @@ enum Ev {
     Done(u64, Result<Value, String>),
     QuickTool(String, String),
     OpenLive,
-    LiveNavigation,
+    LiveNavigation { replaces_document: bool },
     OcrDone(Option<u64>, Result<Option<region::Capture>, String>),
+}
+
+fn bundled_document(uri: &str) -> bool {
+    uri == "about:blank"
+}
+
+fn revoke_page_for_navigation(page: &mut Option<String>, heartbeat: &mut Option<Instant>, replaces_document: bool) {
+    *heartbeat = None;
+    if replaces_document { *page = None; }
 }
 
 fn bridge_result(id: u64, result: Result<Value, String>) -> String {
@@ -564,14 +573,15 @@ fn main() {
         .with_incognito(true)
         .with_navigation_handler(move |uri| {
             // NavigateToString is the bundled about:blank document. Block foreign top-level navigation.
-            let _ = nav_proxy.send_event(Ev::LiveNavigation);
-            uri == "about:blank"
+            let replaces_document = bundled_document(&uri);
+            let _ = nav_proxy.send_event(Ev::LiveNavigation { replaces_document });
+            replaces_document
         })
         .with_ipc_handler(move |req| {
             if let Ok(v) = serde_json::from_str::<Value>(req.body()) {
                 let id = v["id"].as_u64().unwrap_or(0);
                 let m = v["m"].as_str().unwrap_or("").to_string();
-                if m.starts_with("live_") && req.uri().to_string() != "about:blank" { return; }
+                if m.starts_with("live_") && !bundled_document(&req.uri().to_string()) { return; }
                 let a = v["a"].as_array().cloned().unwrap_or_default();
                 let _ = handler_proxy.send_event(Ev::Call(id, m, a));
             }
@@ -622,9 +632,13 @@ fn main() {
     event_loop.run(move |event, _, flow| {
         app.check_live_lease(Instant::now());
         match event {
-            Event::UserEvent(Ev::LiveNavigation) => {
+            Event::UserEvent(Ev::LiveNavigation { replaces_document }) => {
                 app.live.view_lost();
-                app.live_heartbeat = None;
+                // An accepted replacement forgets the old renderer nonce, even for
+                // a same-URI reload. A blocked attempt leaves the current document
+                // in place; it can acquire a fresh lease but never restart on its own.
+                revoke_page_for_navigation(&mut app.live_page, &mut app.live_heartbeat, replaces_document);
+                if replaces_document && !app.quick_mode { win::set_topmost(app.hwnd, false); }
             }
             Event::UserEvent(Ev::OpenLive) => {
                 if !app.quick_mode { app.live_pending = true; }
@@ -916,5 +930,31 @@ mod quick_presentation_tests {
         assert!(present.acknowledge(Some(token)));
         assert!(!present.awaiting_render()); // OCR model inference need not have finished
         assert_eq!(present.deadline, None);
+    }
+}
+
+#[cfg(test)]
+mod live_navigation_tests {
+    use super::*;
+
+    #[test]
+    fn replacement_revokes_old_nonce_and_denied_navigation_only_revokes_lease() {
+        let mut page = None;
+        let mut lease = None;
+        revoke_page_for_navigation(&mut page, &mut lease, bundled_document("about:blank"));
+        assert!(page.is_none() && lease.is_none(), "initial bundled navigation starts without a nonce");
+
+        let old = "8e4de8659de000dadb17df7800a17dae";
+        page = Some(old.to_owned());
+        lease = Some(Instant::now());
+        revoke_page_for_navigation(&mut page, &mut lease, bundled_document("https://sig4a.invalid/"));
+        assert_eq!(page.as_deref(), Some(old), "blocked navigation leaves the same document");
+        assert!(lease.is_none());
+
+        lease = Some(Instant::now());
+        revoke_page_for_navigation(&mut page, &mut lease, bundled_document("about:blank"));
+        assert_ne!(page.as_deref(), Some(old), "old-document heartbeats cannot match after reload");
+        assert!(page.is_none() && lease.is_none());
+        assert!(!bundled_document("about:blank#foreign"));
     }
 }

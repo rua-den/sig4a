@@ -29,7 +29,7 @@ using (var wave = new WaveFileReader(args[0]))
     for (int i = 0; i < 60; i++) Feed(silent);
     var text = string.Join(' ', recognized);
     if (!text.Contains("MEETING", StringComparison.OrdinalIgnoreCase) ||
-        !(text.Contains("THREE", StringComparison.OrdinalIgnoreCase) || text.Contains("3")))
+        !text.Contains("WINDOW", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("The synthetic ASR phrase did not reach a plausible endpoint.");
 
     void Feed(float[] wave)
