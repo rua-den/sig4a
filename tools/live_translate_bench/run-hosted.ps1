@@ -58,15 +58,28 @@ function Start-ProofServer($exe,$argv,$name,$port) {
   }
   throw "$name never became ready at its owned local port"
 }
+# TCP probe with no audio/text; stage comparison before firewall is changed.
+$probeIp = [System.Net.Dns]::GetHostAddresses('api.github.com') | Where-Object AddressFamily -eq InterNetwork | Select-Object -First 1 -ExpandProperty IPAddressToString
+$socketCheck = 'import socket,sys; s=socket.socket(); s.settimeout(2); connected=(s.connect_ex((sys.argv[1],443))==0); s.close(); assert connected==(sys.argv[2]=="allowed"), "Unexpected synthetic outbound result"; print("EGRESS_PROBE",sys.argv[2])'
+& $python -c $socketCheck $probeIp allowed
 $servers = [System.Collections.Generic.List[Diagnostics.Process]]::new()
 $rules = [System.Collections.Generic.List[string]]::new()
 try {
   foreach ($exe in @($python,$whisper,$llama)) {
     $name = 'sig4a-benchmark-' + [guid]::NewGuid()
-    if (-not (Get-NetFirewallProfile -PolicyStore ActiveStore | Where-Object Enabled).Count) { throw 'Windows Firewall must be enabled before benchmarking.' }
-    New-NetFirewallRule -Name $name -DisplayName $name -Direction Outbound -Action Block -Profile Any -Program $exe -RemoteAddress @('0.0.0.0-126.255.255.255','128.0.0.0-255.255.255.255','::/0') | Out-Null
+    $profiles = @(Get-NetConnectionProfile | ForEach-Object { if ($_.NetworkCategory -eq 'DomainAuthenticated') { 'Domain' } else { [string]$_.NetworkCategory } } | Sort-Object -Unique)
+    foreach ($profile in $profiles) {
+      if ((Get-NetFirewallProfile -PolicyStore ActiveStore -Name $profile).Enabled -ne 'True') { throw "Windows Firewall disabled for active profile $profile." }
+    }
+    if (!$profiles.Count) { throw 'No active network profile found.' }
+    New-NetFirewallRule -Name $name -DisplayName $name -Direction Outbound -Action Block -Profile Any -Program $exe -RemoteAddress Any | Out-Null
     $rules.Add($name)
+    $active = Get-NetFirewallRule -PolicyStore ActiveStore -Name $name
+    if ($active.Enabled -ne 'True' -or $active.Action -ne 'Block' -or $active.Direction -ne 'Outbound') {
+      throw 'Expected outbound block not present in active policy.'
+    }
   }
+  & $python -c $socketCheck $probeIp denied
   $w = Start-ProofServer $whisper @('--host','127.0.0.1','--port','18080','--language','en','--no-gpu','-t','4','-m',"`"$wolf`"") 'whisper' 18080
   $l = Start-ProofServer $llama @('--host','127.0.0.1','--port','18081','--alias','sig4a-lfm-q8','-ngl','0','-t','4','-c','2048','-m',"`"$lfm`"") 'llama' 18081
   $common = @('--audio',$wav,'--frozen',$frozen,'--translator-blob',$lfm,'--translator-backend','llama.cpp','--translator-version','b12776','--translator-port','18081','--revision',$rev)
