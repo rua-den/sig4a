@@ -1,0 +1,11 @@
+{
+  "title": "Local AI controls and translation reliability",
+  "baseline": "95139d455eda6ba04521534b0dcf7c2f4ba42b19",
+  "status": "in_progress",
+  "privacy": "Only existing local loopback backends. No cloud fallback, downloads, or Live Translate changes.",
+  "phases": [
+    {"id": "configuration", "status": "in_progress", "acceptance": ["Expose which backend/model will actually run and distinguish managed fixed model from external model", "Switch models explicitly and verify requests before and after save/reopen on the OCR popup/dashboard paths", "Allow saving optional per-task prompts with default/reset behavior and validate size"]},
+    {"id": "translation-output", "status": "pending", "acceptance": ["Reproduce repeated output from a single backend response; remove only provable repeated full translations of single-line input", "Preserve intentional repeated lines and formatting on multiline input; test both translation entry points", "Keep old settings compatible and reject stale configuration responses"]},
+    {"id": "verification", "status": "pending", "acceptance": ["Independent Advisor review of the final diff", "Run Windows WebView2 and native loopback-provider regressions, including save/reopen and explicit model change", "Only mark checks passed after verified evidence; no merge until review and tests pass"]}
+  ]
+}
