@@ -1,0 +1,29 @@
+{
+  "source": "independently authored synthetic technical meeting text; frozen before any inference",
+  "rows": [
+    ["H001", "Do not increase the retry limit from three to six until the dead-letter queue is empty.", ["no increase yet", "three to six", "dead-letter queue empty"], true],
+    ["H002", "Linh, please move the cache review to ten thirty on Thursday, not Tuesday.", ["Linh", "10:30", "Thursday not Tuesday", "cache review"], true],
+    ["H003", "Only five of the forty migration jobs failed, and none wrote to production.", ["five of forty failed", "none wrote to production"], true],
+    ["H004", "The checkout endpoint returned HTTP 409, not 429, for seven requests.", ["checkout endpoint", "409 not 429", "seven requests"], true],
+    ["H005", "If the lag reaches 250 milliseconds, page the on-call engineer but leave the scraper running.", ["250 milliseconds threshold", "page on-call", "leave scraper running"], false],
+    ["H006", "Please don't merge Priya's patch before Omar confirms that the backup can restore.", ["no merge before confirmation", "Priya patch", "Omar confirms backup restore"], true],
+    ["H007", "The invoice quoted 1,280 euros for twelve months, including tax.", ["1,280 euros", "twelve months", "includes tax"], false],
+    ["H008", "We're moving just the staging database to Singapore; production stays in Tokyo.", ["only staging moves to Singapore", "production remains in Tokyo"], false],
+    ["H009", "I said ship the alert dashboard, not the code that sends alerts.", ["ship alert dashboard", "do not ship alerting code"], true],
+    ["H010", "The memory cap is 768 megabytes per worker, and we're starting with four workers.", ["768 MB per worker", "start with four workers"], false],
+    ["H011", "Don't turn off encryption to hit the Friday deadline.", ["keep encryption enabled", "Friday deadline"], true],
+    ["H012", "Nadia's team will cover the first fifteen minutes, then we hand off to Bao.", ["Nadia team", "first fifteen minutes", "handoff to Bao"], false],
+    ["H013", "All samples except case R seventeen were anonymized before export.", ["R17 excluded", "anonymized before export"], true],
+    ["H014", "Set the timeout to one point five seconds, not fifteen.", ["1.5 seconds not 15", "timeout"], true],
+    ["H015", "The canary held at two percent of traffic overnight with no increase in errors.", ["canary two percent of traffic", "overnight", "no rise in errors"], true],
+    ["H016", "If nobody objects by noon, use the new pagination key and keep the old key readable.", ["condition no objections by noon", "use new pagination key", "old key still readable"], false],
+    ["H017", "The read replica in Frankfurt is healthy, but the primary is still unreachable.", ["Frankfurt read replica healthy", "primary still unreachable"], true],
+    ["H018", "Mei is assigned ticket K N nine four, and Diego owns the follow-up.", ["Mei owns KN94", "Diego owns follow-up"], false],
+    ["H019", "We have not renewed the license yet, so avoid deploying the connector on Monday.", ["license not renewed", "avoid Monday connector deployment"], true],
+    ["H020", "The highest reported rate was 0.08 percent, not eight percent.", ["0.08 percent not 8 percent", "highest reported"], true],
+    ["H021", "Move forty gigabytes to the archive bucket before deleting any local copies.", ["40 GB", "archive bucket first", "deletion after transfer"], false],
+    ["H022", "We can retry the import in staging, as long as it does not send customer notifications.", ["retry import on staging allowed", "must not notify customers"], true],
+    ["H023", "At 13:45 UTC, the index rebuilt successfully after the second attempt.", ["13:45 UTC", "successful index rebuild", "second attempt"], false],
+    ["H024", "Do not escalate ticket eight eighty until we know whether the outage is regional.", ["no escalation yet", "ticket 880", "whether outage is regional"], true]
+  ]
+}
