@@ -1,14 +1,41 @@
 {
   "title": "OCR popup configuration and focus persistence",
-  "status": "planned",
+  "status": "passed",
   "baseline": "a848df7a218ab0bd95a060191e85387080621d2a",
   "scope": "SIG4A OCR quick popup and dashboard Settings page",
   "goal": "Let users configure whether the OCR popup stays visible above other windows after clicking outside it; default to staying visible.",
   "acceptance": [
-    {"id":"OCRCFG-AUTO-1","case":"Config default and round-trip save preserve ocr_popup_always_on_top without changing unknown keys","status":"planned"},
-    {"id":"OCRCFG-AUTO-2","case":"Settings page exposes OCR Popup section and persists the toggle","status":"planned"},
-    {"id":"OCRCFG-WIN-1","case":"Quick OCR popup remains visible when focus moves to another window with default enabled; explicit Escape/Close still exits","status":"planned"}
+    {
+      "id": "OCRCFG-AUTO-1",
+      "case": "Config default and round-trip save preserve ocr_popup_always_on_top without changing unknown keys",
+      "status": "passed",
+      "evidence": "Locked cu-core library tests 3/3 including strict default and disabled policy. Combined with WebView2 save preserving unknown sibling keys: https://github.com/rua-den/sig4a/actions/runs/45938986325/job/140308662466"
+    },
+    {
+      "id": "OCRCFG-AUTO-2",
+      "case": "Settings page exposes OCR Popup section and persists the toggle",
+      "status": "passed",
+      "evidence": "Exact Windows WebView2 dashboard test 1/1 plus standard Windows build/API/dashboard smoke: https://github.com/rua-den/sig4a/actions/runs/45938986325/job/140308662466 and https://github.com/rua-den/sig4a/actions/runs/45938859561/job/140308266475"
+    },
+    {
+      "id": "OCRCFG-WIN-1",
+      "case": "Quick OCR popup remains visible when focus moves to another window with default enabled; explicit Escape/Close still exits",
+      "status": "passed",
+      "evidence": "Ordinary Windows release: physical hotkey/crop, clipboard, external activation without focus steal, overlapping HWND remains exposed, warm Escape restores original result, explicit Escape closes, disabled preference persists after restart and restores ordinary z-order: https://github.com/rua-den/sig4a/actions/runs/45938986325/job/140308662799"
+    }
   ],
-  "advisor":{"status":"pending"},
-  "gate":{"status":"pending","rule":"Do not mark passed until automated tests, independent Advisor review, and native Windows verification pass."}
+  "advisor": {
+    "status": "approved",
+    "evidence": "Independent GPT-6.2 Astra approved the exact product tree 8b5efae52f05ecc7b6c82eab1eff3fa151a285bd; its native and automated Windows conditions subsequently passed."
+  },
+  "gate": {
+    "status": "passed",
+    "rule": "Do not mark passed until automated tests, independent Advisor review, and native Windows verification pass.",
+    "closed_at": "2026-11-27T04:21:51.062Z"
+  },
+  "tested_product": "3082d491ad359b78a12071f6f5cf883f6e371fda",
+  "limitations": [
+    "Tested on hosted Windows Server 2025, not on the user's device.",
+    "The native interaction proof uses a deterministic loopback double with PNG crop validation; it does not measure model accuracy."
+  ]
 }
