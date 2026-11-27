@@ -46,6 +46,18 @@
           "status": "pending",
           "case": "Benchmark artifacts justify selected local engines and explicitly list limitations. Independent Advisor approval."
         }
+      ],
+      "observations": [
+        {
+          "status": "verified_partial",
+          "case": "Native WASAPI Windows compilation and invalid-endpoint/no-auto-fallback checks succeeded. Hosted machine had zero render and capture endpoints, so runtime capture and hardware are not verified.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45977648093/job/140433306980"
+        },
+        {
+          "status": "in_progress",
+          "case": "Exploratory synthetic Windows proof for two local ASR engines with LFM translator cleared by independent Advisor for hosted run. Not device proof, not a model decision, and not a phase pass.",
+          "evidence": "https://github.com/rua-den/sig4a/pull/26"
+        }
       ]
     },
     {
