@@ -110,7 +110,7 @@ $('wstyle').value = 'rings'; await save(); await sleep(400);
 tab('gen');await sleep(500);
 check('appearance tab is not shown by default (general tab is)', $('look').hidden === true && $('gen').hidden === false);
 const settingsTabs = [...document.querySelectorAll('#settings-box .tabs .tab')].map(button => button.id);
-check('settings retains its four legacy tabs and has dedicated OCR and shortcut tabs', JSON.stringify(settingsTabs) === JSON.stringify(['t-gen','t-look','t-alerts','t-hooks','t-ocrpopup','t-shortcuts']), JSON.stringify(settingsTabs));
+check('settings retains its four legacy tabs plus OCR, shortcuts and Quick Check', JSON.stringify(settingsTabs) === JSON.stringify(['t-gen','t-look','t-alerts','t-hooks','t-ocrpopup','t-shortcuts','t-quick-check-settings']), JSON.stringify(settingsTabs));
 const hClosed = document.documentElement.scrollHeight;
 tab('look'); await sleep(1200);
 g = geo(); const rows = document.querySelectorAll('#acclabels .al').length;

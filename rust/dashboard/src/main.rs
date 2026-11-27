@@ -9,6 +9,8 @@ mod geom;
 mod live;
 mod model_setup;
 mod model_setup_path;
+mod quick_check;
+mod quick_check_transport;
 mod region;
 mod setup;
 mod setup_trust;
@@ -28,7 +30,7 @@ use tao::window::{Window, WindowBuilder};
 use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass};
 use windows_sys::Win32::UI::WindowsAndMessaging::{WM_COPYDATA, WM_NCDESTROY};
-use wry::{http, WebContext, WebViewBuilder, WebViewBuilderExtWindows};
+use wry::{http, WebContext, WebViewBuilder, WebViewBuilderExtWindows, WebViewExtWindows};
 
 const UI_HTML: &str = include_str!("../../../ui.html");
 const SHIM: &str = include_str!("shim.js");
@@ -37,6 +39,9 @@ const SHIM: &str = include_str!("shim.js");
 const DASHBOARD_SCHEME: &str = "sig4a-bundled";
 const DASHBOARD_BUNDLE_URL: &str = "sig4a-bundled://localhost/dashboard.html";
 const DASHBOARD_DOCUMENT_URL: &str = "https://sig4a-bundled.localhost/dashboard.html";
+const QUICK_CHECK_DOCUMENT_URL: &str = "https://sig4a-bundled.localhost/dashboard.html?view=quick-check";
+const QUICK_CHECK_BUNDLE_URL: &str = "sig4a-bundled://localhost/dashboard.html?view=quick-check";
+
 
 const PERSIST_DELAY: Duration = Duration::from_millis(800);
 const READY_TIMEOUT: Duration = Duration::from_secs(4);
@@ -47,6 +52,8 @@ enum Ev {
     Call(u64, String, Vec<Value>),
     DiagnosticsPreview { id: u64, valid_args: bool },
     Done(u64, Result<Value, String>),
+    QcCall(quick_check::Call, u64, bool),
+    QcDone(quick_check::Call, u64, Value),
     QuickTool(String, String),
     OpenLive,
     LiveNavigation { replaces_document: bool },
@@ -54,7 +61,14 @@ enum Ev {
 }
 
 fn bundled_document(uri: &str) -> bool {
-    uri == DASHBOARD_DOCUMENT_URL
+    matches!(uri, DASHBOARD_DOCUMENT_URL | QUICK_CHECK_DOCUMENT_URL)
+}
+
+fn qc_reply(call: &quick_check::Call, epoch: u64, value: Value) -> String {
+    // Distinct from generic __cu_resolve. The document witness prevents an
+    // asynchronously evaluating script from settling a new document's reused id.
+    format!("window.__cu_qc_resolve?.({},{},{},{value})", call.id,
+        json!(call.document), json!(format!("{epoch:016x}")))
 }
 
 fn revoke_page_for_navigation(page: &mut Option<String>, heartbeat: &mut Option<Instant>, replaces_document: bool) {
@@ -70,6 +84,11 @@ fn bridge_result(id: u64, result: Result<Value, String>) -> String {
 }
 static OCR_BUSY: AtomicBool = AtomicBool::new(false);
 static AI_BUSY: AtomicBool = AtomicBool::new(false);
+
+struct QuickCheckAiSlot;
+impl Drop for QuickCheckAiSlot {
+    fn drop(&mut self) { AI_BUSY.store(false, Ordering::Release); }
+}
 
 /// Only the current hidden view can authorize showing the native popup.
 #[derive(Default)]
@@ -182,6 +201,7 @@ struct App {
     ready: bool,
     live: live::Live,
     model_setup: model_setup::ModelSetup,
+    qc: quick_check::View,
     live_page: Option<String>,
     live_heartbeat: Option<Instant>,
     live_pending: bool,
@@ -217,6 +237,7 @@ impl App {
         win::hide(self.hwnd);
         self.live.close();
         self.model_setup.view_lost();
+        self.qc.invalidate();
         if !self.quick_mode { self.persist_now(); }
         win::terminate()
     }
@@ -640,13 +661,17 @@ fn main() {
     let mut ctx = WebContext::new(Some(if quick_mode { storage_dir_named(&core.paths.data, "webview-quick") } else { storage_dir(&core.paths.data) }));
     let handler_proxy = proxy.clone();
     let nav_proxy = proxy.clone();
+    let qc_gate = quick_check::Gate::default();
+    let qc_ipc_gate = qc_gate.clone();
+    let qc_nav_gate = qc_gate.clone();
     let mode_script = format!("window.__SIG4A_RUST_LIVE__=true;window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
     let page = core.page(UI_HTML, quick_mode).into_bytes();
     let built = WebViewBuilder::new_with_web_context(&mut ctx)
         .with_https_scheme(true)
         .with_custom_protocol(DASHBOARD_SCHEME.into(), move |_, request| {
             // Windows Wry reverts the URL to the custom scheme in this callback.
-            let allowed = request.method() == http::Method::GET && request.uri().to_string() == DASHBOARD_BUNDLE_URL;
+            let allowed = request.method() == http::Method::GET &&
+                matches!(request.uri().to_string().as_str(), DASHBOARD_BUNDLE_URL | QUICK_CHECK_BUNDLE_URL);
             let mut response = http::Response::builder()
                 .header("Cache-Control", "no-store")
                 .header("X-Content-Type-Options", "nosniff");
@@ -668,21 +693,34 @@ fn main() {
             // Allow only the fixed bundled Windows URL. A navigation request
             // may differ from a committed document origin (e.g. NavigateToString).
             let replaces_document = bundled_document(&uri);
+            // Covers same-URL reload synchronously even when Source does not change.
+            qc_nav_gate.invalidate();
             let _ = nav_proxy.send_event(Ev::LiveNavigation { replaces_document });
             replaces_document
         })
         .with_ipc_handler(move |req| {
             // The script bridge is globally injected by Wry; validate the actual WebView2 source.
-            if !bundled_document(&req.uri().to_string()) { return; }
-            if let Ok(v) = serde_json::from_str::<Value>(req.body()) {
+            let source = req.uri().to_string();
+            if !bundled_document(&source) { return; }
+            let body = req.body();
+            if body.starts_with(quick_check::PREFIX) {
+                if let Some(call) = quick_check::parse(body) {
+                    let _ = handler_proxy.send_event(Ev::QcCall(call, qc_ipc_gate.epoch(), source == QUICK_CHECK_DOCUMENT_URL));
+                }
+                return;
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(body) {
+                let m = v["m"].as_str().unwrap_or("");
+                // The generic bridge cannot invoke the structured Quick Check methods.
+                if m.starts_with("qc_") { return; }
                 let id = v["id"].as_u64().unwrap_or(0);
-                let m = v["m"].as_str().unwrap_or("").to_string();
                 if m == "diagnostics_export_preview" {
                     let _ = handler_proxy.send_event(Ev::DiagnosticsPreview {
                         id, valid_args: diagnostics_export::has_exact_empty_args(&v),
                     });
                     return;
                 }
+                let m = m.to_string();
                 let a = v["a"].as_array().cloned().unwrap_or_default();
                 let _ = handler_proxy.send_event(Ev::Call(id, m, a));
             }
@@ -694,6 +732,21 @@ fn main() {
             &core,
             &format!("WebView2 không khởi động được: {e}\nCài Microsoft Edge WebView2 Runtime rồi mở lại."),
         ),
+    };
+
+    let qc_source_gate = qc_gate.clone();
+    let mut qc_source_event = 0;
+    // Wry's navigation handler does not cover same-document history transitions.
+    // Track actual CoreWebView2 Source changes too; no string provided by the renderer
+    // can mint a native scope for another committed URL.
+    let qc_route_supported = unsafe {
+        webview.webview().add_SourceChanged(
+            &webview2_com::SourceChangedEventHandler::create(Box::new(move |_, _| {
+                qc_source_gate.invalidate();
+                Ok(())
+            })),
+            &mut qc_source_event,
+        ).is_ok()
     };
 
     let mut app = App {
@@ -710,6 +763,7 @@ fn main() {
         ready: false,
         live: live::Live::default(),
         model_setup: model_setup::ModelSetup::default(),
+        qc: quick_check::View::default(),
         live_page: None,
         live_heartbeat: None,
         live_pending: startup_live,
@@ -721,6 +775,8 @@ fn main() {
     let started = Instant::now();
     let mut shown = false;
     let mut e2e_started = false;
+    #[cfg(debug_assertions)]
+    let mut qc_scripted_fixture = false;
     // "shown" means a panel has previously been presented; it stays true
     // while a new native picker temporarily hides that panel.
     let mut hidden_for_picker = startup_ocr;
@@ -733,8 +789,64 @@ fn main() {
 
     event_loop.run(move |event, _, flow| {
         app.check_live_lease(Instant::now());
+        if !win::visible_live_window(app.hwnd) { app.qc.invalidate(); }
         match event {
+            Event::UserEvent(Ev::QcCall(call, epoch, quick_source)) => {
+                use quick_check::Action;
+                let committed = qc_route_supported && quick_source && epoch == qc_gate.epoch() &&
+                    webview.url().is_ok_and(|uri| uri == QUICK_CHECK_DOCUMENT_URL);
+                let scoped = || app.qc.matches(epoch, &call.document, call.scope.as_deref());
+                let reply = match call.action {
+                    _ if app.quick_mode || !committed || !win::visible_live_window(app.hwnd) => json!({"code":"view_lost"}),
+                    Action::Enter => match app.qc.enter(epoch, call.document.clone()) {
+                        Some(scope) => json!({"code":"ready","scope":scope}),
+                        None => json!({"code":"view_lost"}),
+                    },
+                    Action::Exit => {
+                        if scoped() { app.qc.invalidate(); }
+                        Value::Null
+                    }
+                    Action::Work(_) if !scoped() => json!({"code":"view_lost"}),
+                    Action::Work(_) if setup::status()["active"].as_bool() == Some(true) => json!({"code":"busy"}),
+                    Action::Work(_) if AI_BUSY.swap(true, Ordering::AcqRel) => json!({"code":"busy"}),
+                    Action::Work(operation) => {
+                        let active = app.qc.admit(call.id, &qc_gate, epoch);
+                        let path = app.core.paths.config.clone();
+                        let sender = proxy.clone();
+                        #[cfg(debug_assertions)]
+                        let scripted_fixture = qc_scripted_fixture;
+                        let reply_on_failure = qc_reply(&call, epoch, json!({"code":"internal"}));
+                        let launched = std::thread::Builder::new().name("sig4a-quick-check".into()).spawn(move || {
+                            let slot = QuickCheckAiSlot;
+                            #[cfg(debug_assertions)]
+                            let result = if scripted_fixture {
+                                quick_check::scripted_fixture(operation, &active)
+                            } else { quick_check::execute(operation, &path, &active) };
+                            #[cfg(not(debug_assertions))]
+                            let result = quick_check::execute(operation, &path, &active);
+                            drop(slot);
+                            let _ = sender.send_event(Ev::QcDone(call, epoch, result));
+                        });
+                        if launched.is_err() {
+                            app.qc.cancel_work();
+                            AI_BUSY.store(false, Ordering::Release);
+                            let _ = webview.evaluate_script(&reply_on_failure);
+                        }
+                        return;
+                    }
+                };
+                let _ = webview.evaluate_script(&qc_reply(&call, epoch, reply));
+            }
+            Event::UserEvent(Ev::QcDone(call, epoch, result)) => {
+                if epoch == qc_gate.epoch() && win::visible_live_window(app.hwnd) &&
+                    webview.url().is_ok_and(|uri| uri == QUICK_CHECK_DOCUMENT_URL) &&
+                    app.qc.finish(call.id, epoch, &call.document, call.scope.as_deref())
+                {
+                    let _ = webview.evaluate_script(&qc_reply(&call, epoch, result));
+                }
+            }
             Event::UserEvent(Ev::LiveNavigation { replaces_document }) => {
+                app.qc.invalidate();
                 app.live.view_lost();
                 app.model_setup.view_lost();
                 // An accepted replacement forgets the old renderer nonce, even for
@@ -828,6 +940,16 @@ fn main() {
                 }
             }
             Event::UserEvent(Ev::Call(id, m, a)) => {
+                if m == "save" {
+                    app.qc.cancel_work();
+                    let _ = webview.evaluate_script("window.__cu_qc_forget?.()");
+                }
+                #[cfg(debug_assertions)]
+                if m == "__e2e_quick_check_fixture" && e2e.is_some() && a.is_empty() {
+                    qc_scripted_fixture = true;
+                    let _ = webview.evaluate_script(&bridge_result(id, Ok(Value::Bool(true))));
+                    return;
+                }
                 #[cfg(any(debug_assertions, feature = "e2e"))]
                 if m == "__e2e_suspend_tao" && e2e.is_some() {
                     // Prove the watchdog can kill the helper with neither renderer beats

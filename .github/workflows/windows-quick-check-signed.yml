@@ -1,0 +1,61 @@
+name: Windows signed Quick Check proof
+on:
+  pull_request:
+    branches: [main]
+    types: [labeled]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  windows-quick-check-signed:
+    # No activity or multi-GB downloads on ordinary PR opening, pushes,
+    # unrelated labels, or externally owned branches.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dot/quick-check') ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'dot/quick-check' &&
+      github.event.label.name == 'proof:quick-check-signed')
+    runs-on: windows-2025
+    timeout-minutes: 65
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test signed-proof evidence sanitization
+        run: ./.github/quick-check/proof-evidence.test.ps1
+      - name: Build independent ordinary candidate ZIP without the E2E bridge
+        run: ./build.ps1
+      - name: Prove both fixed samples in the separately built extracted ZIP
+        env:
+          SIG4A_QC_PROOF_MANIFEST: b37049369adfe3d2b653af0ab301a062ca5cbe96ace6aa0d3f2559ee9b563fc2
+        run: |
+          $files = @(Get-ChildItem dist -File -Filter 'sig4a-*-windows.zip')
+          if ($files.Count -ne 1) { throw 'Expected one app ZIP.' }
+          $archive = $files[0]
+          $sha = (Get-FileHash -LiteralPath $archive.FullName -Algorithm SHA256).Hash
+          $revision = git rev-parse HEAD
+          Write-Host "Signed proof build revision=$revision SHA256=$sha"
+          ./.github/live-translate/smoke-package.ps1 -Archive $archive.FullName -RealGemmaManifestSha256 $env:SIG4A_QC_PROOF_MANIFEST
+          if ((Get-FileHash -LiteralPath $archive.FullName -Algorithm SHA256).Hash -ne $sha) {
+            throw 'Tested ordinary archive modified during smoke.'
+          }
+          $revision | Set-Content dist/REVISION.txt
+          "$sha  $($archive.Name)" | Set-Content dist/SHA256.txt
+          'Independently built ordinary ZIP tested with signed Ollama and both pinned local Gemma samples; not the separately built standard workflow artifact.' | Set-Content dist/PROVENANCE.txt
+      - name: Preserve the exact ordinary archive tested by signed proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sig4a-quick-check-signed-tested-windows
+          path: |
+            dist/sig4a-*-windows.zip
+            dist/REVISION.txt
+            dist/SHA256.txt
+            dist/PROVENANCE.txt
+          retention-days: 7
+          if-no-files-found: error

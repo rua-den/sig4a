@@ -77,6 +77,14 @@ footer .spin{display:inline-block;margin-right:6px;vertical-align:-1px}
 .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:-2px 0 10px}.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);font:inherit;padding:2px 10px;cursor:pointer}
 .tab:hover{color:var(--fg)}.tab.on{color:var(--accent);border-bottom-color:var(--accent)}[hidden]{display:none!important}
 .compact .tabs{margin-bottom:6px}
+/* Keep the eight Settings controls on one row at the regular dashboard width.
+   At 420px the same buttons wrap naturally, without clipped labels or hiding Quick Check. */
+#settings-box>.tabs{column-gap:4px;row-gap:3px;align-items:center}
+#settings-box>.tabs .tab{white-space:nowrap;font-size:12px;padding-inline:5px}
+#settings-box>.tabs #settings-ai{white-space:nowrap;font-size:12px;padding:2px 7px}
+#settings-box>.tabs button:focus-visible{outline:1px solid var(--accent);outline-offset:1px;border-radius:3px}
+@media (min-width:755px){#settings-box>.tabs{flex-wrap:nowrap}}
+
 .look>summary{cursor:pointer;color:var(--accent);font-size:12px;list-style:none;padding:2px 0}.look>summary::-webkit-details-marker{display:none}
 .look>summary::before{content:'▸ ';color:var(--dim)}.look[open]>summary::before{content:'▾ '}
 .al{display:grid;grid-template-columns:1fr 92px auto;gap:8px;align-items:center}.al span{color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -131,6 +139,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
 .quick .toolnav,.quick .wb:not(.x),.quick footer,.quick #tool-overview,.quick #tool-usage,.quick #tool-localai{display:none}.quick main{padding:10px 12px}.quick .title{height:30px}.quick .toolpanel.on{display:block}.quick .box{padding:8px 10px}.quick .result{max-height:118px;overflow:auto}.quick textarea{min-height:58px}.quick #ocr-preview{max-height:82px}.quick .toolactions{margin-top:7px}
 .quick.localai-route #tool-localai.on{display:block}.quick #ocr-preview,.quick #ocr-in{display:none}.quick #ocr-status{display:block}.quick #tool-ocr .hint{display:none}.quick #tool-ocr .result{min-height:122px;max-height:156px}.quick .accent-picker{display:none}
 #quick-open-toolbox{display:none;margin-right:6px}.quick #quick-open-toolbox{display:block}.shortcut-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}.shortcut-fields input{width:100%}.shortcut-settings{grid-column:1/-1}.route-settings #settings-box:has(#shortcuts:not([hidden]))>.row{display:none}
+#quick-check-settings{display:block}.quick-check-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px;margin-top:10px}.quick-check-card{min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px}.quick-check-card h3{margin:0 0 6px;font-size:1em;color:var(--accent)}.quick-check-card p{margin:6px 0;overflow-wrap:anywhere}.quick-check-card ul{margin:6px 0;padding-left:18px}.quick-check-card output{display:block;white-space:pre-wrap;overflow-wrap:anywhere}.quick-check-card output[hidden],#quick-check-settings[hidden]{display:none}.route-settings #settings-box:has(#quick-check-settings:not([hidden]))>.row{display:none}
 .ocr-popup .rz,.ocr-popup #ocr-remove{display:none}.ocr-popup #tool-ocr .result{min-height:44px;max-height:111px;overflow:auto;overflow-wrap:anywhere}.ocr-popup #ocr-out{margin-top:6px}.ocr-inline{margin-top:8px}.ocr-inline .toolactions{margin-top:5px}.ocr-popup #tool-ocr .toolactions{gap:5px}.ocr-popup #ocr-out:focus-visible,.ocr-popup #ocr-translation-out:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.ai-prompts{margin-top:12px}.ai-prompts textarea{min-height:75px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable]{cursor:text}.result[data-placeholder]:empty::before{content:attr(data-placeholder);color:var(--dim);pointer-events:none}.text-status{margin:7px 0 4px;overflow-wrap:anywhere}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
 #live-check-result{margin-top:8px}
@@ -208,7 +217,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
  <section class="toolpanel" id="tool-usage">
  <div class="box" id="usage-accounts"><div class="lbl">CLAUDE USAGE</div><div class="usage-actions"><button class="b" id="rbtn" onclick="refresh()">Làm mới quota</button> <span id="usage-policy-status" class="hint" role="status" hidden></span></div><div id="accs"></div></div>
  <div class="box" id="settings-box"><div class="lbl" id="settings-label">SETTINGS</div><div class="lbl" id="clean-label">DỌN Ổ</div>
-  <div class="tabs"><button class="tab on" id="t-gen" onclick="tab('gen')">Chung</button><button class="tab" id="t-look" onclick="tab('look')">Widget</button><button class="tab" id="t-alerts" onclick="tab('alerts')">Cảnh báo</button><button class="tab" id="t-hooks" onclick="tab('hooks')">Hook CLI</button><button class="tab" id="t-ocrpopup" onclick="tab('ocrpopup')">OCR Popup</button><button class="tab" id="t-shortcuts" onclick="tab('shortcuts')">Phím tắt</button><button class="b" id="settings-ai" onclick="toolTab('localai')">Local AI readiness</button></div>
+  <div class="tabs"><button class="tab on" id="t-gen" onclick="tab('gen')">Chung</button><button class="tab" id="t-look" onclick="tab('look')">Widget</button><button class="tab" id="t-alerts" onclick="tab('alerts')">Cảnh báo</button><button class="tab" id="t-hooks" onclick="tab('hooks')">Hook CLI</button><button class="tab" id="t-ocrpopup" onclick="tab('ocrpopup')">OCR Popup</button><button class="tab" id="t-shortcuts" onclick="tab('shortcuts')">Phím tắt</button><button class="tab" id="t-quick-check-settings" onclick="tab('quick-check-settings')" hidden>Kiểm tra nhanh</button><button class="b" id="settings-ai" onclick="toolTab('localai')">Local AI readiness</button></div>
   <div class="set" id="gen">
    <label>Refresh (giây, tối thiểu 90)<input type="number" id="interval" min="90"></label>
    <label class="chk"><input type="checkbox" id="autosw">Chạy cùng Windows (ẩn ở tray)</label>
@@ -249,6 +258,22 @@ textarea:focus{outline:0;border-color:var(--accent)}
     <p class="hint" id="shortcuts-status" role="status"></p>
    </div>
   </div>
+  <section class="set" id="quick-check-settings" aria-label="Kiểm tra nhanh" hidden>
+   <div class="toolactions"><button class="b" id="qc-refresh" type="button" disabled>Làm mới trạng thái</button><span class="hint" id="qc-refresh-status" role="status">Chưa kiểm tra.</span></div>
+   <div class="quick-check-grid">
+    <section class="quick-check-card"><h3>Local AI</h3><p id="qc-ai-config" class="hint">Chưa có cấu hình.</p><p id="qc-ai-status" class="hint">Chưa kiểm tra kết nối hoặc model.</p><button class="b" type="button" id="qc-open-ai" onclick="openQcDestination('localai')">Mở Local AI</button></section>
+    <section class="quick-check-card"><h3>Live Translate</h3><p id="qc-live-status" class="hint">Chưa kiểm tra bộ chạy. Thiết bị và nhận dạng chưa được thử.</p><button class="b" type="button" id="qc-open-live" onclick="openQcDestination('live')">Mở Live Translate</button></section>
+    <section class="quick-check-card"><h3>Thông báo Windows</h3><p id="qc-notify-status" class="hint">Chưa có trạng thái đã lưu.</p><p class="hint">Chưa xác minh Windows hiển thị thông báo.</p><button class="b" type="button" id="qc-open-alerts" onclick="openQcDestination('alerts')">Mở Cảnh báo</button></section>
+    <section class="quick-check-card"><h3>Hook CLI</h3><p class="hint">Chưa xác minh chạy từ CLI. Xem cấu hình từng profile trong Hook CLI.</p><button class="b" type="button" id="qc-open-hooks" onclick="openQcDestination('hooks')">Mở Hook CLI</button></section>
+    <section class="quick-check-card"><h3>Phím tắt</h3><p class="hint">Cấu hình đã lưu · chưa thử tổ hợp trong Windows.</p><ul class="hint" id="qc-shortcut-status"></ul><button class="b" type="button" id="qc-open-shortcuts" onclick="openQcDestination('shortcuts')">Mở Phím tắt</button></section>
+   </div>
+   <div class="quick-check-grid" aria-label="Mẫu thử Local AI">
+    <section class="quick-check-card"><h3>Translation</h3><p class="hint">Mẫu Anh → Việt: “The robot has two blue boxes.”</p><button class="b" type="button" id="qc-translation" disabled>Thử Translation</button><div id="qc-translation-status-scope" role="group" aria-label="Trạng thái mẫu Translation"><p class="hint" id="qc-translation-status" role="status">Chưa thử.</p></div><output id="qc-translation-output" hidden></output></section>
+    <section class="quick-check-card"><h3>Grammar</h3><p class="hint">Mẫu: “Every morning the robot carry two blue boxes.”</p><button class="b" type="button" id="qc-grammar" disabled>Thử Grammar</button><div id="qc-grammar-status-scope" role="group" aria-label="Trạng thái mẫu Grammar"><p class="hint" id="qc-grammar-status" role="status">Chưa thử.</p></div><output id="qc-grammar-output" hidden></output></section>
+   </div>
+   <p class="hint">Mẫu có sẵn, không dùng văn bản hay prompt riêng của bạn. Kết quả chỉ áp dụng cho câu thử này.</p>
+   <details class="hint"><summary>Nếu Ollama chưa báo tắt Cloud</summary><p>Trong PowerShell, đặt <code>$env:OLLAMA_NO_CLOUD='1'</code> trước khi tự khởi động Ollama bằng <code>ollama serve</code>. Chỉ cần làm khi bạn muốn dùng mẫu thử; nếu Ollama đang chạy sẵn, hãy tự thoát phiên đó trước. Sig4a không đổi biến, cài tải hoặc khởi động lại Ollama.</p></details>
+  </section>
   <div class="set" id="ocrpopup" hidden>
    <label class="chk"><input type="checkbox" id="ocr-popup-topmost">Giữ popup OCR nổi khi bấm ra ngoài</label>
    <div class="grp" style="grid-column:span 6">Mặc định bật. Khi tắt, cửa sổ khác có thể che popup OCR. Thay đổi áp dụng từ lần chụp tiếp theo.</div>
@@ -511,6 +536,7 @@ function renderQuotaCards(id,rows,compact,empty){
  return changed;
 }
 function apply(s){if(!s)return 2000;
+ updateQuickSnapshot(s);
  if(!loaded){cfg=s.cfg;if(s.shortcuts)applyShortcuts(s.shortcuts);applyAccent(cfg.dashboard_accent);applySavedAiSettings(savedAiConfig(cfg));$('interval').value=cfg.interval_sec;$('warn').value=cfg.warn_pct;$('block').value=cfg.block_pct;
   $('blocksw').checked=cfg.block_enabled;$('wsize').value=cfg.widget_size;$('wstyle').value=cfg.widget_style||'rings';$('wen').checked=cfg.widget_enabled;$('autosw').checked=cfg.autostart;$('trefsw').checked=cfg.token_refresh!==false;
   $('ocr-popup-topmost').checked=cfg.ocr_popup_always_on_top!==false;$('wlabel').value=cfg.widget_label||'alias';$('wfont').value=cfg.widget_font||100;$('wopac').value=cfg.widget_opacity||100;$('wtheme').value=cfg.widget_theme||'auto';$('wplate').checked=!!cfg.widget_plate;const on=(k,d)=>cfg[k]===undefined?d:!!cfg[k];$('sl').checked=on('widget_show_label',true);$('s5').checked=on('widget_show_5h',true);$('s7').checked=on('widget_show_7d',true);const rm=on('widget_reset',true);$('r5').checked=rm&&on('widget_show_reset5',true);$('r7').checked=rm&&on('widget_show_reset7',true);$('wtip').checked=on('widget_tooltip',true);$('wsort').value=cfg.widget_sort||'config';$('wmax').value=cfg.widget_max_cells||0;$('nen').checked=cfg.notify_enabled;$('nwarn').checked=cfg.notify_warn;$('nblock').checked=cfg.notify_block;loaded=true;loadCleanConfig(cfg);settingsBaseline=collectSettings()}
@@ -736,10 +762,149 @@ async function confirmCleanReview(){
 $('cleanlist').addEventListener('change',()=>{cancelCleanReview();syncCleanControls()});
 for(const id of ['croots','cdays','dmin'])$(id).addEventListener('input',()=>{cancelCleanReview();renderCleanConfig()});
 let activeRoute='overview',activeAi='grammar';
+let settingsTab='gen',qcSaved=null,qcNonce=null,qcBusy=false,qcReady=false,qcRun=0,qcOpenEpoch=0,qcOpening=false;
+const qcActive=()=>activeRoute==='settings'&&settingsTab==='quick-check-settings'&&!window.__QUICK_MODE__;
+const qcReasons={
+ unsupported_selection:'Mẫu thử chỉ hỗ trợ Ollama chính thức trên cổng mặc định với gemma4:e2b đã có sẵn.',
+ unverified_owner:'Chưa xác minh được tiến trình Ollama chính thức trên cổng mặc định.',
+ ollama_unreachable:'Không kết nối được Ollama ở cổng mặc định.',
+ cloud_unverified:'Ollama chưa báo Cloud tắt bằng biến môi trường. Xem thiết lập Ollama trong Local AI.',
+ unsupported_response:'Phiên bản hoặc phản hồi của Ollama chưa được hỗ trợ.',
+ unverified_alias:'Không xác minh được model local đã chọn.',
+ model_missing:'Chưa có gemma4:e2b trong Ollama. Xem Local AI.',
+ timeout:'Đã hết thời gian chờ. Không tự chạy lại.',
+ invalid_response:'Phản hồi không hợp lệ hoặc chưa hoàn tất.',
+ config_unavailable:'Không đọc được cấu hình đã lưu.',
+ configuration_changed:'Cấu hình đã đổi. Hãy thử lại.',
+ busy:'Local AI đang bận. Hãy thử lại khi công việc hiện tại kết thúc.',
+ view_lost:'Phiên kiểm tra đã đóng. Mở lại mục này để thử.',
+ internal:'Không thể bắt đầu kiểm tra.',
+ cancelled:'Đã huỷ kiểm tra.'
+};
+function syncQcControls(){
+ for(const key of ['refresh','translation','grammar'])$('qc-'+key).disabled=!qcReady||qcBusy;
+}
+function resetQcEvidence(){
+ setText('qc-refresh-status','Chưa kiểm tra.');
+ setText('qc-ai-status','Chưa kiểm tra kết nối hoặc model.');
+ setText('qc-live-status','Chưa kiểm tra bộ chạy. Thiết bị và nhận dạng chưa được thử.');
+ for(const key of ['translation','grammar']){
+  setText('qc-'+key+'-status','Chưa thử.');
+  const output=$('qc-'+key+'-output');output.textContent='';output.hidden=true;
+ }
+}
+function setQcUrl(on){
+ const query=on?'?view=quick-check':'';
+ if(location.search!==query)history.replaceState(null,'','/dashboard.html'+query);
+}
+function closeQc(dropUrl=true){
+ const old=qcNonce;qcNonce=null;qcBusy=false;qcReady=false;qcOpening=false;qcRun++;qcOpenEpoch++;
+ window.__cu_qc_forget?.();
+ resetQcEvidence();syncQcControls();
+ if(old)void api.qc_exit(old).catch(()=>{});
+ if(dropUrl)setQcUrl(false);
+}
+async function openQc(){
+ if(!qcActive()||qcNonce||qcOpening||document.hidden)return;
+ try { setQcUrl(true); } catch (_) {
+  setText('qc-refresh-status',qcReasons.view_lost);return;
+ }
+ qcOpening=true;
+ const epoch=++qcOpenEpoch;
+ try{
+  // SourceChanged and IPC are native callbacks. Give the same-document URI
+  // time to commit before asking for a capability; this never starts work.
+  for(let i=0;i<3;i++){
+   await new Promise(resolve=>setTimeout(resolve,60));
+   if(epoch!==qcOpenEpoch||!qcActive()||document.hidden)return;
+   const result=await api.qc_enter();
+   if(epoch!==qcOpenEpoch||!qcActive())return;
+   if(result?.code==='ready'&&typeof result.scope==='string'){
+    qcNonce=result.scope;qcReady=true;syncQcControls();return;
+   }
+  }
+  setText('qc-refresh-status',qcReasons.view_lost);
+ }catch(_){if(epoch===qcOpenEpoch)setText('qc-refresh-status','Không kết nối được với dashboard Windows.')}
+ finally{if(epoch===qcOpenEpoch)qcOpening=false}
+}
+function openQcDestination(destination){
+ const tabDest=['alerts','hooks','shortcuts'].includes(destination);
+ if(tabDest){tab(destination);$('t-'+destination)?.focus({preventScroll:true});return}
+ toolTab(destination);
+ const panel=$('tool-'+destination);
+ const heading=panel?.querySelector('.lbl');
+ if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true})}
+}
+async function runQc(key){
+ if(!qcActive()||!qcReady||!qcNonce||qcBusy)return;
+ const nonce=qcNonce,run=++qcRun,refresh=key==='refresh',status='qc-'+key+'-status';
+ const fixtureLabel=key==='translation'?'Translation':'Grammar';
+ const show=msg=>setText(status,refresh?msg:fixtureLabel+' · '+msg);
+ qcBusy=true;syncQcControls();
+ if(!refresh){const output=$('qc-'+key+'-output');output.hidden=true;output.textContent=''}
+ show(refresh?'Đang kiểm tra trạng thái…':'Đang chạy mẫu local…');
+ try{
+  const result=await api['qc_'+key](nonce);
+  if(run!==qcRun||qcNonce!==nonce||!qcActive())return;
+  if(!result){show('Kết quả không còn hiệu lực. Thử lại nếu cần.');return}
+  if(refresh){
+   if(typeof result.helper==='boolean')setText('qc-live-status',result.helper? 'Đã thấy bộ chạy trong gói. Chưa thử thiết bị hoặc nhận dạng.':
+    'Thiếu bộ chạy Live Translate. Dùng gói ZIP đầy đủ của Sig4a.');
+   if(result.code==='inventory'){
+    setText('qc-ai-status',result.listed?'Ollama phản hồi và có model đã chọn trong danh sách. Chưa chạy mẫu.':
+     'Ollama phản hồi; không thấy model đã chọn trong danh sách.');
+    setText(status,'Vừa kiểm tra.');
+   }else{
+    setText('qc-ai-status',result.code==='unsupported_selection'?
+      'Không kiểm tra danh sách: Làm mới chỉ hỗ trợ Ollama chính thức ở cổng mặc định.':
+      qcReasons[result.code]||'Không xác minh được Local AI.');
+    setText(status,'Đã làm mới; có trạng thái chưa xác minh.');
+   }
+  }else{
+   const ok=result.code==='match',mismatch=result.code==='mismatch';
+   const ms=Number.isFinite(result.ms)?' · '+(result.ms/1000).toFixed(2)+' giây':'';
+   show((ok?'Mẫu khớp. Ollama báo Cloud đã tắt.':mismatch?'Có phản hồi, mẫu chưa khớp; xem kết quả.':
+    qcReasons[result.code]||'Không xác minh được mẫu.')+ms);
+   if((ok||mismatch)&&typeof result.preview==='string'){
+    const output=$('qc-'+key+'-output');output.textContent=result.preview;output.hidden=false;
+   }
+  }
+ }catch(_){if(run===qcRun&&qcNonce===nonce)show('Không kết nối được với dashboard Windows.')}
+ finally{if(run===qcRun){qcBusy=false;syncQcControls();fit()}}
+}
+for(const key of ['refresh','translation','grammar'])$('qc-'+key).addEventListener('click',()=>void runQc(key));
+document.addEventListener('visibilitychange',()=>{if(!qcActive())return;if(document.hidden)closeQc(false);else openQc()});
+const qcBounded=(value,max)=>typeof value==='string'?value.replace(/[\x00-\x1f\x7f]/g,'').slice(0,max):'';
+function updateQuickSnapshot(state){
+ const c=state?.cfg;if(!c||typeof c!=='object')return;
+ const aiKey=JSON.stringify([c.local_ai_managed,c.local_ai_backend,c.local_ai_endpoint,c.local_ai_model]);
+ if(qcSaved&&qcSaved.aiKey!==aiKey&&qcActive()){
+  qcRun++;qcBusy=false;resetQcEvidence();syncQcControls();
+ }
+ qcSaved={aiKey,managed:c.local_ai_managed===true,provider:c.local_ai_backend==='llama_cpp'?'llama.cpp':'Ollama',
+  model:qcBounded(c.local_ai_model,128),notify:c.notify_enabled===true,warn:c.notify_warn===true,block:c.notify_block===true,
+  shortcuts:Object.fromEntries(['toolbox','grammar','translation','ocr','live'].map(key=>[key,qcBounded(state.shortcuts?.[key],40)])),
+  hasShortcuts:!!state.shortcuts};
+ if(activeRoute==='settings'&&settingsTab==='quick-check-settings')renderQuickSaved();
+}
+function renderQuickSaved(){
+ if(!qcSaved)return;
+ setText('qc-ai-config',qcSaved.managed?'Đã chọn LFM đi kèm · Chưa kiểm tra':
+  'Đã lưu: '+qcSaved.provider+' · '+(qcSaved.model||'Chưa có model trong cấu hình'));
+ setText('qc-notify-status',qcSaved.notify?'Đang bật trong Sig4a · '+([qcSaved.warn?'Cảnh báo':'',qcSaved.block?'Ngưỡng chặn':''].filter(Boolean).join(' / ')||'Chưa chọn loại'):'Đang tắt trong Sig4a.');
+ const list=$('qc-shortcut-status');
+ if(!qcSaved.hasShortcuts)return;
+ const names={toolbox:'Tool Box',grammar:'Grammar',translation:'Translation',ocr:'OCR',live:'Live Translate'};
+ const rows=Object.entries(qcSaved.shortcuts).map(([k,chord])=>names[k]+': '+(chord||'Chưa gán'));
+ const signature=rows.join('|');if(list.dataset.signature===signature)return;
+ list.dataset.signature=signature;
+ list.replaceChildren(...rows.map(text=>{const li=document.createElement('li');li.textContent=text;return li}));
+}
 const nativeLive=window.__SIG4A_RUST_LIVE__===true&&!window.__QUICK_MODE__;
-if(nativeLive){document.querySelector('.toolnav [data-tool=live]').hidden=false;$('shortcut-live-row').hidden=false}
+if(nativeLive){$('t-quick-check-settings').hidden=false;document.querySelector('.toolnav [data-tool=live]').hidden=false;$('shortcut-live-row').hidden=false}
 function toolTab(t){
  if(t==='live'&&!nativeLive)return;
+ if(qcActive()&&t!=='settings'){closeQc();settingsTab='gen';}
  if(t==='localai')void refreshAiSettingsIfClean();else clearTimeout(setupTimer);
  const previousFocus=document.activeElement;
  const previousRoute=activeRoute;
@@ -1512,8 +1677,12 @@ async function openToolBox(){
  toast('Không mở được Tool Box. Kiểm tra SIG4A trong khay hệ thống.');
 }
 function tab(t){
+ if(t==='quick-check-settings'&&(activeRoute!=='settings'||!nativeLive))return;
  if(t!=='gen')clearDiagnosticsPreview();
- for(const key of ['gen','look','alerts','hooks','ocrpopup','shortcuts','clean']){ $(key).hidden=key!==t;const button=$('t-'+key);if(button){button.classList.toggle('on',key===t);button.setAttribute('aria-pressed',String(key===t))} }
+ if(settingsTab==='quick-check-settings'&&t!=='quick-check-settings')closeQc();
+ settingsTab=t;
+ for(const key of ['gen','look','alerts','hooks','ocrpopup','shortcuts','quick-check-settings','clean']){ $(key).hidden=key!==t;const button=$('t-'+key);if(button){button.classList.toggle('on',key===t);button.setAttribute('aria-pressed',String(key===t))} }
+ if(t==='quick-check-settings'){renderQuickSaved();openQc();}
  if(t==='shortcuts')void loadShortcutStatus();
  if(t==='hooks')void hookStatus().catch(()=>{});
  if(t==='clean'){const epoch=cleanEpoch;api.cleaner_status().then(s=>{if(epoch!==cleanEpoch)return;applyClean(s);if(s&&(s.phase==='scanning'||s.phase==='cleaning'))startCleanPoll()}).catch(()=>{});api.cleaner_dups_status().then(s=>{applyDups(s);if(s&&s.phase==='scanning')startDupsPoll()}).catch(()=>{})}
@@ -1647,5 +1816,7 @@ if(window.__QUICK_MODE__){
  document.body.classList.add('quick');
 }
 initResize();
-window.addEventListener('pywebviewready',()=>{if(window.__QUICK_MODE__){api.page_ready();return}hookStatus();poll().then(syncWin).finally(()=>api.page_ready())});   // fresh data + size first, then the window is shown
+window.addEventListener('pywebviewready',()=>{if(window.__QUICK_MODE__){api.page_ready();return}
+ if(location.search==='?view=quick-check'){toolTab('settings');tab('quick-check-settings')}
+ hookStatus();poll().then(syncWin).finally(()=>api.page_ready())});   // fresh data + size first, then the window is shown
 </script></body></html>

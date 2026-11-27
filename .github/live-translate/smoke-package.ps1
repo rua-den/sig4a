@@ -1,7 +1,10 @@
 # Hosted Windows smoke of the ordinary extracted package. Does not open a physical endpoint.
-param([Parameter(Mandatory)][string]$Archive,[switch]$InstallEnglishFromUI)
+param([Parameter(Mandatory)][string]$Archive, [string]$RealGemmaManifestSha256 = "", [switch]$InstallEnglishFromUI)
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
+if ($InstallEnglishFromUI -and $RealGemmaManifestSha256) {
+    throw 'Run the English installer and signed Ollama test as separate archive proofs.'
+}
 $root = Join-Path $env:RUNNER_TEMP ('sig4a-extracted-' + [guid]::NewGuid())
 $profile = Join-Path $root 'isolated'
 Expand-Archive -LiteralPath $Archive -DestinationPath $root
@@ -59,6 +62,8 @@ $psi.RedirectStandardOutput = $true
 $psi.CreateNoWindow = $true
 $probe = $null
 $app = $null
+$refusalListener = $null
+$proofDaemon = $null
 try {
     $probe = [Diagnostics.Process]::Start($psi)
     $first = $probe.StandardOutput.ReadLineAsync()
@@ -83,6 +88,21 @@ try {
     $env:CU_NO_AUTOSTART = '1'
     $env:CU_NO_REPAIR = '1'
     $env:CU_NO_DASHBOARD = '1'
+    # Production refusal proof: a never-authorized ephemeral loopback endpoint. No e2e flags or fake code.
+    $refusalListener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $refusalListener.Start()
+    $data = Join-Path $env:LOCALAPPDATA 'claude-usage'
+    $hooks = Join-Path $env:USERPROFILE '.claude'
+    New-Item -ItemType Directory -Force $data,$hooks | Out-Null
+    $hookConfig = Join-Path $hooks 'settings.json'
+    Set-Content -LiteralPath $hookConfig -Value '{}' -Encoding utf8NoBOM
+    $fixtureConfig = Join-Path $data 'config.json'
+    $port = ([Net.IPEndPoint]$refusalListener.LocalEndpoint).Port
+    if ($port -eq 11434) { throw 'Ephemeral refusal fixture unexpectedly used reserved Ollama port.' }
+    @{profiles=@(@{name='fixture';path=$hooks});autostart=$false;local_ai_backend='ollama';local_ai_endpoint="http://127.0.0.1:$port";local_ai_model='gemma4:e2b';local_ai_managed=$false} |
+        ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $fixtureConfig -Encoding utf8NoBOM
+    $fixtureHash = (Get-FileHash -LiteralPath $fixtureConfig).Hash
+    $hookHash = (Get-FileHash -LiteralPath $hookConfig).Hash
     Add-Type @'
 using System;
 using System.Collections.Generic;
@@ -205,132 +225,254 @@ public static class Sig4aPackageSmokeWin {
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr wnd);
     [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
     private static extern IntPtr FindWindowW(string className, string windowName);
+
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr wnd);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr wnd, IntPtr root, int x, int y, int w, int h, uint flags);
 }
 '@
-    $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-    [uint32]$launchPid = $app.Id
-    $activation = 'not requested'
-    $activatedRoot = [IntPtr]::Zero
-    do {
-        Start-Sleep -Milliseconds 250
-        $app.Refresh()
-        if ($app.HasExited) {
-            $startup = Read-IsolatedStartupSummary $profile
-            throw "Extracted dashboard exited early ($($app.ExitCode)). Startup: $startup"
-        }
-        $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
-        # If the original exact product root stays hidden, use the ordinary
-        # second-open path once. Still require the original root and real UI.
-        if ($candidates.Count -eq 0 -and $activation -eq 'not requested' -and $timer.Elapsed.TotalSeconds -ge 8) {
-            $roots = @([Sig4aPackageSmokeWin]::DashboardRoots($launchPid, $false))
-            if ($roots.Count -eq 1 -and [Sig4aPackageSmokeWin]::CanRelaunchDashboard($roots[0], $launchPid)) {
-                $candidate = $roots[0]
-                $details = [Sig4aPackageSmokeWin]::Describe($candidate)
-                Write-Host "Existing dashboard confirmed before ordinary second open: $details"
-                $reopen = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
-                try {
-                    if (!$reopen.WaitForExit(5000)) { throw 'Ordinary dashboard second-open did not return within five seconds.' }
-                    if ($reopen.ExitCode -ne 0) { throw "Ordinary dashboard second-open returned $($reopen.ExitCode)." }
-                    $app.Refresh()
-                    if ($app.HasExited) { throw 'Original packaged dashboard exited during ordinary second-open.' }
-                    $activation = "ordinary second-open completed for $details"
-                    $activatedRoot = $candidate
-                } finally {
-                    if (!$reopen.HasExited) { $reopen.Kill($true); [void]$reopen.WaitForExit(3000) }
-                    $reopen.Dispose()
-                }
-            }
-        }
-    } until ($candidates.Count -gt 0 -or $timer.Elapsed.TotalSeconds -gt 20)
-    if ($candidates.Count -eq 0) {
-        $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
-        $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
-        $startup = Read-IsolatedStartupSummary $profile
-        throw "Extracted dashboard has no visible owned ClaudeUsageDashboard root (launch PID=$launchPid; process main: $main; owned windows: $owned; native activation: $activation). Startup: $startup"
-    }
-    # A native HWND alone can be a dialog or a blank/framework window. Only pass
-    # when the same visible owned root exposes canonical dashboard navigation.
     $uia = Join-Path $PSScriptRoot 'desktop-uia.ps1'
-    $hwnd = [IntPtr]::Zero
-    $observations = [ordered]@{}
-    $expectedButtons = @('Live Translate','Claude Usage','Cài đặt')
-    $examined = $null
-    $placed = [Collections.Generic.HashSet[IntPtr]]::new()
-    $timer.Restart()
-    do {
-        $app.Refresh()
-        if ($app.HasExited) {
-            $startup = Read-IsolatedStartupSummary $profile
-            throw "Extracted dashboard exited before navigation was shown ($($app.ExitCode)). Startup: $startup"
+    function Find-VerifiedPackagedDashboard([Diagnostics.Process]$App,[string]$IsolatedProfile,[string]$Uia,[string]$Dashboard,[string]$PackageRoot) {
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        [uint32]$launchPid = $app.Id
+        $activation = 'not requested'
+        $activatedRoot = [IntPtr]::Zero
+        do {
+            Start-Sleep -Milliseconds 250
+            $app.Refresh()
+            if ($app.HasExited) {
+                $startup = Read-IsolatedStartupSummary $IsolatedProfile
+                throw "Extracted dashboard exited early ($($app.ExitCode)). Startup: $startup"
+            }
+            $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
+            # First allow normal startup to reveal itself. If the genuine product
+            # HWND remains hidden, run the ordinary second-open path exactly
+            # once. Passing still requires visibility and the original HWND's UI.
+            if ($candidates.Count -eq 0 -and $activation -eq 'not requested' -and $timer.Elapsed.TotalSeconds -ge 8) {
+                $roots = @([Sig4aPackageSmokeWin]::DashboardRoots($launchPid, $false))
+                if ($roots.Count -eq 1 -and [Sig4aPackageSmokeWin]::CanRelaunchDashboard($roots[0], $launchPid)) {
+                    $candidate = $roots[0]
+                    $details = [Sig4aPackageSmokeWin]::Describe($candidate)
+                    Write-Host "Existing dashboard confirmed before ordinary second open: $details"
+                    $reopen = Start-Process -FilePath $Dashboard -WorkingDirectory $PackageRoot -PassThru
+                    try {
+                        if (!$reopen.WaitForExit(5000)) { throw 'Ordinary dashboard second-open did not return within five seconds.' }
+                        if ($reopen.ExitCode -ne 0) { throw "Ordinary dashboard second-open returned $($reopen.ExitCode)." }
+                        $app.Refresh()
+                        if ($app.HasExited) { throw 'Original packaged dashboard exited during ordinary second-open.' }
+                        $activation = "ordinary second-open completed for $details"
+                        $activatedRoot = $candidate
+                    } finally {
+                        if (!$reopen.HasExited) { $reopen.Kill($true); [void]$reopen.WaitForExit(3000) }
+                        $reopen.Dispose()
+                    }
+                }
+            }
+        } until ($candidates.Count -gt 0 -or $timer.Elapsed.TotalSeconds -gt 20)
+        if ($candidates.Count -eq 0) {
+            $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
+            $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
+            $startup = Read-IsolatedStartupSummary $IsolatedProfile
+            throw "Extracted dashboard has no visible owned ClaudeUsageDashboard root (launch PID=$launchPid; process main: $main; owned windows: $owned; native activation: $activation). Startup: $startup"
         }
-        $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
-        foreach ($h in $candidates) {
-            if ($activatedRoot -ne [IntPtr]::Zero -and $h -ne $activatedRoot) { continue }
-            if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) { continue }
-            $examined = [Sig4aPackageSmokeWin]::Describe($h)
-            if ($placed.Add($h)) { [void][Sig4aPackageSmokeWin]::SetWindowPos($h, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014) }
-            [void][Sig4aPackageSmokeWin]::SetForegroundWindow($h)
-            $raw = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($h.ToInt64())" -Mode list
-            if ($LASTEXITCODE -ne 0) {
-                $startup = Read-IsolatedStartupSummary $profile
-                throw "Native dashboard UI automation failed ($examined). Startup: $startup"
+        # A native HWND alone can be a dialog or a blank/framework window. Only pass
+        # when the same visible owned root exposes canonical dashboard navigation.
+        $hwnd = [IntPtr]::Zero
+        $observations = [ordered]@{}
+        $expectedButtons = @('Live Translate','Claude Usage','Cài đặt')
+        $examined = $null
+        $placed = [Collections.Generic.HashSet[IntPtr]]::new()
+        $timer.Restart()
+        do {
+            $app.Refresh()
+            if ($app.HasExited) {
+                $startup = Read-IsolatedStartupSummary $IsolatedProfile
+                throw "Extracted dashboard exited before navigation was shown ($($app.ExitCode)). Startup: $startup"
             }
-            $sample = ($raw -join "`n") | ConvertFrom-Json
-            $buttons = @($sample.items | Where-Object {Test-UiaButtonInRoot $_ $sample.root})
-            $names = @($buttons | ForEach-Object name)
-            $matched = @($expectedButtons | Where-Object {$_ -cin $names})
-            $allNamed = @($sample.items | Where-Object {$_.name -cin $expectedButtons})
-            $key = [string]($h.ToInt64())
-            if ($observations.Contains($key) -or $observations.Count -lt 6) {
-                $entry = $observations[$key]
-                if ($null -eq $entry) {
-                    $entry = @{window=$examined;attempts=0;bestScore=-1;best=$null;latest=$null}
-                    $observations[$key] = $entry
+            $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
+            foreach ($h in $candidates) {
+                if ($activatedRoot -ne [IntPtr]::Zero -and $h -ne $activatedRoot) { continue }
+                if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) { continue }
+                $examined = [Sig4aPackageSmokeWin]::Describe($h)
+                if ($placed.Add($h)) { [void][Sig4aPackageSmokeWin]::SetWindowPos($h, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014) }
+                [void][Sig4aPackageSmokeWin]::SetForegroundWindow($h)
+                $raw = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($h.ToInt64())" -Mode list
+                if ($LASTEXITCODE -ne 0) {
+                    $startup = Read-IsolatedStartupSummary $IsolatedProfile
+                    throw "Native dashboard UI automation failed ($examined). Startup: $startup"
                 }
-                $entry.attempts++
-                $snapshot = @{
-                    root=$sample.root; rootState=$sample.root_state; rootsRead=$sample.roots_read
-                    scanErrors=$sample.scan_errors; itemCount=@($sample.items).Count
-                    metRoleAndBounds=$matched
-                    namedCandidates=@($allNamed | Select-Object -First 9 name,id,kind,enabled,offscreen,left,top,right,bottom)
-                    sample=@($sample.items | Select-Object -First 8 @{Name='name';Expression={$_.name.Substring(0,[Math]::Min(96,$_.name.Length))}},kind,offscreen,left,top,right,bottom)
+                $sample = ($raw -join "`n") | ConvertFrom-Json
+                $buttons = @($sample.items | Where-Object {Test-UiaButtonInRoot $_ $sample.root})
+                $names = @($buttons | ForEach-Object name)
+                $matched = @($expectedButtons | Where-Object {$_ -cin $names})
+                $allNamed = @($sample.items | Where-Object {$_.name -cin $expectedButtons})
+                $key = [string]($h.ToInt64())
+                if ($observations.Contains($key) -or $observations.Count -lt 6) {
+                    $entry = $observations[$key]
+                    if ($null -eq $entry) {
+                        $entry = @{window=$examined;attempts=0;bestScore=-1;best=$null;latest=$null}
+                        $observations[$key] = $entry
+                    }
+                    $entry.attempts++
+                    $snapshot = @{
+                        root=$sample.root; rootState=$sample.root_state; rootsRead=$sample.roots_read
+                        scanErrors=$sample.scan_errors; itemCount=@($sample.items).Count
+                        metRoleAndBounds=$matched
+                        namedCandidates=@($allNamed | Select-Object -First 9 name,id,kind,enabled,offscreen,left,top,right,bottom)
+                        sample=@($sample.items | Select-Object -First 8 @{Name='name';Expression={$_.name.Substring(0,[Math]::Min(96,$_.name.Length))}},kind,offscreen,left,top,right,bottom)
+                    }
+                    $score = 100000 * $matched.Count + 1000 * $allNamed.Count + @($sample.items).Count
+                    $entry.latest = $snapshot
+                    if ($score -gt $entry.bestScore) {
+                        $entry.bestScore = $score
+                        $entry.best = $snapshot
+                    }
                 }
-                $score = 100000 * $matched.Count + 1000 * $allNamed.Count + @($sample.items).Count
-                $entry.latest = $snapshot
-                if ($score -gt $entry.bestScore) {
-                    $entry.bestScore = $score
-                    $entry.best = $snapshot
+                if ($matched.Count -eq $expectedButtons.Count -and $sample.root.process_id -eq $launchPid -and
+                    [Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) {
+                    $hwnd = $h
+                    break
                 }
+                if ($timer.Elapsed.TotalSeconds -gt 28) { break }
             }
-            if ($matched.Count -eq $expectedButtons.Count -and [Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) {
-                $hwnd = $h
-                break
-            }
-            if ($timer.Elapsed.TotalSeconds -gt 28) { break }
+            if ($hwnd -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 350 }
+        } until ($hwnd -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 28)
+        if ($hwnd -eq [IntPtr]::Zero) {
+            $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
+            $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
+            $summary = @($observations.Values) | ConvertTo-Json -Depth 7 -Compress
+            $startup = Read-IsolatedStartupSummary $IsolatedProfile
+            $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow()
+            throw "Extracted native dashboard navigation missing (launch PID=$launchPid; foreground=$foreground; process main: $main; owned: $owned; last examined: $examined). Per-dashboard UIA observations: $summary. Startup: $startup"
         }
-        if ($hwnd -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 350 }
-    } until ($hwnd -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 28)
-    if ($hwnd -eq [IntPtr]::Zero) {
-        $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
-        $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
-        $summary = @($observations.Values) | ConvertTo-Json -Depth 7 -Compress
-        $startup = Read-IsolatedStartupSummary $profile
-        $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow()
-        throw "Extracted native dashboard navigation missing (launch PID=$launchPid; foreground=$foreground; process main: $main; owned: $owned; last examined: $examined). Per-dashboard UIA observations: $summary. Startup: $startup"
+        $verifiedWindow = [Sig4aPackageSmokeWin]::Describe($hwnd)
+        Write-Host "Native UIA found visible Live Translate, Claude Usage and Settings buttons within the extracted app root ($verifiedWindow). Startup activation: $activation."
+        return $hwnd
     }
-    $verifiedWindow = [Sig4aPackageSmokeWin]::Describe($hwnd)
-    "Native UIA found visible Live Translate, Claude Usage and Settings buttons within the extracted app root ($verifiedWindow). Startup activation: $activation."
+    $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
+    $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia $dashboard $root
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
-    'SIG4A archive verified: actual released dashboard, explicit inventory, invalid source no fallback, no passive helper/capture. No physical endpoints accessed.'
+    function Wait-PackageUia([string]$Pattern, [string]$Mode, [string]$Kind='', [int]$Seconds=12, [string]$Id='', [string]$ScopeId='', [string]$ScopeName='') {
+        $clock = [Diagnostics.Stopwatch]::StartNew()
+        do {
+            if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($hwnd, [uint32]$app.Id)) {
+                throw 'Extracted dashboard is no longer the verified visible owned root.'
+            }
+            $uiaArgs = @('-NoProfile','-STA','-File',$uia,'-Hwnd',"$($hwnd.ToInt64())",'-Name',$Pattern,'-Mode',$Mode,'-ExpectedRootPid',"$($app.Id)")
+            if ($Kind) { $uiaArgs += @('-Kind',$Kind) }
+            if ($Id) { $uiaArgs += @('-Id',$Id) }
+            if ($ScopeId) { $uiaArgs += @('-ScopeId',$ScopeId,'-ScopeName',$ScopeName) }
+            $raw = & powershell.exe @uiaArgs
+            if ($LASTEXITCODE -ne 0) { throw 'Native Quick Check UI automation failed.' }
+            $item = ($raw -join "`n") | ConvertFrom-Json
+            if ($item.found) { return $item }
+            Start-Sleep -Milliseconds 200
+        } until ($clock.Elapsed.TotalSeconds -gt $Seconds)
+        # Only allowlisted fixed UI labels/identifiers in diagnostics, never model samples.
+        $known = '^(Cài đặt|Chung|Widget|Cảnh báo|Hook CLI|OCR Popup|Phím tắt|Kiểm tra nhanh|Làm mới trạng thái|Thử Translation|Thử Grammar|Trạng thái mẫu Translation|Trạng thái mẫu Grammar)$'
+        $detail = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($hwnd.ToInt64())" -Name $known -Mode list -Patterns -ExpectedRootPid "$($app.Id)"
+        $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow() -eq $hwnd
+        throw "Native Quick Check UI did not reach $Pattern ($Mode, id=$Id, foreground=$foreground). Fixed controls: $($detail -join ' ')"
+    }
+    function Assert-PackageRefusalBoundary([string]$Phase) {
+        if ($refusalListener.Pending()) { throw "$Phase connected to the unauthorized endpoint." }
+        if ((Get-FileHash -LiteralPath $fixtureConfig).Hash -ne $fixtureHash -or
+            (Get-FileHash -LiteralPath $hookConfig).Hash -ne $hookHash -or
+            (Test-Path -LiteralPath (Join-Path $data 'notify_test.flag'))) {
+            throw "$Phase modified configuration, a hook, or the notification flag."
+        }
+        if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw "$Phase started the Live Translate helper." }
+    }
+    $settings = Wait-PackageUia '^Cài đặt$' 'invoke' 'Button'
+    Wait-PackageUia '^Widget$' 'state' 'Button|TabItem' -Id 't-look' | Out-Null
+    $quick = Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button|TabItem' -Id 't-quick-check-settings'
+    Write-Host "Quick Check native UIA activation: Settings=$($settings.pattern), Quick Check=$($quick.pattern)."
+    Wait-PackageUia '^Chưa kiểm tra[.]$' 'state' | Out-Null
+    Start-Sleep -Milliseconds 500
+    Assert-PackageRefusalBoundary 'Quick Check opening'
+    Wait-PackageUia '^Làm mới trạng thái$' 'invoke' 'Button' -Id 'qc-refresh' | Out-Null
+    Wait-PackageUia '^Đã làm mới; có trạng thái chưa xác minh[.]$' 'state' | Out-Null
+    Wait-PackageUia '^Thử Translation$' 'invoke' 'Button' -Id 'qc-translation' | Out-Null
+    Wait-PackageUia 'Mẫu thử chỉ hỗ trợ Ollama chính thức trên cổng mặc định' 'state' | Out-Null
+    Assert-PackageRefusalBoundary 'Refresh and fixed model sample refusal'
+    'Ordinary Quick Check Settings route verified: passive entry and real refusal with no connection/config write/hook/flag/helper.'
     if ($InstallEnglishFromUI) {
+        # Quick Check has finished and its no-helper/no-write/refusal assertions
+        # have passed. Only now explicitly opt into the independent English gate.
         & (Join-Path $PSScriptRoot 'smoke-english-install-ui.ps1') -Dashboard $app -Window $hwnd -Package $root -Uia $uia
     }
+    if ($RealGemmaManifestSha256) {
+        $app.Kill($true); [void]$app.WaitForExit(5000); $app.Dispose(); $app = $null
+        . (Join-Path $PSScriptRoot '../quick-check/signed-ollama-proof.ps1')
+        . (Join-Path $PSScriptRoot '../quick-check/proof-evidence.ps1')
+        $proofScratch = Join-Path $profile 'ollama-proof'
+        $proofDaemon = Start-SignedOllamaProof -Scratch $proofScratch -ManifestSha256 $RealGemmaManifestSha256
+        $config = Get-Content -LiteralPath $fixtureConfig -Raw | ConvertFrom-Json -AsHashtable
+        $config.local_ai_endpoint = 'http://127.0.0.1:11434'
+        $config | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $fixtureConfig -Encoding utf8NoBOM
+        $fixtureHash = (Get-FileHash -LiteralPath $fixtureConfig).Hash
+        $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
+        $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia $dashboard $root
+        $settings = Wait-PackageUia '^Cài đặt$' 'invoke' 'Button'
+        Wait-PackageUia '^Widget$' 'state' 'Button|TabItem' -Id 't-look' | Out-Null
+        $quick = Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button|TabItem' -Id 't-quick-check-settings'
+        Write-Host "Quick Check native UIA activation: Settings=$($settings.pattern), Quick Check=$($quick.pattern)."
+        $unmatchedFixtures = [Collections.Generic.List[string]]::new()
+        $priorUnobservedChat = $false
+        foreach ($label in @('Translation','Grammar')) {
+            $offsets = Get-IsolatedSignedLogOffsets $proofScratch
+            $fixtureTimer = [Diagnostics.Stopwatch]::StartNew()
+            $result = @{result='no_visible_terminal_status';elapsed_ms=$null}
+            $clicked = $false
+            $buttonId = "qc-"+$label.ToLowerInvariant()
+            $scopeId = "$buttonId-status-scope"
+            $scopeName = "Trạng thái mẫu $label"
+            try {
+                # Prove a fresh idle status from the fixture's DOM group before
+                # the real click. The model preview is a sibling of this group.
+                $result.result = 'fresh_status_not_observed'
+                Wait-PackageUia '^\s*Chưa thử[.]\s*$' 'state' -ScopeId $scopeId -ScopeName $scopeName | Out-Null
+                $result.result = 'button_not_activated'
+                Wait-PackageUia ("^Thử $label$") 'invoke' 'Button' -Id $buttonId | Out-Null
+                $clicked = $true
+                $result.result = 'no_visible_terminal_status'
+                $state = Wait-PackageUia (Get-SignedQuickFixtureStatusPattern $label) 'state' '' 36 -ScopeId $scopeId -ScopeName $scopeName
+                $observed = Convert-SignedQuickFixtureStatus $label $state.name
+                if (!$observed) { throw 'Could not map the fixed accessible sample result.' }
+                $result = $observed
+            } catch {
+                # Wait-PackageUia can print fixed control diagnostics. Never
+                # forward arbitrary accessibility names or model preview here.
+                # Keep the current fixed stage code.
+            } finally {
+                $requestProof = Get-IsolatedSignedCompletedRequests $proofScratch $offsets
+                $record = @{fixture=$label;clicked=$clicked;result=$result.result;app_ms=$result.elapsed_ms
+                    observed_ms=[int]$fixtureTimer.Elapsed.TotalMilliseconds;ollama_completed_in_window=$requestProof
+                    carryover_possible=$priorUnobservedChat}
+                Write-Host ("PRODUCTION_SAMPLE_EVIDENCE: " + ($record|ConvertTo-Json -Depth 6 -Compress))
+                # A delayed POST from a preceding failed run might complete in
+                # this time window. UI verdicts remain per-fixture; logs do not
+                # carry a request id and are never an independent pass.
+                $priorUnobservedChat = $priorUnobservedChat -or ($clicked -and !$requestProof.chat_completion_seen)
+            }
+            if ($result.result -ne 'match') {
+                $unmatchedFixtures.Add("$label=$($result.result)")
+            } else {
+                Write-Host "PRODUCTION_SAMPLE_MATCH: $label"
+            }
+        }
+        if ($unmatchedFixtures.Count) {
+            throw "Ordinary signed Quick Check proof did not match both fixed fixtures: $($unmatchedFixtures -join '; '); see fixed evidence."
+        }
+        if ($proofDaemon.HasExited) { throw 'The same signed Ollama daemon was not retained across the package samples.' }
+        Assert-PackageRefusalBoundary 'Signed package Quick Check actions'
+    } else {
+        'REAL_SIGNED_OLLAMA_GEMMA_NOT_RUN: explicit signed Quick Check workflow was not requested.'
+    }
+    'SIG4A archive verified: actual released dashboard, explicit inventory, invalid source no fallback, no passive helper/capture. No physical endpoints accessed.'
 } finally {
-    foreach ($p in @($probe,$app)) {
+    if ($refusalListener) { $refusalListener.Stop() }
+    foreach ($p in @($probe,$app,$proofDaemon)) {
         if ($p) {
             if (!$p.HasExited) { $p.Kill($true); [void]$p.WaitForExit(5000) }
             $p.Dispose()

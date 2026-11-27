@@ -75,14 +75,17 @@ mod imp {
     use super::{package_name_in_buffer, Path, PathBuf, TrustError};
     use std::{
         mem::{size_of, zeroed},
-        os::windows::ffi::OsStrExt,
+        os::windows::{ffi::OsStrExt, fs::MetadataExt},
+        path::{Component, Prefix},
         ptr, slice,
     };
     use windows_sys::Win32::{
-        Foundation::{CloseHandle, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE},
+        Foundation::{
+            CloseHandle, FILETIME, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
+        },
         NetworkManagement::IpHelper::{
             GetExtendedTcpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCPROW_OWNER_PID,
-            TCP_TABLE_OWNER_PID_LISTENER,
+            TCP_TABLE_OWNER_PID_CONNECTIONS, TCP_TABLE_OWNER_PID_LISTENER,
         },
         Networking::WinSock::{AF_INET, AF_INET6},
         Security::{
@@ -90,16 +93,21 @@ mod imp {
             WinTrust::{
                 WTHelperGetProvCertFromChain, WTHelperGetProvSignerFromChain,
                 WTHelperProvDataFromStateData, WinVerifyTrust, WINTRUST_ACTION_GENERIC_VERIFY_V2,
-                WINTRUST_DATA, WINTRUST_DATA_0, WINTRUST_FILE_INFO, WTD_CHOICE_FILE,
-                WTD_REVOKE_NONE, WTD_STATEACTION_CLOSE, WTD_STATEACTION_VERIFY, WTD_UI_NONE,
+                WINTRUST_DATA, WINTRUST_DATA_0, WINTRUST_FILE_INFO, WTD_CACHE_ONLY_URL_RETRIEVAL,
+                WTD_CHOICE_FILE, WTD_REVOKE_NONE, WTD_STATEACTION_CLOSE, WTD_STATEACTION_VERIFY,
+                WTD_UI_NONE,
             },
         },
         Storage::{
-            FileSystem::{CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, OPEN_EXISTING},
+            FileSystem::{
+                CreateFileW, GetDriveTypeW, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT,
+                FILE_SHARE_READ, OPEN_EXISTING,
+            },
             Packaging::Appx::{GetPackagePathByFullName, GetPackagesByPackageFamily},
         },
         System::Threading::{
-            OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+            GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, WaitForSingleObject,
+            PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
         },
     };
 
@@ -207,21 +215,35 @@ mod imp {
     /// sharing and remains live in `VerifiedOllama`, preventing replacement between verification
     /// and the subsequent child launch.
     pub fn resolve_ollama() -> Result<Option<VerifiedOllama>, TrustError> {
+        resolve_ollama_with_trust(false)
+    }
+
+    pub fn resolve_ollama_cache_only() -> Result<Option<VerifiedOllama>, TrustError> {
+        resolve_ollama_with_trust(true)
+    }
+
+    fn resolve_ollama_with_trust(cache_only: bool) -> Result<Option<VerifiedOllama>, TrustError> {
         let local = std::env::var_os("LOCALAPPDATA").ok_or(TrustError::UntrustedPath)?;
         let root = PathBuf::from(local).join("Programs").join("Ollama");
         if !root.is_absolute() {
             return Err(TrustError::UntrustedPath);
         }
         let path = root.join("ollama.exe");
+        if cache_only && !diagnostic_local_path(&path) {
+            return Err(TrustError::UntrustedPath);
+        }
         match path.try_exists() {
             Ok(false) => return Ok(None),
             Err(_) => return Err(TrustError::UntrustedPath),
             Ok(true) => {}
         }
-        verify_ollama_exe(&path).map(Some)
+        verify_ollama_exe_with_trust(&path, cache_only).map(Some)
     }
 
-    pub fn verify_ollama_exe(path: &Path) -> Result<VerifiedOllama, TrustError> {
+    fn verify_ollama_exe_with_trust(
+        path: &Path,
+        cache_only: bool,
+    ) -> Result<VerifiedOllama, TrustError> {
         let local = std::env::var_os("LOCALAPPDATA").ok_or(TrustError::UntrustedPath)?;
         let expected = PathBuf::from(local)
             .join("Programs")
@@ -255,7 +277,7 @@ mod imp {
             if handle.is_null() || handle == INVALID_HANDLE_VALUE {
                 return Err(TrustError::UntrustedPath);
             }
-            if !verify_signature(handle, &path_w) {
+            if !verify_signature(handle, &path_w, cache_only) {
                 CloseHandle(handle);
                 return Err(TrustError::UntrustedSignature);
             }
@@ -266,12 +288,44 @@ mod imp {
         }
     }
 
+    // Do not traverse mapped/network volumes or reparse paths for a no-egress
+    // diagnostic (even filesystem discovery could otherwise trigger SMB).
+    fn diagnostic_local_path(path: &Path) -> bool {
+        let mut parts = path.components();
+        let Some(Component::Prefix(prefix)) = parts.next() else {
+            return false;
+        };
+        if !matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
+            || !matches!(parts.next(), Some(Component::RootDir))
+        {
+            return false;
+        }
+        let mut root = PathBuf::from(prefix.as_os_str());
+        root.push(r"\");
+        let drive = wide(root.as_os_str());
+        const DRIVE_FIXED: u32 = 3;
+        if unsafe { GetDriveTypeW(drive.as_ptr()) } != DRIVE_FIXED {
+            return false;
+        }
+        for part in parts {
+            if !matches!(part, Component::Normal(_)) {
+                return false;
+            }
+            root.push(part.as_os_str());
+            match std::fs::symlink_metadata(&root) {
+                Ok(m) if m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0 => (),
+                _ => return false,
+            }
+        }
+        true
+    }
+
     fn same_path(a: &Path, b: &Path) -> bool {
         a.to_string_lossy()
             .eq_ignore_ascii_case(&b.to_string_lossy())
     }
 
-    unsafe fn verify_signature(handle: HANDLE, path: &[u16]) -> bool {
+    unsafe fn verify_signature(handle: HANDLE, path: &[u16], cache_only: bool) -> bool {
         let mut file: WINTRUST_FILE_INFO = zeroed();
         file.cbStruct = size_of::<WINTRUST_FILE_INFO>() as u32;
         file.pcwszFilePath = path.as_ptr();
@@ -280,6 +334,9 @@ mod imp {
         data.cbStruct = size_of::<WINTRUST_DATA>() as u32;
         data.dwUIChoice = WTD_UI_NONE;
         data.fdwRevocationChecks = WTD_REVOKE_NONE;
+        if cache_only {
+            data.dwProvFlags = WTD_CACHE_ONLY_URL_RETRIEVAL;
+        }
         data.dwUnionChoice = WTD_CHOICE_FILE;
         data.Anonymous = WINTRUST_DATA_0 { pFile: &mut file };
         data.dwStateAction = WTD_STATEACTION_VERIFY;
@@ -357,6 +414,30 @@ mod imp {
         pub fn matches(&self, ollama: &VerifiedOllama) -> bool {
             self.is_alive() && same_path(&self.image, ollama.path())
         }
+        pub fn creation_identity(&self) -> Option<u64> {
+            let zero = FILETIME {
+                dwHighDateTime: 0,
+                dwLowDateTime: 0,
+            };
+            let (mut creation, mut exit, mut kernel, mut user) = (zero, zero, zero, zero);
+            // Synchronization against the retained process is stricter than STILL_ACTIVE,
+            // whose numeric exit code is not reserved by the kernel.
+            if unsafe { WaitForSingleObject(self._process, 0) } != WAIT_TIMEOUT
+                || unsafe {
+                    GetProcessTimes(
+                        self._process,
+                        &mut creation,
+                        &mut exit,
+                        &mut kernel,
+                        &mut user,
+                    )
+                } == 0
+            {
+                return None;
+            }
+            let creation = ((creation.dwHighDateTime as u64) << 32) | creation.dwLowDateTime as u64;
+            (creation != 0).then_some(creation)
+        }
         pub fn is_alive(&self) -> bool {
             use windows_sys::Win32::System::Threading::GetExitCodeProcess;
             let mut code = 0u32;
@@ -383,6 +464,17 @@ mod imp {
     }
 
     fn listener_owner_on_port(port: u16) -> Result<Option<ListenerOwner>, TrustError> {
+        listener_owner_on_port_with_rights(port, false)
+    }
+
+    pub fn diagnostic_listener_owner() -> Result<Option<ListenerOwner>, TrustError> {
+        listener_owner_on_port_with_rights(11434, true)
+    }
+
+    fn listener_owner_on_port_with_rights(
+        port: u16,
+        diagnostic: bool,
+    ) -> Result<Option<ListenerOwner>, TrustError> {
         unsafe {
             let mut found: Option<u32> = None;
             let mut ipv6_loopback_pids = Vec::new();
@@ -419,7 +511,9 @@ mod imp {
             if ipv6_loopback_pids.iter().any(|other| *other != pid) {
                 return Err(TrustError::ListenerOwnershipUnknown);
             }
-            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            let rights = PROCESS_QUERY_LIMITED_INFORMATION
+                | if diagnostic { PROCESS_SYNCHRONIZE } else { 0 };
+            let process = OpenProcess(rights, 0, pid);
             if process.is_null() {
                 return Err(TrustError::ListenerOwnershipUnknown);
             }
@@ -431,6 +525,10 @@ mod imp {
             }
             name.truncate(n as usize);
             let image_raw = PathBuf::from(String::from_utf16_lossy(&name));
+            if diagnostic && !diagnostic_local_path(&image_raw) {
+                CloseHandle(process);
+                return Err(TrustError::UntrustedPath);
+            }
             let image = std::fs::canonicalize(&image_raw).map_err(|_| {
                 CloseHandle(process);
                 TrustError::ListenerOwnershipUnknown
@@ -475,29 +573,26 @@ mod imp {
         }
     }
 
+    pub fn connected_rows_v4() -> Result<Vec<MIB_TCPROW_OWNER_PID>, TrustError> {
+        unsafe { tcp_rows_class(AF_INET as u32, TCP_TABLE_OWNER_PID_CONNECTIONS) }
+    }
+
     unsafe fn tcp_rows(family: u32) -> Result<Vec<MIB_TCPROW_OWNER_PID>, TrustError> {
+        tcp_rows_class(family, TCP_TABLE_OWNER_PID_LISTENER)
+    }
+
+    unsafe fn tcp_rows_class(
+        family: u32,
+        class: i32,
+    ) -> Result<Vec<MIB_TCPROW_OWNER_PID>, TrustError> {
         let mut size = 0u32;
-        let first = GetExtendedTcpTable(
-            ptr::null_mut(),
-            &mut size,
-            0,
-            family,
-            TCP_TABLE_OWNER_PID_LISTENER,
-            0,
-        );
-        if first != ERROR_INSUFFICIENT_BUFFER || size < 4 {
+        let first = GetExtendedTcpTable(ptr::null_mut(), &mut size, 0, family, class, 0);
+        if first != ERROR_INSUFFICIENT_BUFFER || !(4..=1_048_576).contains(&size) {
             return Err(TrustError::OsApi);
         }
         let mut data = vec![0u64; (size as usize + 7) / 8];
-        let status = GetExtendedTcpTable(
-            data.as_mut_ptr().cast(),
-            &mut size,
-            0,
-            family,
-            TCP_TABLE_OWNER_PID_LISTENER,
-            0,
-        );
-        if status != 0 {
+        let status = GetExtendedTcpTable(data.as_mut_ptr().cast(), &mut size, 0, family, class, 0);
+        if status != 0 || size as usize > data.len() * 8 || size < 4 {
             return Err(TrustError::OsApi);
         }
         let base = data.as_ptr().cast::<u8>();
@@ -524,7 +619,7 @@ mod imp {
         if first == ERROR_NO_DATA {
             return Ok(Vec::new());
         }
-        if size < 4 {
+        if !(4..=1_048_576).contains(&size) {
             return Err(TrustError::OsApi);
         }
         let mut data = vec![0u64; (size as usize + 7) / 8];
@@ -550,7 +645,8 @@ mod imp {
 
 #[cfg(windows)]
 pub use imp::{
-    loopback_listener_owner, resolve_ollama, resolve_winget, ListenerOwner, VerifiedOllama,
+    connected_rows_v4, diagnostic_listener_owner, loopback_listener_owner, resolve_ollama,
+    resolve_ollama_cache_only, resolve_winget, ListenerOwner, VerifiedOllama,
 };
 
 #[cfg(not(windows))]

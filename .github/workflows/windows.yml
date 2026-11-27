@@ -27,5 +27,7 @@ jobs:
         run: cargo check --locked --workspace --all-targets
       - name: Test dashboard API
         run: cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard
+      - name: Check scoped Quick Check reply handling across document reload
+        run: node dashboard/tests/js/quick_check_shim.test.cjs
       - name: Exercise the real dashboard WebView2
-        run: cargo test --locked -p claude-usage-dashboard --test dashboard_ui --test dashboard_usage_layout -- --test-threads=1
+        run: cargo test --locked -p claude-usage-dashboard --test dashboard_ui --test dashboard_usage_layout --test dashboard_quick_check -- --test-threads=1

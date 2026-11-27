@@ -203,12 +203,15 @@ version = "2.3.0"
 dependencies = [
  "cu-cleaner",
  "cu-core",
+ "httparse",
+ "serde",
  "serde_json",
  "tao",
  "tempfile",
  "ureq",
  "windows-sys 0.59.0",
  "winresource",
+ "webview2-com",
  "wry",
 ]
 

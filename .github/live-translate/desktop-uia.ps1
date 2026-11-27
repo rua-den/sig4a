@@ -3,15 +3,15 @@ param(
  [string]$Id='',
  [string]$Name='',
  [string]$Kind='',
- [ValidateSet('point','focus','state','list')][string]$Mode='point'
+ [ValidateSet('point','focus','state','list','invoke')][string]$Mode='point',
+ [switch]$Patterns,
+ [uint32]$ExpectedRootPid=0,
+ [string]$ScopeId='',
+ [string]$ScopeName=''
 )
 $ErrorActionPreference='Stop'
-# Windows PowerShell's console code page may not represent the UI's Vietnamese
-# accessible names. Escape every response (list, point, state, focus), so the
-# extracted dashboard's scripted install can assert the real Ready label.
-function Write-AsciiJson($value) {
- $json=$value|ConvertTo-Json -Depth 5 -Compress
- [regex]::Replace($json,'[^\x00-\x7f]',{param($m) '\u{0:x4}' -f [int][char]$m.Value[0]})
+if (($ScopeId -or $ScopeName) -and ($Mode -ne 'state' -or !$ScopeId -or !$ScopeName)) {
+ throw 'A scoped lookup requires state mode, exact id and accessible group name.'
 }
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,WindowsBase
 Add-Type @'
@@ -45,24 +45,57 @@ $rootBounds=$null
 $rootState='not_observed'
 $rootsRead=0
 $scanErrors=0
+$rootOwnerVerified=$false
+function Write-UiaJson($Value) {
+ # Windows PowerShell's console code page may not represent Vietnamese text.
+ # Escape localized names in every response, not just navigation inventory.
+ $json=$Value|ConvertTo-Json -Depth 5 -Compress
+ [regex]::Replace($json,'[^\x00-\x7f]',{param($m) '\u{0:x4}' -f [int][char]$m.Value[0]})
+}
 foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
  try {
   $root=[Windows.Automation.AutomationElement]::FromHandle($h)
   if(!$root){continue}
   $rootsRead++
-  if($Mode -eq 'list' -and $h -eq $main){
+  if(($Mode -eq 'list' -or $ExpectedRootPid) -and $h -eq $main){
     # Same UIA screen coordinate space as the descendants, not Win32's DPI
     # virtualized GetWindowRect as observed by the invoking process.
     $rootState='bounds_unavailable'
     $rootInfo=$root.Current
+    if($ExpectedRootPid -and $rootInfo.ProcessId -ne $ExpectedRootPid){
+      $rootState='unexpected_process'
+      break
+    }
+    $rootOwnerVerified=$true
     $rect=$rootInfo.BoundingRectangle
     if(!$rect.IsEmpty){
       $rootState='observed'
       $rootBounds=@{left=$rect.Left;top=$rect.Top;right=$rect.Right;bottom=$rect.Bottom;process_id=$rootInfo.ProcessId}
     }
   }
+  if($ExpectedRootPid -and !$rootOwnerVerified){break}
   $cond=[Windows.Automation.Condition]::TrueCondition
-  foreach($e in $root.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)){
+  $elements=$root.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)
+  if($ScopeId){
+    # Resolve the real fixed group before matching text. A generated preview
+    # elsewhere can repeat a verdict but cannot enter this DOM/AX subtree.
+    $scopes=[Collections.Generic.List[object]]::new()
+    $idScopes=[Collections.Generic.List[object]]::new()
+    foreach($candidate in $elements){
+      try {$info=$candidate.Current} catch {continue}
+      if($info.ControlType -eq [Windows.Automation.ControlType]::Group -and
+         $info.Name -ceq $ScopeName){
+        $scopes.Add($candidate)
+        if($info.AutomationId -ceq $ScopeId){$idScopes.Add($candidate)}
+      }
+    }
+    $group=$null
+    if($idScopes.Count -eq 1){$group=$idScopes[0]}
+    elseif(!$idScopes.Count -and $scopes.Count -eq 1){$group=$scopes[0]}
+    if(!$group){continue}
+    $elements=$group.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)
+  }
+  foreach($e in $elements){
     try {$c=$e.Current} catch {
       if($Mode -ne 'list'){throw}
       $scanErrors++
@@ -74,6 +107,9 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
       if($c.Name -and $names.Count -lt 300){
         $rect=$c.BoundingRectangle
         $item=@{name=$c.Name;id=$c.AutomationId;kind=$c.ControlType.ProgrammaticName;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen}
+        if($Patterns){
+          try {$item.patterns=@($e.GetSupportedPatterns() | ForEach-Object ProgrammaticName)} catch {}
+        }
         if(!$rect.IsEmpty){
           $item.left=[int][Math]::Round($rect.Left);$item.top=[int][Math]::Round($rect.Top)
           $item.right=[int][Math]::Round($rect.Right);$item.bottom=[int][Math]::Round($rect.Bottom)
@@ -86,6 +122,46 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
       try {$e.GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView();$c=$e.Current} catch {}
     }
     if($Mode -eq 'focus' -and $c.IsEnabled){ try{$e.SetFocus()}catch{continue} }
+    if($Mode -eq 'invoke'){
+      if(!$c.IsEnabled){continue}
+      if($c.IsOffscreen){
+        try {$e.GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView()} catch {}
+        $c=$e.Current
+        if($c.IsOffscreen){
+          try {$e.SetFocus()} catch {}
+          $c=$e.Current
+        }
+        if($c.IsOffscreen){continue}
+      }
+      if($ExpectedRootPid){
+        $r=$c.BoundingRectangle
+        if(!$rootBounds -or $r.IsEmpty -or $r.Width -le 0 -or $r.Height -le 0){continue}
+        $cx=$r.X+$r.Width/2
+        $cy=$r.Y+$r.Height/2
+        if($cx -lt $rootBounds.left -or $cx -ge $rootBounds.right -or
+           $cy -lt $rootBounds.top -or $cy -ge $rootBounds.bottom){continue}
+      }
+      # aria-pressed Chromium buttons expose TogglePattern, not always InvokePattern.
+      # A real UIA activate is required; the caller still verifies the resulting page/status.
+      $activated=''
+      try {
+        $p=$null
+        if($e.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$p)){
+          ([Windows.Automation.InvokePattern]$p).Invoke()
+          $activated='Invoke'
+        } elseif($e.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern,[ref]$p)){
+          ([Windows.Automation.TogglePattern]$p).Toggle()
+          $activated='Toggle'
+        } elseif($c.ControlType -eq [Windows.Automation.ControlType]::TabItem -and
+                 $e.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern,[ref]$p)){
+          ([Windows.Automation.SelectionItemPattern]$p).Select()
+          $activated='Select'
+        }
+      } catch { continue }
+      if(!$activated){continue}
+      Write-UiaJson @{found=$true;name=$c.Name;id=$c.AutomationId;pattern=$activated}
+      exit 0
+    }
     $item=@{found=$true;name=$c.Name;id=$c.AutomationId;kind=$c.ControlType.ProgrammaticName;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen;focused=$e.Current.HasKeyboardFocus}
     try {$item.selectedText=@($e.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).GetSelection() | ForEach-Object {$_.GetText(-1)})} catch {}
     try {$item.toggle=[string]$e.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Current.ToggleState} catch {}
@@ -99,13 +175,13 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
       $item.x=[int][Math]::Round($p.X);$item.y=[int][Math]::Round($p.Y)
     }
     if($Mode -ne 'point' -or ($item.enabled -and !$item.offscreen -and $item.ContainsKey('x'))){
-      Write-AsciiJson $item
+      Write-UiaJson $item
       exit 0
     }
   }
  }catch{if($Mode -eq 'list'){$scanErrors++}}
 }
 if($Mode -eq 'list'){
- Write-AsciiJson @{root=$rootBounds;root_state=$rootState;roots_read=$rootsRead;scan_errors=$scanErrors;items=@($names.ToArray())}
+ Write-UiaJson @{root=$rootBounds;root_state=$rootState;roots_read=$rootsRead;scan_errors=$scanErrors;items=@($names.ToArray())}
 }
 else{'{"found":false}'}

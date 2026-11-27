@@ -1,0 +1,267 @@
+{
+  "title": "Sig4a Settings · Kiểm tra nhanh",
+  "status": "passed",
+  "baseline": {
+    "start": "After Audio Check PR #35 merges, rebase/cut the implementation branch from exact latest main containing both #34 and #35; record that SHA in the repo plan. Draft review only before then.",
+    "inspected_audio_check": "efec55d4d132881491038a6395de64136c4ce3e3",
+    "inspected_local_ai_setup": "fcd82b1de383ab74fbed0bca990a3828193ca616",
+    "sha": "2032859753dd33399488a7722f117a529f13c89f",
+    "ref": "origin/main",
+    "implementation_started_at_sha": "a20328f66046eb71c8708107330b62e21da2f336",
+    "sync": "Normal two-parent syncs retain the exact Safe Report #36 and English Setup #38 main histories; no rewrite of the Quick Check #37 history. Evidence sections remain scoped to their exact candidates."
+  },
+  "scope": "One native Windows Settings surface with five status cards and two separate explicit fixed-sample tests. No new top-level Tool Box route, capture popup feature, general diagnostic runner or aggregate pass badge.",
+  "ux": {
+    "entry": "Cài đặt > Kiểm tra nhanh. Keep default Cài đặt > Chung and all existing routes. Use compact, responsive cards with an evidence/freshness line, readable text (not color only), keyboard navigation, focus restoration and restrained aria-live feedback.",
+    "on_open": "Render existing in-memory/saved-status summaries and 'chưa kiểm tra'; do not reread config/profile files for this route, enumerate devices or hooks, launch a helper/server, make HTTP calls, send a prompt/notification, run an installer or hook, write config/flags, touch the clipboard or poll. Normal independent app background activity is unchanged.",
+    "refresh": "One explicit Làm mới trạng thái action: reuse already available bounded native sources. The only allowed HTTP is GET /api/tags at signed official Ollama on 127.0.0.1:11434 via the same retained owner and connected reverse TCP tuple verification, in the current visible Quick Check scope. Zero HTTP for arbitrary/custom, managed, llama.cpp or wrong scope. Live may check canonical helper file; notification uses saved facts; CLI hook uses bounded existing summary or links; shortcuts are saved/untested. Never scan profile directories, run card actions or score overall.",
+    "cards": [
+      {
+        "key": "local_ai",
+        "status": "Show saved effective backend/model and managed/manual. Only a fresh eligible Refresh can report reachability or an exact alias listing, via bounded pinned signed default Ollama transport. Unsupported/custom/managed selection can show saved configuration with inventory unverified, zero HTTP. Alias listing is not inference, OCR/vision, model loaded state or proof of no cloud. Export normalized evidence, no raw list or server metadata.",
+        "action": "Mở Local AI goes to existing Local AI settings. Keep advanced diagnostics, synthetic OCR test and setup/preset there; do not duplicate or auto-activate them."
+      },
+      {
+        "key": "live_translate",
+        "status": "Read-only canonical colocated helper executable presence check using the same path validation as Live, distinguishing unsupported build from missing package. Static asset check is optional only if canonical and bounded; otherwise model/runtime remain unverified. File presence never proves device/permissions/model execution.",
+        "action": "Mở Live Translate goes to existing Tool Box > Live Translate with separate Thử âm thanh. Following the link must not enumerate devices, test, or start capture."
+      },
+      {
+        "key": "notifications",
+        "status": "Saved Sig4a notification enable/warn/block and optional actually queried tray availability. No claim about Windows permissions, Do Not Disturb, banners or user receipt. The existing test_notify call writes a test flag only; that is not OS submission or a confirmed notification.",
+        "action": "Mở Cảnh báo goes to existing Settings > Cảnh báo where the user can separately request its test notification. Quick Check never writes the flag."
+      },
+      {
+        "key": "cli_hook",
+        "status": "A cached limited summary already available from the dashboard may report configured/unusable/disabled/unknown counts if evidence actually supports them. Otherwise show 'Chưa kiểm tra cấu hình' and link to Hook CLI rather than scanning profiles. No new profile or config enumeration on open; do not introduce unbounded reads on Refresh. A correct exact configured/usable command is still 'Chưa xác minh chạy từ CLI'. Never read logs or execute any hook.",
+        "action": "Mở Hook CLI goes to existing Settings > Hook CLI. No install/remove/execute/usage restart in Quick Check."
+      },
+      {
+        "key": "shortcuts",
+        "status": "Show saved, explicitly unbound or unknown shortcut slots from the existing in-memory snapshot. Label 'Đã lưu · chưa thử tổ hợp'. The generic tray bitmask is not evidence about the saved chord, particularly across state changes; no chord is labeled registered/working on that basis. Optional coarse tray reachability only if available without new blocking work.",
+        "action": "Mở Phím tắt goes to existing Settings > Phím tắt. No registration, remapping, synthetic keypress or tool invocation."
+      }
+    ]
+  },
+  "synthetic_tests": {
+    "fixtures": [
+      {
+        "id": "translation_sample_v1",
+        "button": "Thử Translation",
+        "text": "The robot has two blue boxes.",
+        "fixed_prompt": "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Translate the color blue as \"xanh dương\" or \"xanh lam\", not just \"xanh\". Return only the Vietnamese translation.\n\nThe robot has two blue boxes.",
+        "example_acceptable": [
+          "Robot có hai chiếc hộp màu xanh dương.",
+          "Con rô-bốt có 2 cái hộp màu xanh lam."
+        ]
+      },
+      {
+        "id": "grammar_sample_v1",
+        "button": "Thử Grammar",
+        "text": "Every morning the robot carry two blue boxes.",
+        "fixed_prompt": "Correct the English grammar in this one sentence without changing its meaning. Return only the corrected sentence.\n\nEvery morning the robot carry two blue boxes.",
+        "example_acceptable": [
+          "Every morning the robot carries two blue boxes.",
+          "Every morning, the robot carries two blue boxes."
+        ]
+      }
+    ],
+    "evidence": "Show the fixed fixture and that the test uses the saved model with a built-in prompt, never a custom prompt. Native deterministic allowlist with documented normalization of case, whitespace, optional final period and explicit accepted variants; preserve accents. Reject echo, wrong count/color, wrong target, commentary, overflow, truncation and injected formatting. Unknown plausible paraphrase is 'Có phản hồi, mẫu chưa khớp; xem kết quả' not 'model hỏng'. A matching response proves this fixture only, not language or model quality. Distinguish not run, busy, stale/config changed, unproven offline backend, model/inventory unavailable, timeout/invalid response, mismatch and fixture matched. Show elapsed time including any model warmup, not a speed rating.",
+    "ipc_and_trust": [
+      "Dedicated native bridge, full dashboard only and exact bundled WebView2 origin. Before the generic bridge parser/coercion/argument clone, apply a strict raw-message size cap and exact method, arity and argument types, bounded view nonce/request ID and closed operation enum only. Reject objects, additional fields/args, oversized payloads and text/prompt/custom endpoint/model/target/image/executable/path inputs. Gate the route against native active Quick Check page session/generation. Persisted effective native selection and compile-time fixture/prompt are the only model settings/content inputs.",
+      "Reuse the existing process-local AI_BUSY (RAII if factored), guaranteeing no overlap with other managed Local AI calls in this dashboard process only; don't imply system-wide exclusivity or rewrite regular paths. No queue/retry, do not interrupt existing work. Check active setup when available. Metadata <=5 s per request; whole model test <=30 s including preflight and identity checks. Use monotonic connect, first-byte and read bounds; no streaming, <=96 output tokens, bounded body and literal preview <=512 UTF-16 units; malformed/truncated cannot pass. Never retain prompt/preview in app logs, clipboard, config, history or disk.",
+      "v1 inference only when the saved effective manual Ollama selection normalizes to http://127.0.0.1:11434 and names exactly gemma4:e2b. Other providers, managed LFM and custom aliases/ports can show existing metadata/status only; never fall back to general Local AI chat. Never use DNS, proxy, redirect, external network or start/restart/install/download/pull or set flags for the user.",
+      "For Refresh try only bounded GET /api/tags (no /api/status, /api/show or chat) via the same signed exact default official Ollama owner and attached reverse TCP tuple. If UI scope invalid or config/Ollama owner unsupported, send zero HTTP before returning unknown/refused. Refresh never supplies trust evidence for a later sample. Inject fake verification/transport only into test binaries; release has no bypass or fallback.",
+      "Native Quick Check page lease/session tracks exact document/navigation and active view; invalidate on settings tab/route exit, navigation, same-URL reload, minimize or window close; re-open or restore requires fresh generation and explicit click. Invalidate on superseding request and effective saved config change. Validate active native generation, current visible window and exact request/config identity before returning any result (including any text preview) to WebView, not merely in JS. JS independently ignores stale generations. An already-sent local request may finish within its native deadline; it does not deliver late results and holds the per-process slot until native cleanup."
+    ],
+    "ollama_v1_admission": {
+      "identity": "Reuse #34 official Ollama Authenticode exact publisher/path and listener-ownership checks, with WTD_CACHE_ONLY_URL_RETRIEVAL for verification (no certificate or revocation network retrieval); unknown/offline trust fails closed. Only exact IPv4 127.0.0.1:11434. Retain Windows process handle, PID and creation identity/liveness of the verified daemon throughout; a signed path on disk or listener query alone is insufficient. Ambiguity, process exit/restart or PID reuse fails closed.",
+      "attached_transport": "Connect a TCP stream to the exact literal under the monotonic deadline; send no HTTP bytes yet. Retrieve actual socket local and peer IPv4 tuples. Using Windows GetExtendedTcpTable / TCP_TABLE_OWNER_PID_CONNECTIONS, require exactly one ESTABLISHED server-side row with local == socket peer, remote == socket local (including ephemeral port), and owner PID == retained live verified daemon. A listening row or client-side row cannot substitute. Verify immediately before every HTTP request (both GETs and POST) on the exact stream used for the write. If the row is briefly absent, allow only a bounded wait within the job deadline; if no unique proof, close without HTTP. Every new socket needs its own proof against the same retained daemon, with no automatic reconnect/retry, alternate host or transport fallback.",
+      "rust_testability": "Separate process/connection proof from HTTP adapter: verifier yields opaque PinnedConnection holding the exact already-connected stream rather than a URL; HTTP consumes only that stream and one of three typed requests under one monotonic deadline. Inject identity/TCP-owner and stream fakes in Rust tests, and use a Windows fixture with real controlled accepted sockets plus actual TCP table rows. Use a bounded HTTP codec/library where feasible. If exact socket attachment cannot be maintained, refuse v1 samples and escalate to Advisor; do not downgrade to a fresh generic HTTP client or listener snapshots.",
+      "cloud_gate": "Pinned GET /api/status before model inventory. Require HTTP 200, bounded well-formed JSON with unique cloud object, exact bool disabled=true and exact source env or both. Refuse config-only, false, malformed/duplicate/missing/unsupported fields or identity change before any prompt bytes. Evidence label: 'Ollama báo đã tắt Cloud bằng biến môi trường'. This is not a firewall/no-egress proof or audit of other daemon features. If refused, link to existing Local AI/Ollama setup and explain a supported signed daemon must already be running with environment-forced Cloud disable; never automatically set flags, change config, start, restart or download.",
+      "model_gate": "Pinned GET /api/tags on the same retained daemon after cloud gate. Require HTTP 200, bounded models array under byte/count caps, exactly one case-folded candidate with byte-exact tag gemma4:e2b; reject duplicate/case collisions, conflicting name/model fields, malformed/ambiguous candidate and any non-null remote_host or remote_model marker. No fallback tag/pull or synthetic prompt if missing or uncertain. This establishes the exact local installed tag, not provenance of an arbitrary user tag or general model quality.",
+      "inference": "Reverify the POST socket immediately before sending one frozen native /api/chat body. Pin exactly model=gemma4:e2b:local (Ollama audited local-source suffix, after the exact installed gemma4:e2b preflight), stream=false, think=false, options.temperature=0 and options.num_predict=96; no tools/images/auth/cloud or dynamic renderer/user prompts. Never remove the :local suffix, retry or downgrade for older servers. Require bounded final JSON, done=true, done_reason=stop, assistant role, nonempty bounded content and no tool calls, remote markers or conflicting returned model; truncation/incomplete responses cannot pass. Freeze the audited canonical response alias in the test matrix; installed Gemma tag is not a verified official weights claim. This may load an installed model into an already-running daemon, but never starts the daemon or acquires a model.",
+      "source": "Official Ollama v0.31.1 StatusHandler https://github.com/ollama/ollama/blob/v0.31.1/server/routes.go#L2019-L2026 (raw verified https://raw.githubusercontent.com/ollama/ollama/v0.31.1/server/routes.go). Older/unknown endpoint schema is unsupported; no downgrade. The same official server files show the native ChatHandler local-source/remote-alias refusal: https://github.com/ollama/ollama/blob/v0.31.1/server/routes.go#L2354-L2380. Verify the exact runtime response alias on the pinned Windows acceptance run."
+    }
+  },
+  "phases": [
+    {
+      "id": "design",
+      "status": "passed",
+      "acceptance": [
+        "Independent strong Advisor reviews exact plan before Luna codes. Freeze evidence claims, copy, safe provider/trust path, budgets, fixture prompts and allowlists. Reconcile #34/#35 and exact main baseline.",
+        "Advisor explicitly approves exact-socket Windows owner proof, cache-only Authenticode/offline refusal, official env-forced status, unique local tag and narrow status scope before sampling code."
+      ]
+    },
+    {
+      "id": "status_and_navigation",
+      "status": "passed",
+      "acceptance": [
+        "Five read-only cards and exact existing links. Start from already available bounded status; do not reread/enumerate profiles on overview open. For hook use existing cached, bounded summary when available or just link. For shortcuts show saved/unbound plus untested, never infer individual registration from bitmask. Keep explicit refresh bounded; no worker buildup and timeout != missing. Refresh must send no HTTP outside the exact signed+socket-pinned default Ollama path, even for a saved custom loopback.",
+        "Keep main settings navigation, accessibility, popup isolation, legacy actions and setup untouched. Empty/offline/unavailable states must have actionable next steps. Advisor first-phase checkpoint on side effects and truthful wording."
+      ]
+    },
+    {
+      "id": "fixed_model_checks",
+      "status": "passed",
+      "acceptance": [
+        "Implement the sole v1 inference profile: signed official existing Ollama on exact loopback with attached-owner socket proof, fresh env-forced status, exact unique local gemma4:e2b and fixed samples using :local, with no generic fallback. Prove both tests work on an admissible path or block this phase and consult Advisor; no trust downgrade for compatibility.",
+        "Advisor reviews exact implementation phase diff, especially request restrictions, worker accounting, ownership/cancellation, privacy, output handling and fixture scoring."
+      ]
+    },
+    {
+      "id": "verification",
+      "status": "passed",
+      "acceptance": [
+        "Native tests cover exact native bytes/argument and response schema, zero HTTP before connected proof, actual server-side reverse tuple including ephemeral port, listener swap before connect, fake/client/missing/ambiguous owner rows, daemon exit/PID reuse, replacement stream re-proof, cache-only Authenticode fail closed, strict cloud source env|both vs config/false/malformed/unsupported, exact unique local Gemma vs missing/duplicate/remote, no release bypass or fallback, shared per-process busy, deadline and stale handling. Cover status/link and zero new reads/actions on page open. Include Windows real TCP-table accepted-socket fixture; no user data or tools. Verify exact :local/no-drop behavior and reject remote/tool/non-assistant/incomplete or token-cap responses. Reject exact raw IPC schema/size before general bridge coercion; deny result completion after route swap, minimize, same URI reload and close. Negative production-shaped Refresh tests for unauthorized endpoint, custom loopback, managed/llama.cpp, missing/wrong scope, bad signer or tuple, asserting zero HTTP; positive Refresh proves exactly one pinned GET /api/tags and no other requests.",
+        "Real hosted Windows WebView2 tests open Settings Quick Check and assert zero Local AI HTTP, notifications, Live device/helper launch, hook runs or writes on open; Refresh sends metadata only. Click both tests (exact fixture requests with no user fields), check pass/mismatch and literal output, busy/stale/reopen/settings changes, safe action links, degraded states and focus. Keep prior dashboard, Local AI setup, Audio Check, OCR and hotkey suites. Include the dedicated native UI fixture with required execution in standard hosted Windows workflow as well as full/specialized Windows workflow; fake responder verifies synthetic bridge behavior and must never enable the production trust bypass.",
+        "Run both fixtures against verified official Windows Ollama and pinned local gemma4:e2b with env-forced Cloud disabled. Record daemon and controlled provisioned model/build/digest, process and exact socket proof behavior, sample results/timings; report daemon-reported Cloud off, not blanket firewall/no-egress certification. Separately label any environmental egress monitoring and fake/actual Windows coverage. Hook remains configured/untested and notify flags are not delivery proof. Attempt proof with production trust path and the real signed daemon in controlled Windows, but record a specific blocked/refused state if unavailable; a fake/no-signature fixture cannot close the real-run gate.",
+        "Build exact candidate ordinary release ZIP and smoke-test the extracted package via its actual Quick Check Settings route. On opening observe zero new device/helper/HTTP/notification/hook/config effects; then exercise real production refusal for an unauthorized configured endpoint (no scripted fake or trust bypass), proving no HTTP to that endpoint. When available, run both genuine signed Ollama Gemma samples from that ordinary package with production verification; otherwise record real-daemon/ZIP positive as pending or not verified, never count the fixture as proof. Record SHA, job links, observed outcomes/limits and independent Advisor findings in repo JSON. Root merges after exact reviewed required gates; no release outside authorization."
+      ]
+    }
+  ],
+  "translation_fixture_clarification": {
+    "status": "proposed_pending_independent_advisor_before_code",
+    "scope": "Translation fixture v1 instruction and, only if supported by exact attestation, one reviewed explicit native response variant. No product edit before approval.",
+    "prior_evidence": {
+      "windows_signed_candidate": "a4635e8f",
+      "windows_signed_job": "140754221217",
+      "windows_observed": "Real ordinary packaged Settings UI, official signed Ollama v0.31.1, exact pinned local Gemma and env-forced Cloud disabled; both samples had completed local status/tags/chat HTTP 200 in their own phase. Translation returned mismatch (10.79 s); Grammar matched (2.58 s). This establishes real trusted dispatch, not successful Translation.",
+      "old_exact_prompt": "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Return only the Vietnamese translation.\n\nThe robot has two blue boxes.",
+      "linux_cross_check": "Separate isolated direct reproduction of the exact old fixed request and pinned model yielded ‘Robot có hai hộp màu xanh.’ in 3/3 reported retries. Bare xanh does not establish blue unambiguously. The direct observed string is not a capture of the Windows preview or proof of Windows equivalence.",
+      "pinned_manifest_sha256": "b37049369adfe3d2b653af0ab301a062ca5cbe96ace6aa0d3f2559ee9b563fc2"
+    },
+    "proposed_exact_prompt": "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Translate the color blue as \"xanh dương\" or \"xanh lam\", not just \"xanh\". Return only the Vietnamese translation.\n\nThe robot has two blue boxes.",
+    "exact_candidate_direct_benchmark": {
+      "environment": "Isolated Linux Ollama v0.31.1 with pinned local Gemma manifest above, native-shaped fixed local request. Supporting observation only, not Windows package proof.",
+      "observed_reply": "Robot có hai hộp màu xanh dương.",
+      "result": "3/3 exact replies, HTTP 200 with done_reason=stop, 62 prompt tokens and 9 generated tokens on each completion.",
+      "elapsed_seconds": [
+        24.992,
+        1.368,
+        1.325
+      ]
+    },
+    "only_proposed_new_normalized_variant": "robot có hai hộp màu xanh dương",
+    "freeze_before_product_edit": [
+      "Leave the displayed English fixture ‘The robot has two blue boxes.’ unchanged. The fixed prompt must clarify only the requested color wording; it does not supply a full target answer.",
+      "Independently review the exact addendum, prompt and only proposed new variant before implementation. The direct benchmark above establishes what the fixed local model emitted, not production Windows coverage.",
+      "The exact output is valid but the old matcher omitted the no-classifier wording. Add only the attested normalized sentence above, preserving all existing variants and normalization. The classifier ‘chiếc’/‘cái’ is not required semantically. Do not add hypothetical variants, broad slot/prefix/substring rules, or any acceptance for bare xanh. If Windows output is ambiguous, wrong, inconsistent or unattested, keep Translation pending; return to Advisor rather than loosening."
+    ],
+    "acceptance": [
+      "Freeze the complete expected Translation request bytes in a native test literal independent of the implementation constant or request serializer; also pin unchanged Grammar bytes; check unchanged model :local, stream, think, temperature, num_predict, deadlines and request ordering. No renderer data/custom text, onboarding, network, signer, owner, config, env-forced Cloud, alias, schema or no-fallback changes.",
+      "Test any newly attested exact candidate positively and keep rejection for bare xanh, green/missing color, wrong actor, ownership/count/object, negation, English echo, repeated/extra sentence or line, commentary and invalid/truncated model response. Preserve existing deterministic normalization and ambiguity wording.",
+      "Retain ordinary extracted ZIP passive entry/unauthorized endpoint refusal, native dashboard/protocol and full Windows regression; rerun both exact production signed samples via the real UI on the exact candidate after independent code review. Both must match under the existing proof and isolated pinned setup. No historical or direct Linux result satisfies that gate and no pass is set here."
+    ]
+  },
+  "non_goals": [
+    "No general quality benchmark, custom prompts or user text, audio/notifications/CLI/key actions on this page, model install/pull/preset, cloud/telemetry, persistent result history, update checker or unrelated feature redesign."
+  ],
+  "source_anchors": [
+    "rust/dashboard/src/api.rs: local_models/local_ai_diagnostics/local_chat, Core hook/status/config and flag",
+    "rust/dashboard/src/main.rs: trusted WebView origin, async AI_BUSY, setup, live nonce, shortcut_status",
+    "rust/dashboard/src/live.rs: canonical colocated helper selection; docs/live-translate-experimental-protocol.md",
+    "rust/dashboard/src/setup.rs and setup_trust.rs: Ollama provider process verification and no-cloud launch constraints",
+    "rust/dashboard/src/win.rs and rust/app/src/tray.rs: bounded tray IPC, registered status and independently managed -hf process",
+    "rust/crates/core/src/hookinstall.rs, hotkeys.rs and daemon/alerts.rs; ui.html settings links and navigation; plan-local-ai-setup.json"
+  ],
+  "evidence": {
+    "baseline_sync": {
+      "main_parent": "59e12b6815d57c8051597b0c47613986d4159a5d",
+      "quick_check_published_parent": "b1eaa8a7ded69a75836fb39daa1e4debc9158a9e",
+      "quick_check_local_parent": "5859457c02734813d4e3fb86f83b3bbca725133e",
+      "same_quick_check_tree": "64e3ffb19016179028c9878c436ff6c1cf7fca7d",
+      "preserved_baseline": {
+        "safe_report_pr": "https://github.com/rua-den/sig4a/pull/36",
+        "verified_candidate": "a9bbdce5cbd606ad57a6e8bf2784f44b46d83fa3",
+        "standard_windows": "https://github.com/rua-den/sig4a/actions/runs/46061252312",
+        "full_windows": "https://github.com/rua-den/sig4a/actions/runs/46061252327",
+        "ordinary_zip": "https://github.com/rua-den/sig4a/actions/runs/46061252327/artifacts/15228313523",
+        "scope": "Previously verified Safe Report candidate only; no implication for Quick Check or combined candidate."
+      },
+      "pre_sync_quick_check": {
+        "standard_windows": "https://github.com/rua-den/sig4a/actions/runs/46060307275",
+        "full_windows_regression": "https://github.com/rua-den/sig4a/actions/runs/46060307264/job/140712678582",
+        "full_windows_engine": "https://github.com/rua-den/sig4a/actions/runs/46060307264/job/140712678624",
+        "ordinary_zip": "https://github.com/rua-den/sig4a/actions/runs/46060307264/job/140712678256",
+        "scope": "Regression and engine passed their pre-sync jobs. Package failed selecting the dashboard root; no Quick Check package or signed sample pass."
+      },
+      "resolution": "Retain dedicated guarded Quick Check IPC and exact zero-argument Diagnostics Preview IPC; Settings route transitions clear either stale preview. Both ordinary and optional signed package runs use the same visible owned window and root-contained localized navigation checks. Quick Check still uses real UIA activation/refusal with no sample bypass; localized UIA responses are escaped safely.",
+      "combined_windows": "pending exact regression, package, and opted-in signed production proof"
+    },
+    "english_base_sync": {
+      "main_parent": "2032859753dd33399488a7722f117a529f13c89f",
+      "quick_check_published_parent": "11ba33758f9ec4d600f46a9d2d222029f7752eb2",
+      "quick_check_local_parent": "7f6a60395a52fb0eea7eaa0478e569f5041bc361",
+      "same_quick_check_tree": "9d8466219c67bd8d0a651e7928839418f63d2ba1",
+      "pre_sync_quick_check": {
+        "standard": "https://github.com/rua-den/sig4a/actions/runs/46064414424",
+        "full_and_ordinary": "https://github.com/rua-den/sig4a/actions/runs/46064413965",
+        "scope": "Previous candidate passed standard, full engine and ordinary-package Quick Check refusal; no signed positive claimed."
+      },
+      "previously_verified_english_setup": {
+        "candidate": "83f1839df5f5bf849364f6c36d8b9016221dcb81",
+        "standard": "https://github.com/rua-den/sig4a/actions/runs/46064563579",
+        "full": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650603",
+        "native_engine": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650977",
+        "ordinary_package": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650879",
+        "scope": "English native consent/decline/stale-view and actual digest-pinned publisher model setup plus local synthetic inference on its exact prior candidate only."
+      },
+      "resolution": "Preserve both native view fences. The normal release ZIP first proves Quick Check passive entry and unauthorized HTTP refusal, then explicitly invokes real Win32 English consent/download/verification/offline inference in the same isolated package. The signed Ollama proof runs on a separate package extraction and is never combined with English setup. Keep exact owned-dashboard relaunch, bounded root/ASCII localized UIA, and actual localized English dialog/button identities.",
+      "combined_windows": "Pending repeat at the exact combined revision; signed production positive not yet run."
+    },
+    "exact_acceptance": {
+      "tested_revision": "161fffac8a628de955f2cea6b7f27fb099034cd9",
+      "tested_tree": "9075e2107d23075f16c6e941013cbbbbf7aa88c0",
+      "integrated_main": "2032859753dd33399488a7722f117a529f13c89f",
+      "independent_source_review": {
+        "local_revision": "a60847bf1170cc38e3ba3b9b9519f018584258e0",
+        "plan_revision": "9c79fbeb537a03b67fc28390d7913dd7202cd16c",
+        "plan_sha256": "013c52977588e932468c8c1e9a3aca27b98d96cb84de13bd8c9e42a8257fd0a7",
+        "result": "Exact tree independently source-approved, then passed the hosted gates below."
+      },
+      "standard_windows": "https://github.com/rua-den/sig4a/actions/runs/46075083646",
+      "full_windows": "https://github.com/rua-den/sig4a/actions/runs/46075083557/job/140760816859",
+      "full_regression": {
+        "passed": 263,
+        "failed": 0,
+        "ignored": 1
+      },
+      "local_engine": "https://github.com/rua-den/sig4a/actions/runs/46075083557/job/140760816618",
+      "ordinary_zip_job": "https://github.com/rua-den/sig4a/actions/runs/46075083557/job/140760816550",
+      "ordinary_zip_artifact": "https://github.com/rua-den/sig4a/actions/runs/46075083557/artifacts/15233929736",
+      "ordinary_outcome": "Actual owned dashboard UI showed passive Settings entry and refused the unauthorized endpoint without HTTP, hook, config, notification flag, or Live helper effects; the independent subsequent explicit native English install verified the pinned download and true synthetic offline inference.",
+      "signed_windows": {
+        "job": "https://github.com/rua-den/sig4a/actions/runs/46076912117/job/140766690183",
+        "artifact": "https://github.com/rua-den/sig4a/actions/runs/46076912117/artifacts/15235827028",
+        "tested_archive_sha256": "72eaaa1c832d70b980e000dda4ddae649a6c9ddca20af792451c7a1cb7c20459",
+        "provider": "Official Authenticode-verified Ollama v0.31.1",
+        "provider_archive_sha256": "9ecf5a631561c7dff3a143925f11e2008327be738a7279fcf0c5462b9c422700",
+        "signed_image_sha256": "ffb61f3800d250a080155fe6243c87e6effa67b0686546252c965bc8cb736b77",
+        "local_model": "gemma4:e2b",
+        "manifest_sha256": "b37049369adfe3d2b653af0ab301a062ca5cbe96ace6aa0d3f2559ee9b563fc2",
+        "cloud_disabled": true,
+        "cloud_source": "env",
+        "translation": {
+          "actual_ui_click": true,
+          "status": 200,
+          "result": "match",
+          "app_ms": 7750
+        },
+        "grammar": {
+          "actual_ui_click": true,
+          "status": 200,
+          "result": "match",
+          "app_ms": 1330
+        },
+        "limits": "Only these two fixed text fixtures on the retained local daemon. No general quality, physical audio/device, or system-wide egress guarantee."
+      }
+    }
+  },
+  "revision": "advisor-offline-v1-final-refresh",
+  "pre_code_review": {
+    "draft_sha256": "34b71d0f7277d597513335b1a148f6cb22f669509306c55f795810d31fc06594",
+    "result": "Independent Advisor approved the exact draft after reviewing signed Ollama transport, passive routes, and native evidence.",
+    "merged_main_sha": "a20328f66046eb71c8708107330b62e21da2f336"
+  }
+}

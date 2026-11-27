@@ -26,6 +26,7 @@ jobs:
         working-directory: rust
         run: |
           tzutil.exe /s "SE Asia Standard Time"
+          node dashboard/tests/js/quick_check_shim.test.cjs
           cargo test --locked --workspace -- --test-threads=1
   windows-package:
     runs-on: windows-2025
