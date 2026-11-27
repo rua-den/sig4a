@@ -69,7 +69,7 @@ fn dashboard_english_model_setup_is_explicit_bounded_and_cancelable() {
     );
     run.go("verified");
     // The consent dialog is a real native dialog. This test process only presses its documented No/Yes buttons.
-    for (i, button) in [7usize, 6, 6].into_iter().enumerate() {
+    for (i, button) in [6usize, 7, 6, 6].into_iter().enumerate() {
         let deadline = std::time::Instant::now() + Duration::from_secs(8);
         let dlg = loop {
             let h = find_dialog("Live Translate · English model");
@@ -84,6 +84,34 @@ fn dashboard_english_model_setup_is_explicit_bounded_and_cancelable() {
         };
         answer(dlg, button);
         if i == 0 {
+            let first_pid = fs::read_to_string(&pid).unwrap_or_default();
+            run.stage("grant-held");
+            // Consent alone (plus ordinary view heartbeats) does not launch.
+            thread::sleep(Duration::from_millis(800));
+            run.rust_check(
+                "no helper launch without the challenge echo",
+                fs::read_to_string(&pid).unwrap_or_default() == first_pid
+                    && fs::read_to_string(&commands)
+                        .unwrap_or_default()
+                        .lines()
+                        .count()
+                        == 1,
+                "",
+            );
+            run.go("grant-held");
+            run.stage("grant-revoked");
+            run.rust_check(
+                "an exact challenge from a departed page is rejected",
+                fs::read_to_string(&pid).unwrap_or_default() == first_pid
+                    && fs::read_to_string(&commands)
+                        .unwrap_or_default()
+                        .lines()
+                        .count()
+                        == 1,
+                "",
+            );
+            run.go("grant-revoked");
+        } else if i == 1 {
             run.stage("declined");
             let lines = fs::read_to_string(&commands).unwrap_or_default();
             run.rust_check(
@@ -92,7 +120,7 @@ fn dashboard_english_model_setup_is_explicit_bounded_and_cancelable() {
                 &lines,
             );
             run.go("declined");
-        } else if i == 1 {
+        } else if i == 2 {
             run.stage("cancelled");
             run.rust_check(
                 "install start was sent only after the Yes dialog",

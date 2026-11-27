@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
@@ -305,27 +306,44 @@ static class WindowsModelPaths
         finally { Marshal.FreeHGlobal(buffer); }
     }
 
+    internal static byte[] PointerRenameBuffer(nint rootDirectory)
+    {
+        const int sizeOfNativeStructureX64 = 24, nameOffset = 20;
+        var name = Encoding.Unicode.GetBytes(EnglishModelInstaller.MarkerLeaf);
+        // WDK FILE_RENAME_INFORMATION Win64: zero ReplaceIfExists,
+        // aligned HANDLE at 8, ULONG byte length at 16, WCHAR data at 20.
+        // Zero-initialized padding (including a trailing NUL) is not counted
+        // in FileNameLength; the call length covers sizeof(struct) + name.
+        var buffer = new byte[sizeOfNativeStructureX64 + name.Length];
+        BinaryPrimitives.WriteInt64LittleEndian(buffer.AsSpan(8), rootDirectory.ToInt64());
+        BinaryPrimitives.WriteInt32LittleEndian(buffer.AsSpan(16), name.Length);
+        name.CopyTo(buffer, nameOffset);
+        return buffer;
+    }
+
     internal static void CommitPointer(FileStream original, string source, Identity identity, Pin parent)
     {
-        const string leaf = EnglishModelInstaller.MarkerLeaf;
+        const int fileRenameInformation = 10;
         var handle = original.SafeFileHandle;
-        if (Inspect(handle, source, directory: false) != identity || identity.Volume != parent.Id.Volume || IntPtr.Size != 8)
+        if (Inspect(handle, source, directory: false) != identity ||
+            identity.Volume != parent.Id.Volume || IntPtr.Size != 8)
             throw new SetupFailure("invalid_path");
         ConfirmPin(parent);
-        var name = Encoding.Unicode.GetBytes(leaf + "\0");
-        // FILE_RENAME_INFO x64: zero no-overwrite BOOLEAN/union, HANDLE at
-        // offset 8, ULONG text byte count at 16, UTF-16 text at offset 20.
-        int bytes = 24 + name.Length;
-        var info = Marshal.AllocHGlobal(bytes);
+        bool parentHeld = false;
         try
         {
-            Marshal.WriteInt64(info, 0, 0);
-            Marshal.WriteIntPtr(info, 8, parent.Handle.DangerousGetHandle());
-            Marshal.WriteInt32(info, 16, name.Length - 2);
-            Marshal.Copy(name, 0, info + 20, name.Length);
-            if (!SetFileInformationByHandle(handle, 3, info, (uint)bytes)) throw Last();
+            parent.Handle.DangerousAddRef(ref parentHeld);
+            byte[] buffer = PointerRenameBuffer(parent.Handle.DangerousGetHandle());
+            // The original marker was opened FILE_SYNCHRONOUS_IO_NONALERT
+            // with DELETE access. No Win32 path translation or fallback.
+            int status = NtSetInformationFile(handle, out _, buffer, (uint)buffer.Length, fileRenameInformation);
+            if (status != 0)
+            {
+                int win32 = (int)RtlNtStatusToDosError(status);
+                throw new Win32Exception(win32, $"Rooted marker rename failed (NTSTATUS 0x{unchecked((uint)status):X8}; Win32 {win32}).");
+            }
         }
-        finally { Marshal.FreeHGlobal(info); }
+        finally { if (parentHeld) parent.Handle.DangerousRelease(); }
     }
 
     internal sealed class PackageLease(Chain chain, SafeWaitHandle mutex) : IDisposable
@@ -369,6 +387,9 @@ static class WindowsModelPaths
     [DllImport("ntdll.dll", ExactSpelling = true)]
     static extern int NtCreateFile(out IntPtr handle, uint access, ref ObjectAttributes attributes, out IoStatus io,
         IntPtr allocationSize, uint attributesOfFile, uint share, uint disposition, uint options, IntPtr data, uint dataLength);
+    [DllImport("ntdll.dll", ExactSpelling = true)]
+    static extern int NtSetInformationFile(SafeFileHandle handle, out IoStatus io,
+        [In] byte[] data, uint length, int informationClass);
     [DllImport("ntdll.dll", ExactSpelling = true)]
     static extern uint RtlNtStatusToDosError(int status);
     [DllImport("ntdll.dll", ExactSpelling = true)]

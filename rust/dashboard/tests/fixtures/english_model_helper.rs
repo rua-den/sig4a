@@ -58,16 +58,24 @@ fn main() {
     send(format!(
         r#"{{"v":1,"type":"model_setup","session":{session},"state":"downloading","received":42,"total":310414022}}"#
     ));
-    if count == 1 {
-        if let Some(cancel) = io::stdin().lock().lines().next().and_then(Result::ok) {
-            if cancel.contains(r#""type":"model_setup_cancel""#)
+    let cancelled = io::stdin()
+        .lock()
+        .lines()
+        .next()
+        .and_then(Result::ok)
+        .is_some_and(|cancel| {
+            cancel.contains(r#""type":"model_setup_cancel""#)
                 && cancel.contains(&format!(r#""session":{session}"#))
-            {
-                send(event(session, "cancelled"));
-            }
-        }
+        });
+    if !cancelled {
         return;
     }
+    if count == 1 {
+        send(event(session, "cancelled"));
+        return;
+    }
+    // This retry models a cancel competing with a commit that already won. The
+    // later stages are still queued when the dashboard is showing Cancelling.
     for stage in [
         "checking_archive",
         "extracting",

@@ -8,7 +8,7 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
 use windows_sys::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow};
-use windows_sys::Win32::UI::Shell::{ShellExecuteW, SetWindowSubclass, SUBCLASSPROC};
+use windows_sys::Win32::UI::Shell::{SetWindowSubclass, SUBCLASSPROC};
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 pub const CLASS: &str = "ClaudeUsageDashboard";
@@ -219,17 +219,6 @@ pub fn open_toolbox() -> bool {
         GetWindowThreadProcessId(h(hwnd), &mut pid);
         if pid != 0 { AllowSetForegroundWindow(pid); }
         PostMessageW(h(hwnd), cu_core::hotkeys::OPEN_MESSAGE, 0, 0) != 0
-    }
-}
-
-pub fn open_model_folder(hwnd: isize, path: &Path) -> bool {
-    use std::os::windows::ffi::OsStrExt;
-    let Ok(canonical) = std::fs::canonicalize(path) else { return false; };
-    if canonical != path || !canonical.is_dir() { return false; }
-    let target: Vec<u16> = canonical.as_os_str().encode_wide().chain([0]).collect();
-    // SAFETY: fixed, canonical app-owned folder and NUL-terminated verb/path.
-    unsafe {
-        ShellExecuteW(h(hwnd), wide("open").as_ptr(), target.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) as isize > 32
     }
 }
 

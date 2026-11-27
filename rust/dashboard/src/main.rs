@@ -7,6 +7,7 @@ mod api;
 mod geom;
 mod live;
 mod model_setup;
+mod model_setup_path;
 mod region;
 mod setup;
 mod setup_trust;
@@ -324,10 +325,7 @@ impl App {
             "live_model_state" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==1 => {
                 self.check_live_lease(Instant::now());
                 if self.live_heartbeat.is_none() { return Ok(json!({"active":false,"state":"unchecked"})); }
-                match std::env::current_exe() {
-                    Ok(exe) => self.model_setup.passive_status(&exe),
-                    Err(_) => json!({"active":false,"state":"missing_helper"}),
-                }
+                self.model_setup.state()
             }
             "live_model_install" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==1 => {
                 self.check_live_lease(Instant::now());
@@ -354,7 +352,7 @@ impl App {
                     let view_deadline=now+LIVE_LEASE;
                     if live_state["phase"].as_str()==Some("idle") && live_state["listing"].as_bool()!=Some(true)
                         && live_state["checking"].as_bool()!=Some(true) && !self.model_setup.busy()
-                        && self.model_setup.heartbeat(page,challenge,now,view_deadline) { self.record_live_heartbeat(now); }
+                        && self.model_setup.heartbeat(page,challenge,now,view_deadline,self.hwnd) { self.record_live_heartbeat(now); }
                     else { self.model_setup.reject_pending(page,challenge,now); }
                 }
                 self.model_setup.state()
@@ -367,21 +365,11 @@ impl App {
                     return Ok(json!({"active":false,"state":"failed","code":"busy"}));
                 }
                 let view_deadline=self.live_heartbeat.map(|seen|seen+LIVE_LEASE).unwrap_or(now);
-                if let Some(session)=self.model_setup.verify(view_deadline) { json!({"active":self.model_setup.busy(),"state":"checking_files","session":session}) }
+                if self.model_setup.verify(view_deadline,self.hwnd).is_some() { self.model_setup.state() }
                 else { json!({"active":false,"state":"failed","code":"busy"}) }
             }
             "live_model_cancel" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==2 => {
                 let session=a.get(1).and_then(Value::as_u64).unwrap_or(0); self.model_setup.cancel(session); self.model_setup.state()
-            }
-            "live_model_open_folder" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==1 => {
-                self.check_live_lease(Instant::now());
-                let now=Instant::now();
-                if !win::visible_live_window(self.hwnd) || self.live_heartbeat.is_none_or(|seen|now.saturating_duration_since(seen)>=LIVE_LEASE) {
-                    return Ok(json!({"opened":false}));
-                }
-                let Some(exe)=std::env::current_exe().ok() else { return Ok(json!({"opened":false})); };
-                let Some(path)=model_setup::ModelSetup::fixed_model_folder(&exe) else { return Ok(json!({"opened":false})); };
-                return Ok(Value::Bool(win::open_model_folder(self.hwnd,&path)));
             }
             "open_toolbox" => Value::Bool(win::open_toolbox()),
             "state" => c.state(),

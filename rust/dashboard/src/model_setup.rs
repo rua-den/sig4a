@@ -7,7 +7,6 @@ use std::{
         io::{AsHandle, AsRawHandle, FromRawHandle, OwnedHandle},
         process::CommandExt,
     },
-    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -125,7 +124,9 @@ fn setup_transition(action: &str, stage: u8, state: &str) -> Option<u8> {
         return Some(stage);
     }
     if state == "cancelled" {
-        return (stage <= 5).then_some(stage);
+        // The helper emits committing before the last cancellation checkpoint and
+        // sends cancelled only once rollback/cleanup has completed.
+        return (stage <= 6).then_some(stage);
     }
     match (action, stage, state) {
         ("verify", 0, "checking_files") => Some(1),
@@ -327,6 +328,7 @@ struct Worker {
     started: Instant,
     last_event: Instant,
     cancel_ms: Arc<AtomicU64>,
+    start_revoked: Arc<Mutex<bool>>,
     tripped: Arc<Mutex<Option<&'static str>>>,
     view_deadline: Arc<Mutex<Instant>>,
     monitor_done: Arc<AtomicBool>,
@@ -334,7 +336,7 @@ struct Worker {
     cancel_at: Option<Instant>,
     action: &'static str,
     stage: u8,
-    process_exit_success: Option<bool>,
+    process_exit: Option<Option<i32>>,
     process_exit_seen_at: Option<Instant>,
     clean_eof: bool,
     session: u64,
@@ -343,19 +345,47 @@ struct Worker {
     code: Option<&'static str>,
     done: bool,
 }
+
+fn write_start_if_permitted(
+    stdin: &mut impl Write,
+    frame: &[u8],
+    original_deadline: Instant,
+    revoked: &Mutex<bool>,
+    visible: impl FnOnce() -> bool,
+) -> Result<(), &'static str> {
+    // A later renewable watchdog heartbeat cannot authorize the **first** write.
+    // The pipe is new and empty: issue one short write including the newline;
+    // a failed/partial write never gets a continuation or a retry.
+    let revoked = revoked.lock().unwrap();
+    if *revoked || !visible() || Instant::now() >= original_deadline {
+        return Err("cleanup_incomplete");
+    }
+    match stdin.write(frame) {
+        Ok(written) if written == frame.len() => Ok(()),
+        _ => Err("installer_internal"),
+    }
+}
+
 impl Worker {
     fn open(
         session: u64,
         action: &str,
         initial_view_deadline: Instant,
+        hwnd: isize,
     ) -> Result<Self, &'static str> {
         let action = match action {
             "install" => "install",
             "verify" => "verify",
             _ => return Err("installer_internal"),
         };
-        let exe = crate::live::colocated(&std::env::current_exe().map_err(|_| "backend_missing")?)
-            .ok_or("backend_missing")?;
+        if Instant::now() >= initial_view_deadline || !crate::win::visible_live_window(hwnd) {
+            return Err("cleanup_incomplete");
+        }
+        let helper = crate::model_setup_path::SetupHelper::open(
+            &std::env::current_exe().map_err(|_| "backend_missing")?,
+        )
+        .map_err(|error| error.code())?;
+        let exe = &helper.executable;
         // This is only a UI-install-session guard. The managed helper owns the shared
         // package lock that arbitrates install, verify, capture, and Audio Check.
         let lock = unsafe {
@@ -375,7 +405,11 @@ impl Worker {
             owner
         };
         let job = job().map_err(|_| "installer_internal")?;
-        let mut child = Command::new(&exe)
+        helper.confirm().map_err(|error| error.code())?;
+        if Instant::now() >= initial_view_deadline || !crate::win::visible_live_window(hwnd) {
+            return Err("cleanup_incomplete");
+        }
+        let mut child = Command::new(exe)
             .arg("--english-model-setup")
             .current_dir(exe.parent().ok_or("backend_missing")?)
             .stdin(Stdio::piped())
@@ -384,11 +418,28 @@ impl Worker {
             .creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED)
             .spawn()
             .map_err(|_| "backend_missing")?;
+        // If process creation itself was slow, the suspended process never starts.
+        if Instant::now() >= initial_view_deadline || !crate::win::visible_live_window(hwnd) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("cleanup_incomplete");
+        }
+        if let Err(error) = helper.confirm() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error.code());
+        }
+        if Instant::now() >= initial_view_deadline || !crate::win::visible_live_window(hwnd) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("cleanup_incomplete");
+        }
         if assign_and_resume(&child, &job).is_err() {
             let _ = child.kill();
             let _ = child.wait();
             return Err("installer_internal");
         }
+        drop(helper);
         let mut stdin = child.stdin.take().ok_or("installer_internal")?;
         let stdout = child.stdout.take().ok_or("installer_internal")?;
         let (send, commands) = mpsc::sync_channel::<Value>(2);
@@ -396,6 +447,7 @@ impl Worker {
         let started = Instant::now();
         let last_event_ms = Arc::new(AtomicU64::new(0));
         let cancel_ms = Arc::new(AtomicU64::new(0));
+        let start_revoked = Arc::new(Mutex::new(false));
         let tripped = Arc::new(Mutex::new(None));
         let view_deadline = Arc::new(Mutex::new(initial_view_deadline));
         let monitor_done = Arc::new(AtomicBool::new(false));
@@ -416,7 +468,14 @@ impl Worker {
             let elapsed = started.elapsed();
             let now_ms = elapsed.as_millis().min(u64::MAX as u128) as u64;
             let cancel = monitor_cancel.load(Ordering::Acquire);
-            let code = if Instant::now() >= *monitor_view_deadline.lock().unwrap() {
+            if unsafe { WaitForSingleObject(monitor_process.as_raw_handle() as _, 0) }
+                == WAIT_OBJECT_0
+            {
+                return;
+            }
+            let code = if !crate::win::visible_live_window(hwnd)
+                || Instant::now() >= *monitor_view_deadline.lock().unwrap()
+            {
                 Some("cleanup_incomplete")
             } else if elapsed >= IDLE_TIMEOUT {
                 Some("timeout")
@@ -432,7 +491,7 @@ impl Worker {
                 None
             };
             if let Some(code) = code {
-                *monitor_trip.lock().unwrap() = Some(code);
+                monitor_trip.lock().unwrap().get_or_insert(code);
                 unsafe {
                     if TerminateJobObject(monitor_job.as_raw_handle() as _, 1) == 0 {
                         TerminateProcess(monitor_process.as_raw_handle() as _, 1);
@@ -440,14 +499,34 @@ impl Worker {
                 }
                 return;
             }
-            if unsafe { WaitForSingleObject(monitor_process.as_raw_handle() as _, 0) }
-                == WAIT_OBJECT_0
-            {
-                return;
-            }
             std::thread::sleep(Duration::from_millis(100));
         });
+        let writer_cancel = start_revoked.clone();
+        let writer_trip = tripped.clone();
+        let writer_job = job.try_clone().map_err(|_| "installer_internal")?;
+        let writer_process = child
+            .as_handle()
+            .try_clone_to_owned()
+            .map_err(|_| "installer_internal")?;
+        let frame = json!({"v":1,"type":"model_setup_start","session":session,"action":action})
+            .to_string()
+            + "\n";
         std::thread::spawn(move || {
+            if let Err(code) = write_start_if_permitted(
+                &mut stdin,
+                frame.as_bytes(),
+                initial_view_deadline,
+                &writer_cancel,
+                || crate::win::visible_live_window(hwnd) && writer_trip.lock().unwrap().is_none(),
+            ) {
+                writer_trip.lock().unwrap().get_or_insert(code);
+                unsafe {
+                    if TerminateJobObject(writer_job.as_raw_handle() as _, 1) == 0 {
+                        TerminateProcess(writer_process.as_raw_handle() as _, 1);
+                    }
+                }
+                return;
+            }
             while let Ok(value) = commands.recv() {
                 let s = value.to_string();
                 if stdin
@@ -492,7 +571,7 @@ impl Worker {
                 }
             }
         });
-        let w = Self {
+        Ok(Self {
             _lock: lock,
             child,
             job,
@@ -501,6 +580,7 @@ impl Worker {
             started,
             last_event: Instant::now(),
             cancel_ms,
+            start_revoked,
             tripped,
             view_deadline,
             monitor_done,
@@ -508,7 +588,7 @@ impl Worker {
             cancel_at: None,
             action,
             stage: 0,
-            process_exit_success: None,
+            process_exit: None,
             process_exit_seen_at: None,
             clean_eof: false,
             session,
@@ -516,24 +596,21 @@ impl Worker {
             state: "starting",
             code: None,
             done: false,
-        };
-        w.send
-            .try_send(json!({"v":1,"type":"model_setup_start","session":session,"action":action}))
-            .map_err(|_| "installer_internal")?;
-        Ok(w)
+        })
     }
     fn cancel(&mut self) {
         if self.done || self.cancel_at.is_some() {
             return;
         }
-        let _ = self
-            .send
-            .try_send(json!({"v":1,"type":"model_setup_cancel","session":self.session}));
+        *self.start_revoked.lock().unwrap() = true;
         self.cancel_at = Some(Instant::now());
         self.cancel_ms.store(
             self.started.elapsed().as_millis().min(u64::MAX as u128) as u64 + 1,
             Ordering::Release,
         );
+        let _ = self
+            .send
+            .try_send(json!({"v":1,"type":"model_setup_cancel","session":self.session}));
         self.state = "cancelling";
     }
     fn kill(&mut self) {
@@ -568,10 +645,6 @@ impl Worker {
                         self.fail("installer_internal");
                         break;
                     }
-                    if self.cancel_at.is_some() && !terminal {
-                        // Ignore progress queued before Cancel; only terminal ack may finish it.
-                        continue;
-                    }
                     let Some(stage) = setup_transition(self.action, self.stage, e.state) else {
                         self.fail("installer_internal");
                         break;
@@ -582,11 +655,13 @@ impl Worker {
                     }
                     self.stage = stage;
                     self.last_event = Instant::now();
+                    self.received = e.received.unwrap_or(self.received);
                     if terminal {
                         self.terminal = Some((e, Instant::now()));
-                    } else {
+                    } else if self.cancel_at.is_none() {
+                        // Progress still advances the protocol FSM while the visible
+                        // status stays Cancelling; an atomic commit may win the race.
                         self.state = e.state;
-                        self.received = e.received.unwrap_or(self.received);
                     }
                 }
                 Ok(ReaderEvent::Event(_)) => {
@@ -611,29 +686,37 @@ impl Worker {
         if self.done {
             return;
         }
-        if !self.done && self.started.elapsed() > IDLE_TIMEOUT {
+        if self.started.elapsed() > IDLE_TIMEOUT
+            || self.last_event.elapsed() > Duration::from_secs(120)
+        {
             self.fail("timeout");
+            return;
         }
-        if !self.done && self.last_event.elapsed() > Duration::from_secs(120) {
-            self.fail("timeout");
-        }
-        if !self.done
-            && self
-                .cancel_at
-                .is_some_and(|at| at.elapsed() > CANCEL_TIMEOUT)
+        if self
+            .cancel_at
+            .is_some_and(|at| at.elapsed() > CANCEL_TIMEOUT)
         {
             self.fail("cleanup_incomplete");
+            return;
         }
         match self.child.try_wait() {
             Ok(Some(status)) => {
                 self.monitor_done.store(true, Ordering::Release);
-                self.process_exit_success = Some(status.success());
+                self.process_exit = Some(status.code());
                 self.process_exit_seen_at.get_or_insert_with(Instant::now);
             }
-            Err(_) => self.fail("installer_internal"),
+            Err(_) => {
+                self.fail("installer_internal");
+                return;
+            }
             _ => {}
         }
-        if let Some(success) = self.process_exit_success {
+        let tripped = { *self.tripped.lock().unwrap() };
+        if let Some(code) = tripped {
+            self.fail(code);
+            return;
+        }
+        if let Some(exit) = self.process_exit {
             if !self.clean_eof {
                 if self
                     .process_exit_seen_at
@@ -644,18 +727,18 @@ impl Worker {
                 return;
             }
             match self.terminal.take() {
-                Some((event, _)) if success && event.state == "ready" => {
+                Some((event, _)) if exit == Some(0) && event.state == "ready" => {
                     self.state = event.state;
                     self.code = event.code;
                     self.received = event.received.unwrap_or(self.received);
                     self.done = true;
                 }
-                Some((event, _)) if success && event.state == "cancelled" => {
+                Some((event, _)) if exit == Some(0) && event.state == "cancelled" => {
                     self.state = "cancelled";
                     self.code = None;
                     self.done = true;
                 }
-                Some((event, _)) if !success && event.state == "failed" => {
+                Some((event, _)) if exit == Some(1) && event.state == "failed" => {
                     self.state = "failed";
                     self.code = event.code.or(Some("installer_internal"));
                     self.done = true;
@@ -679,6 +762,9 @@ impl Worker {
         }
     }
     fn fail(&mut self, code: &'static str) {
+        if self.done {
+            return;
+        }
         unsafe {
             if TerminateJobObject(self.job.as_raw_handle() as _, 1) == 0 {
                 let _ = self.child.kill();
@@ -722,7 +808,9 @@ impl ModelSetup {
             .as_ref()
             .is_some_and(|(_, _, _, _, expires)| now >= *expires)
         {
-            self.pending = None;
+            if let Some((session, _, _, _, _)) = self.pending.take() {
+                self.last = json!({"active":false,"session":session,"state":"failed","code":"stale_confirmation"});
+            }
         }
     }
     pub fn state(&mut self) -> Value {
@@ -736,35 +824,6 @@ impl ModelSetup {
         }
         self.last.clone()
     }
-    /// Metadata-only classification. Never hashes, launches, cleans, or trusts an existing model as Ready.
-    pub fn passive_status(&mut self, current_exe: &Path) -> Value {
-        if self.worker.is_some() {
-            return self.state();
-        }
-        if self.last["state"].as_str() != Some("unchecked") {
-            return self.last.clone();
-        }
-        let state = if let Some(helper) = crate::live::colocated(current_exe) {
-            let Some(root) = helper.parent() else {
-                return self.last.clone();
-            };
-            passive_model_state(root)
-        } else {
-            "missing_helper"
-        };
-        self.last = json!({"active":false,"state":state});
-        self.last.clone()
-    }
-    pub fn fixed_model_folder(current_exe: &Path) -> Option<PathBuf> {
-        let helper = crate::live::colocated(current_exe)?;
-        let root = helper.parent()?;
-        let metadata = std::fs::symlink_metadata(root).ok()?;
-        if !metadata.is_dir() || metadata.file_type().is_symlink() || windows_reparse(&metadata) {
-            return None;
-        }
-        let canonical = std::fs::canonicalize(root).ok()?;
-        (canonical == root).then_some(canonical)
-    }
     /// Arm install only after explicit native confirmation. The returned nonce is bound to one page and expires.
     pub fn confirm_install(
         &mut self,
@@ -773,7 +832,11 @@ impl ModelSetup {
         now: Instant,
     ) -> Option<(u64, String)> {
         self.expire_pending(now);
-        if !confirmed || self.worker.is_some() || self.pending.is_some() {
+        if self.worker.is_some() || self.pending.is_some() {
+            return None;
+        }
+        if !confirmed {
+            self.last = json!({"active":false,"state":"declined"});
             return None;
         }
         let challenge = fresh_challenge()?;
@@ -789,6 +852,7 @@ impl ModelSetup {
             now,
             now + Duration::from_secs(10),
         ));
+        self.last = json!({"active":false,"session":self.next,"state":"awaiting_heartbeat"});
         Some((self.next, challenge))
     }
     pub fn awaiting_heartbeat(&mut self, page: &str, now: Instant) -> bool {
@@ -805,6 +869,7 @@ impl ModelSetup {
         challenge: &str,
         now: Instant,
         view_deadline: Instant,
+        hwnd: isize,
     ) -> bool {
         self.expire_pending(now);
         let valid = self
@@ -819,7 +884,7 @@ impl ModelSetup {
         let Some((session, _, _, _, _)) = self.pending.take() else {
             return false;
         };
-        self.start(session, "install", view_deadline);
+        self.start(session, "install", view_deadline, hwnd);
         true
     }
     pub fn reject_pending(&mut self, page: &str, challenge: &str, now: Instant) {
@@ -833,7 +898,7 @@ impl ModelSetup {
             self.last = json!({"active":false,"session":session,"state":"failed","code":"busy"});
         }
     }
-    pub fn verify(&mut self, view_deadline: Instant) -> Option<u64> {
+    pub fn verify(&mut self, view_deadline: Instant, hwnd: isize) -> Option<u64> {
         self.expire_pending(Instant::now());
         if self.worker.is_some() || self.pending.is_some() {
             return None;
@@ -844,11 +909,11 @@ impl ModelSetup {
             self.next + 1
         };
         let session = self.next;
-        self.start(session, "verify", view_deadline);
+        self.start(session, "verify", view_deadline, hwnd);
         Some(session)
     }
-    fn start(&mut self, session: u64, action: &str, view_deadline: Instant) {
-        match Worker::open(session, action, view_deadline) {
+    fn start(&mut self, session: u64, action: &str, view_deadline: Instant, hwnd: isize) {
+        match Worker::open(session, action, view_deadline, hwnd) {
             Ok(w) => {
                 self.last = w.value();
                 self.worker = Some(w);
@@ -893,44 +958,59 @@ impl ModelSetup {
     }
 }
 
-fn windows_reparse(metadata: &std::fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    metadata.file_attributes() & 0x400 != 0
-}
-
-fn passive_model_state(root: &Path) -> &'static str {
-    let safe_entry = |path: &Path, want_directory: bool| -> Option<bool> {
-        match std::fs::symlink_metadata(path) {
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(false),
-            Err(_) => None,
-            Ok(m) if windows_reparse(&m) || m.file_type().is_symlink() => None,
-            Ok(m) if want_directory == m.is_dir() => Some(true),
-            Ok(_) => None,
-        }
-    };
-    let models = root.join("models");
-    let Some(exists) = safe_entry(&models, true) else {
-        return "needs_repair";
-    };
-    if !exists {
-        return "not_installed";
-    }
-    let Some(pointer) = safe_entry(&models.join("zipformer.current"), false) else {
-        return "needs_repair";
-    };
-    let Some(legacy) = safe_entry(&models.join("zipformer"), true) else {
-        return "needs_repair";
-    };
-    match (pointer, legacy) {
-        (false, false) => "not_installed",
-        (true, false) | (false, true) => "verify_existing",
-        (true, true) => "needs_repair",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
+
+    #[test]
+    fn start_writer_cannot_send_an_expired_cancelled_or_hidden_grant_to_the_win32_pipe() {
+        const START: &[u8] =
+            b"{\"v\":1,\"type\":\"model_setup_start\",\"session\":1,\"action\":\"install\"}\n";
+        for case in [
+            "stalled-spawn",
+            "stalled-writer",
+            "cancelled",
+            "hidden",
+            "valid",
+        ] {
+            // std::io::pipe uses a native Windows one-way pipe. No process, network or assets.
+            let (mut reader, mut writer) = io::pipe().unwrap();
+            let future = Instant::now() + Duration::from_secs(5);
+            let expired = Instant::now() - Duration::from_millis(1);
+            let revoked = Mutex::new(case == "cancelled");
+            let result = if case == "stalled-writer" {
+                // Fall through the visibility check only once the immutable
+                // permit expires, as if this writer were held by the scheduler.
+                let deadline = Instant::now() + Duration::from_millis(20);
+                write_start_if_permitted(&mut writer, START, deadline, &revoked, || {
+                    while Instant::now() < deadline {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    true
+                })
+            } else {
+                let deadline = if case == "stalled-spawn" {
+                    expired
+                } else {
+                    future
+                };
+                write_start_if_permitted(&mut writer, START, deadline, &revoked, || {
+                    case != "hidden"
+                })
+            };
+            drop(writer);
+            let mut actual = Vec::new();
+            reader.read_to_end(&mut actual).unwrap();
+            if case == "valid" {
+                assert_eq!(result, Ok(()));
+                assert_eq!(actual, START);
+            } else {
+                assert_eq!(result, Err("cleanup_incomplete"), "{case}");
+                assert!(actual.is_empty(), "{case}");
+            }
+        }
+    }
     #[test]
     fn protocol_requires_exact_fields_and_pinned_progress() {
         assert_eq!(parse_line(br#"{"v":1,"type":"model_setup","session":2,"state":"downloading","received":3,"total":310414022}"#,2).unwrap().received,Some(3));
@@ -985,18 +1065,32 @@ mod tests {
             "page",
             "00000000000000000000000000000000",
             now + Duration::from_millis(1),
-            deadline
+            deadline,
+            0
         ));
         assert!(!m.heartbeat(
             "another-page",
             &challenge,
             now + Duration::from_millis(2),
-            deadline
+            deadline,
+            0
         ));
         assert!(m.awaiting_heartbeat("page", now + Duration::from_millis(3)));
-        assert!(m.heartbeat("page", &challenge, now + Duration::from_millis(4), deadline));
-        assert!(!m.heartbeat("page", &challenge, now + Duration::from_millis(5), deadline));
-        assert!(!m.busy()); // Missing fake product helper: a replay did not launch a worker.
+        assert!(m.heartbeat(
+            "page",
+            &challenge,
+            now + Duration::from_millis(4),
+            deadline,
+            0
+        ));
+        assert!(!m.heartbeat(
+            "page",
+            &challenge,
+            now + Duration::from_millis(5),
+            deadline,
+            0
+        ));
+        assert!(!m.busy()); // The test has no visible dashboard window; no helper may start.
         let (_, expired) = m
             .confirm_install("page", true, now + Duration::from_millis(6))
             .unwrap();
@@ -1008,7 +1102,8 @@ mod tests {
             "page",
             &expired,
             now + Duration::from_secs(19),
-            now + Duration::from_secs(21)
+            now + Duration::from_secs(21),
+            0
         ));
     }
     #[test]

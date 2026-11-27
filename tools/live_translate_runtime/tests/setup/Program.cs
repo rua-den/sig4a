@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Formats.Tar;
 using System.Net;
@@ -157,6 +158,17 @@ if (args is ["--check-official-archive", var file])
     return;
 }
 
+if (IntPtr.Size == 8)
+{
+    var nativeRoot = new IntPtr(0x0011223344556677);
+    var rename = WindowsModelPaths.PointerRenameBuffer(nativeRoot);
+    int n = BinaryPrimitives.ReadInt32LittleEndian(rename.AsSpan(16));
+    Check(n == Encoding.Unicode.GetByteCount(EnglishModelInstaller.MarkerLeaf));
+    Check(rename.Length == 24 + n && rename[..8].All(x => x == 0) &&
+          BinaryPrimitives.ReadInt64LittleEndian(rename.AsSpan(8)) == nativeRoot.ToInt64() &&
+          Encoding.Unicode.GetString(rename.AsSpan(20,n)) == EnglishModelInstaller.MarkerLeaf &&
+          rename[(20+n)..].All(x => x == 0));
+}
 var (pinned, data) = Fixture();
 EnglishModelExtract.VerifiedArchive(new MemoryStream(data), pinned, _ => new MemoryStream(), CancellationToken.None);
 await Fails(() => Task.Run(() =>

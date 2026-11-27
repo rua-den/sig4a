@@ -1,0 +1,18 @@
+{
+  "feature": "Sig4a Live Translate offline English model setup",
+  "supersedes_only": {
+    "file": "plan-live-english-setup-pointer-addendum.json",
+    "sha256": "4733e0a49e68ca51ee8e0c96938d7d62f2189bbb1ca795f34d75dc190eeb1551",
+    "step": "Replace the specific Win32 API call, not the guarded pointer algorithm or other acceptance criteria."
+  },
+  "observed": "Hosted Windows #38 job 140713701036 returned Win32 ERROR_INVALID_PARAMETER (87) on the ordinary Win32 SetFileInformationByHandle(FileRenameInfo) call with the rooted target. Treat this as failed, not evidence that the alternative works.",
+  "correction": "Use synchronous ntdll NtSetInformationFile(FileRenameInformation=10) via the fixed same original marker handle and already-held stable models directory in RootDirectory. Pass WDK FILE_RENAME_INFORMATION Win64 layout with exact single UTF-16 leaf zipformer.current, zero ReplaceIfExists, length in bytes, and zero-initialized buffer. Retain same-volume and handle identity checks and all ancestor/payload/marker guards across publication and recheck. Never try POSIX replace, path-based rename, close/reopen, a second API fallback, or weaker locking. Treat non-success as refusal and keep exact owned-marker rollback. Diagnostic exception retains only numeric NTSTATUS and mapped Win32 code, not paths, devices, model content, URLs, or credentials; wire error allowlist is unchanged.",
+  "gates": [
+    "Re-run the existing ordinary hosted Windows NTFS success, fixed-leaf reparse refusal, exact writable/read-only last-moment collision, no-kill owned rollback, and forced-kill fixtures without weakening their assertions.",
+    "Re-run the actually extracted dashboard with genuine consent, full verified publisher archive, installed marker and offline synthetic caption verification. Passive no-helper/no-staging evidence is not direct network telemetry. Do not mark pass before actual Windows evidence."
+  ],
+  "microsoft": [
+    "https://learn.microsoft.com/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information",
+    "https://learn.microsoft.com/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntsetinformationfile"
+  ]
+}
