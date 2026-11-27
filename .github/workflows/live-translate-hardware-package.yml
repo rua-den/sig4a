@@ -70,6 +70,7 @@ jobs:
           $line = '' | & $probe --operator
           if ($LASTEXITCODE -ne 2 -or $line) { throw 'Noninteractive refusal failed.' }
           "Hosted smoke only; no physical hardware gate."
+          exit 0
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: optional-sig4a-audio-proof-win-x64
