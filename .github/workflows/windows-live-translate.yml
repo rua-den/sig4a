@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  windows-experimental:
+  windows-regression:
     runs-on: windows-2025
     timeout-minutes: 38
     defaults:
@@ -22,6 +22,17 @@ jobs:
         run: |
           tzutil.exe /s "SE Asia Standard Time"
           cargo test --locked --workspace -- --test-threads=1
+  windows-package:
+    runs-on: windows-2025
+    timeout-minutes: 38
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Build the actual user ZIP
         run: .\build.ps1
       - name: Smoke-test ordinary extracted package

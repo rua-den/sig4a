@@ -8,6 +8,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="translation-assets.json" LogicalName="Sig4a.TranslationAssets" />
     <PackageReference Include="NAudio.Wasapi" Version="[2.2.1]" />
     <PackageReference Include="org.k2fsa.sherpa.onnx" Version="[1.12.30]" />
   </ItemGroup>

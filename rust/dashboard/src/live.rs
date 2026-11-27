@@ -285,8 +285,9 @@ impl Default for Live {
 impl Live {
     pub fn active_worker(&self) -> bool { self.helper.is_some() }
 
-    fn send(&mut self, message: Value) {
+    fn send(&mut self, message: Value, launch: bool) {
         if self.helper.is_none() {
+            if !launch { self.fail("protocol_error"); return; }
             match Helper::open() {
                 Ok(helper) => self.helper = Some(helper),
                 Err(code) => { self.fail(code); return; }
@@ -314,7 +315,7 @@ impl Live {
         self.caption = Caption::default();
         self.code = None;
         self.listing = Some(Instant::now() + LIST_TIMEOUT);
-        self.send(json!({"v":1,"type":"list"}));
+        self.send(json!({"v":1,"type":"list"}), true);
     }
 
     fn start(&mut self, value: &Value) {
@@ -334,7 +335,7 @@ impl Live {
         self.translate = translate;
         self.phase = Phase::Starting;
         self.deadline = Some(Instant::now() + START_TIMEOUT);
-        self.send(json!({"v":1,"type":"start","session":self.generation,"source":source,"device_id":device_id,"translate":translate}));
+        self.send(json!({"v":1,"type":"start","session":self.generation,"source":source,"device_id":device_id,"translate":translate}), true);
     }
 
     fn start_args(&self, value: &Value) -> Option<(String, Option<String>, bool)> {
@@ -360,7 +361,7 @@ impl Live {
                 self.phase = Phase::Stopping;
                 self.pause = pause;
                 self.deadline = Some(Instant::now() + STOP_TIMEOUT);
-                self.send(json!({"v":1,"type":"stop","session":self.generation}));
+                self.send(json!({"v":1,"type":"stop","session":self.generation}), false);
             }
             Phase::Stopping => {
                 if !pause { self.pause = false; }
@@ -420,6 +421,10 @@ impl Live {
     }
 
     pub fn tick(&mut self, now: Instant) {
+        if self.deadline.is_some_and(|d| now >= d) || self.listing.is_some_and(|d| now >= d) {
+            self.fail("timeout");
+            return;
+        }
         for _ in 0..QUEUE {
             let Some(helper) = self.helper.as_ref() else { break; };
             if helper.broken.load(Ordering::Acquire) { self.fail("protocol_error"); break; }
@@ -431,7 +436,6 @@ impl Live {
                 Err(TryRecvError::Empty) => break,
             }
         }
-        if self.deadline.is_some_and(|d| now >= d) || self.listing.is_some_and(|d| now >= d) { self.fail("timeout"); }
     }
 
     pub fn call(&mut self, method: &str, arg: &Value) -> Value {

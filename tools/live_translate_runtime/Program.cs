@@ -56,6 +56,8 @@ static class Program
 
     internal static string TextCap(string text, int max)
     {
+        // Captions/name data are plain accessible text, not embedded controls.
+        text = new string(text.Where(c => !char.IsControl(c)).ToArray());
         int length = Math.Min(text.Length, max);
         if (length > 0 && char.IsHighSurrogate(text[length - 1])) length--;
         return text[..length];
@@ -67,23 +69,52 @@ static class Program
         {
             if (closing || Active != source || source.Cancelled) return false;
             Status(source.Id, "started");
-            if (source.WantsTranslation && !source.HasTranslator) Error(source.Id, "translation_unavailable");
             return true;
         }
     }
 
-    internal static void Caption(Session source, string text)
+    internal static void Caption(Session source, string text, long seq)
     {
         text = TextCap(text.Trim(), 2048);
         if (text.Length == 0) return;
         lock (Gate)
         {
             if (closing || Active != source || source.Cancelled) return;
-            Send(new { v = 1, type = "caption", session = source.Id, en = text, vi = (string?)null });
+            Send(new { v = 1, type = "caption", session = source.Id, en = text, vi = (string?)null, seq });
         }
     }
 
-    internal static void Finished(Session source, string? failure, bool released)
+    internal static void Translated(Session source, long seq, string en, string text)
+    {
+        text = TextCap(text.Trim(), 2048);
+        if (text.Length == 0) return;
+        lock (Gate)
+        {
+            if (closing || Active != source || source.Cancelled || source.LatestSequence != seq) return;
+            // Size accounting must include both captions. Keep the EN text stable
+            // across correlated revisions even if Unicode escaping expands the response.
+            while (text.Length > 0)
+            {
+                var message = new { v = 1, type = "caption", session = source.Id, en, vi = text, seq };
+                if (JsonSerializer.SerializeToUtf8Bytes(message, Protocol.Serialization).Length <= Protocol.LineLimit)
+                {
+                    Send(message);
+                    break;
+                }
+                text = TextCap(text, text.Length / 2);
+            }
+        }
+    }
+
+    internal static void TranslatorUnavailable(Session source)
+    {
+        lock (Gate)
+        {
+            if (!closing && Active == source && !source.Cancelled) Error(source.Id, "translation_unavailable");
+        }
+    }
+
+    internal static void Finished(Session source, string? failure, bool released, bool stopping)
     {
         lock (Gate)
         {
@@ -96,7 +127,7 @@ static class Program
                 Error(source.Id, "internal");
                 Environment.Exit(3);
             }
-            if (failure is not null && !source.Cancelled) Error(source.Id, failure);
+            if (failure is not null && !stopping) Error(source.Id, failure);
             Status(source.Id, "stopped");
         }
     }

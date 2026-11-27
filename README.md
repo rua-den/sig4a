@@ -54,6 +54,12 @@ pwsh -NoProfile -File .\live-translate\Provision-Model.ps1
 
 Vào **Tool Box → Live Translate**. Chọn **Tiếng máy** (mọi âm thanh phát qua thiết bị đã chọn) hoặc **Mic** (phải chọn đích danh). Chỉ **Bắt đầu** hoặc **Tiếp tục** mới mở nguồn. Mở trang/phím tắt không nghe; **Tạm dừng**, **Dừng**, chuyển nguồn hoặc rời trang sẽ dừng phiên. Không tự đổi sang mic nếu mất thiết bị. Âm thanh và phụ đề không được lưu hay gửi lên dịch vụ bên ngoài.
 
+Nếu muốn thử dòng tiếng Việt, đọc giấy phép Tencent trong thư mục `live-translate/notices`, rồi cài model dịch riêng (~1,13 GB trọng số). Ở trang công cụ, bật **Dịch tiếng Việt (thử nghiệm)** trước khi bắt đầu. Tiếng Anh vẫn hiện trước; nếu model dịch không có hoặc bị lỗi, app báo và vẫn giữ phụ đề tiếng Anh.
+
+```powershell
+pwsh -NoProfile -File .\live-translate\Provision-Translation.ps1
+```
+
 Bản thử nghiệm ưu tiên câu tiếng Anh. Sai tên, số và ý phủ định vẫn có thể xảy ra; không dựa vào phụ đề để xác nhận quyết định quan trọng. Máy Windows CI không có thiết bị âm thanh vật lý; các kết quả thiết bị thật và bài chạy 60 phút được theo dõi riêng trong plan.
 
 ## Cài Local AI

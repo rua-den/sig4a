@@ -739,7 +739,8 @@ function renderLive(state){
  if(!state||!Array.isArray(state.devices)||!liveLabels[state.phase])return;
  liveState=state;
  liveDevices();
- const lamp=$('live-lamp');lamp.dataset.listening=String(state.phase==='listening');lamp.textContent=liveLabels[state.phase];
+ const lamp=$('live-lamp');lamp.dataset.listening=String(state.phase==='listening');
+ if(lamp.textContent!==liveLabels[state.phase])lamp.textContent=liveLabels[state.phase];
  const status=state.code?(liveErrors[state.code]||'Phiên đã dừng. Kiểm tra helper rồi thử lại.'):
   state.listing?'Đang đọc danh sách thiết bị…':state.phase==='idle'?'Bấm Bắt đầu để nghe nguồn đã chọn.':'';
  if($('live-status').textContent!==status)$('live-status').textContent=status;

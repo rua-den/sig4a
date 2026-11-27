@@ -11,7 +11,10 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
 {
     internal long Id => id;
     internal bool WantsTranslation => translate;
-    internal bool HasTranslator => false;
+    OfflineTranslation? translator;
+    Task? translationWork;
+    long latestSequence;
+    internal long LatestSequence => Interlocked.Read(ref latestSequence);
     internal Task Work { get; set; } = Task.CompletedTask;
     readonly CancellationTokenSource cancel = new();
     internal bool Cancelled => cancel.IsCancellationRequested;
@@ -139,6 +142,11 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
                 return;
             }
             if (!Program.Started(this)) return;
+            if (translate)
+            {
+                translator = new OfflineTranslation(this, cancel.Token);
+                translationWork = Task.Run(translator.Run);
+            }
             var clock = Stopwatch.StartNew();
             long lastData = 0, paddedTo = 0;
             var silence = new float[format.SampleRate / 20];
@@ -176,7 +184,11 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
                 if (Cancelled || !model.IsEndpoint(stream)) return;
                 var sentence = model.GetResult(stream).Text;
                 model.Reset(stream);
-                Program.Caption(this, sentence);
+                sentence = Program.TextCap(sentence.Trim(), 2048);
+                if (sentence.Length == 0) return;
+                var seq = Interlocked.Increment(ref latestSequence);
+                Program.Caption(this, sentence, seq);
+                translator?.Enqueue(seq, sentence);
             }
         }
         catch (OperationCanceledException) when (Cancelled) { }
@@ -195,7 +207,17 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
                 }
                 catch (Exception) { released = false; }
             }
-            Program.Finished(this, failure, released);
+            // Translation cannot survive Stop, device loss, quit or a source change.
+            if (translationWork is not null)
+            {
+                // Program.Finished distinguishes user cancellation from internal failure.
+                bool stopping = Cancelled;
+                cancel.Cancel();
+                if (await Task.WhenAny(translationWork, Task.Delay(2_750)) != translationWork ||
+                    translator?.Released != true) released = false;
+                Program.Finished(this, failure, released, stopping);
+            }
+            else Program.Finished(this, failure, released, Cancelled);
         }
     }
 
