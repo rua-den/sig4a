@@ -1,5 +1,5 @@
 //! UI test of the real dashboard process (WebView2). Sandboxed LOCALAPPDATA/USERPROFILE, registry/hook writes
-//! disabled, no real token, no network. The window stays hidden in this mode: a JS script (`--e2e`, only in debug
+//! disabled, no real token, no external network (Local AI uses a local fixture). The window stays hidden in this mode: a JS script (`--e2e`, only in debug
 //! builds or with `--features e2e`) drives the real page and writes its
 //! result to a file. Pixels are not inspected (needs human eyes); behaviour is.
 //!
@@ -9,7 +9,9 @@
 use serde_json::{json, Value};
 use std::fs;
 use std::path::Path;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpListener;
+use std::sync::mpsc;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::HWND;
@@ -91,6 +93,57 @@ fn run_script(local: &Path, home: &Path, dir: &Path, name: &str, body: &str) -> 
     std::thread::sleep(Duration::from_millis(100)); // the file is written in one call; be safe
     let v = serde_json::from_str(&fs::read_to_string(&o).unwrap()).unwrap();
     (g, v)
+}
+
+// Real WebView2 pages and the native bridge; provider returns synthetic text locally.
+fn local_ai_fixture() -> (String, mpsc::Receiver<Value>, std::thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    let (tx, rx) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(85);
+        let mut served = 0;
+        while served < 3 {
+            let mut stream = match listener.accept() {
+                Ok((stream, _)) => stream,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue;
+                }
+                Err(e) => panic!("local AI fixture accept: {e}"),
+            };
+            stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+            let mut reader = BufReader::new(&mut stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let request = line.trim_end().to_owned();
+            let mut len = 0;
+            loop {
+                line.clear();
+                if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" { break; }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    len = value.trim().parse::<usize>().unwrap();
+                }
+            }
+            assert!(len < 16 * 1024);
+            let mut bytes = vec![0; len];
+            reader.read_exact(&mut bytes).unwrap();
+            let response = match request.as_str() {
+                "GET /v1/models HTTP/1.1" => json!({"data":[{"id":"fixture-old"},{"id":"fixture-new"}]}),
+                "POST /v1/chat/completions HTTP/1.1" => {
+                    let body: Value = serde_json::from_slice(&bytes).unwrap();
+                    tx.send(body).unwrap();
+                    served += 1;
+                    let text = if served == 1 { "Bản dịch mẫu.\n\nBản dịch mẫu." } else { "Bản dịch mới." };
+                    json!({"choices":[{"message":{"content":text}}]})
+                }
+                _ => panic!("unexpected local AI fixture route: {request}"),
+            }.to_string();
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).unwrap();
+        }
+    });
+    (endpoint, rx, worker)
 }
 
 const SCRIPT1: &str = r#"
@@ -198,6 +251,44 @@ const out = {
 };
 setTimeout(() => api.hide(), 50);
 return out;
+"#;
+
+const QUICK_LOCAL_AI: &str = r#"
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const input = 'Sample billing title.';
+toolTab('translation');
+setTextDraft('translation', input);
+await runTextTool('translation');
+const first = $('translation-out').textContent;
+let saved = false;
+for (let i = 0; i < 100; i++) {
+  const cfg = (await api.state()).cfg;
+  if (cfg.local_ai_model === 'fixture-new' && cfg.local_ai_prompt_translation?.startsWith('PERSISTED PROMPT')) { saved = true; break; }
+  await sleep(200);
+}
+if (!saved) throw new Error('other dashboard did not save fixture-new');
+toolTab('translation');
+setTextDraft('translation', 'Sample billing follow-up.');
+await runTextTool('translation');
+const second = $('translation-out').textContent;
+toolTab('ocr');
+document.body.classList.add('ocr-popup');
+$('ocr-out').textContent = 'Sample OCR text.';
+ocrResultValid = true;
+await translateOcr();
+const inline = $('ocr-translation-out').textContent;
+return { first, second, inline, quick: window.__QUICK_MODE__ };
+"#;
+
+const SAVE_LOCAL_AI: &str = r#"
+toolTab('localai');
+$('ai-model').value = 'fixture-new';
+$('ai-model').dispatchEvent(new Event('input', { bubbles: true }));
+$('ai-prompt-translation').value = 'PERSISTED PROMPT toward {target}: {text}';
+$('ai-prompt-translation').dispatchEvent(new Event('input', { bubbles: true }));
+await saveAi();
+const cfg = (await api.state()).cfg;
+return { saved: cfg.local_ai_model, prompt: cfg.local_ai_prompt_translation?.startsWith('PERSISTED PROMPT') === true };
 "#;
 
 #[test]
@@ -384,10 +475,45 @@ fn dashboard_process_end_to_end() {
     drop(ocr);
     wait_for("OCR test window gone", 5, || window().is_null());
 
-    let (_text, result) = run_script(
+    let (text_window, result) = run_script(
         &local, &home, tmp.path(), "text_tools", include_str!("js/text_tools.js"),
     );
     assert_eq!(result, json!({"text_tools": true}), "{result}");
+
+    drop(text_window);
+    wait_for("text tool window gone", 5, || window().is_null());
+
+    let (endpoint, requests, fixture) = local_ai_fixture();
+    let config_path = data.join("config.json");
+    let mut config: Value = serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
+    config["local_ai_backend"] = json!("llama_cpp");
+    config["local_ai_endpoint"] = json!(endpoint);
+    config["local_ai_model"] = json!("fixture-old");
+    config["local_ai_managed"] = json!(false);
+    fs::write(&config_path, serde_json::to_vec(&config).unwrap()).unwrap();
+
+    let reused_script = tmp.path().join("quick-local-ai.js");
+    let reused_out = tmp.path().join("quick-local-ai.out");
+    fs::write(&reused_script, QUICK_LOCAL_AI).unwrap();
+    let reused_quick = spawn_quick(&local, &home, (&reused_script, &reused_out), "");
+    let old_request = requests.recv_timeout(Duration::from_secs(25)).expect("quick translation request for old model");
+    assert_eq!(old_request["model"], "fixture-old", "{old_request}");
+    assert!(old_request["messages"][0]["content"].as_str().unwrap().contains("Sample billing title."));
+
+    let (settings, saved) = run_script(&local, &home, tmp.path(), "save-local-ai", SAVE_LOCAL_AI);
+    assert_eq!(saved, json!({"saved":"fixture-new","prompt":true}), "{saved}");
+    drop(settings);
+    for source in ["Sample billing follow-up.", "Sample OCR text."] {
+        let new_request = requests.recv_timeout(Duration::from_secs(25)).expect("reused quick translation request for new model");
+        assert_eq!(new_request["model"], "fixture-new", "{new_request}");
+        let content = new_request["messages"][0]["content"].as_str().unwrap();
+        assert_eq!(content, format!("PERSISTED PROMPT toward Vietnamese: {source}"), "{new_request}");
+    }
+    wait_for("reused quick model test result", 15, || reused_out.exists());
+    let result: Value = serde_json::from_slice(&fs::read(&reused_out).unwrap()).unwrap();
+    assert_eq!(result, json!({"first":"Bản dịch mẫu.","second":"Bản dịch mới.","inline":"Bản dịch mới.","quick":true}), "{result}");
+    drop(reused_quick);
+    fixture.join().unwrap();
 
     let log = fs::read_to_string(data.join("events.log")).unwrap_or_default();
     assert!(

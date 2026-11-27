@@ -1,11 +1,12 @@
 const node = id => document.getElementById(id);
 const check = (ok, message) => { if (!ok) throw Error(message); };
 const sleep = ms => new Promise(resolve=>setTimeout(resolve,ms));
-const requests=[],clipboard=[];
+const requests=[],clipboard=[];let modelInventory=['hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0','lfm25-vl-q8'];
 const originalApi=window.pywebview.api, originalClipboard=Object.getOwnPropertyDescriptor(navigator,'clipboard');
 window.pywebview.api=new Proxy(originalApi,{
  get(target,key){
   if(key==='local_chat')return arg=>new Promise(resolve=>requests.push({arg,resolve}));
+  if(key==='local_models')return async()=>({models:modelInventory});
   return target[key];
  }
 });
@@ -74,6 +75,26 @@ try{
  check(clipboard[1]==='  Good morning!\n','edited English translation not copied exactly');
  openQuickTool('translation','');
  check(node('translation-in').value==='Chào buổi sáng.'&&node('translation-out').textContent==='  Good morning!\n'&&requests.length===7,'no-selection shortcut discarded draft or made a request');
+ input('ai-prompt-translation','Repeat exactly {text} toward {target}');
+ input('translation-in','fresh text');
+ node('translation-run').click();await sleep(0);
+ check(requests.length===8&&requests[7].arg.prompt==='Repeat exactly {text} toward {target}','custom prompt was not sent');
+ requests[7].resolve({text:'same\n\nsame'});await sleep(0);
+ check(node('translation-out').textContent==='same\n\nsame','custom prompt output was altered');
+ input('ai-prompt-translation',defaultAiPrompts.translation);
+ input('translation-in','single-line source');
+ node('translation-run').click();await sleep(0);
+ requests[8].resolve({text:'duplicated\nduplicated'});await sleep(0);
+ check(node('translation-out').textContent==='duplicated','exact duplicate one-line translation was not collapsed');
+ input('translation-in','line one\nline two');
+ node('translation-run').click();await sleep(0);
+ requests[9].resolve({text:'kept\nkept'});await sleep(0);
+ check(node('translation-out').textContent==='kept\nkept','multiline source must preserve repeated translation lines');
+ modelInventory=[];
+ input('ai-model','remote-alias');
+ input('translation-in','private sentence');
+ node('translation-run').click();await sleep(0);
+ check(requests.length===10&&phase('translation')==='error','unknown/remote model must be rejected before sending text');
  return {text_tools:true};
 }finally{
  window.pywebview.api=originalApi;
