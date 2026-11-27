@@ -18,21 +18,45 @@ main{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;padding:16px 1
 #wrap{display:flex;flex-direction:column;gap:16px}
 .box{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 14px;position:relative}
 .box>.lbl{position:absolute;top:-9px;left:12px;background:var(--bg);padding:0 6px;color:var(--dim);font-size:11px;letter-spacing:.5px}
-#accs{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));column-gap:26px}
-.acc{display:grid;grid-template-columns:minmax(80px,130px) 1fr 1fr;gap:6px 14px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line);min-width:0}
-#accs>.acc:last-child{border-bottom:0}
-.name{color:var(--accent);display:flex;align-items:center;gap:8px}
-.m small{color:var(--dim);margin-right:6px;font-size:11px}
-.mr{display:flex;align-items:center;gap:6px}.mr small{margin:0}.pbw{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
-.pb{flex:1;min-width:30px;height:9px;background:repeating-linear-gradient(90deg,#2b2b2b 0 6px,transparent 6px 8px)}
-.pb i{display:block;height:100%;background:repeating-linear-gradient(90deg,var(--c) 0 6px,transparent 6px 8px)}
-.pct{display:inline-block;min-width:38px;text-align:right}
-.usage-actions{margin:2px 0 5px}.usage-meta{grid-column:1/-1;min-width:0;overflow-wrap:anywhere;color:var(--dim);font-size:11px}.usage-state[data-kind=blocking],.usage-state[data-kind=login],.usage-hook[data-kind=blocking]{color:var(--bad)}.usage-state[data-kind=threshold],.usage-state[data-kind=stale],.usage-state[data-kind=near]{color:var(--warn)}.usage-reset{display:block;margin-top:2px;line-height:1.25;overflow-wrap:anywhere}.acc .name{overflow-wrap:anywhere}.err{grid-column:2/4;color:var(--bad)}.warn{grid-column:2/4;color:var(--warn);font-size:11px}.stale .pb{opacity:.55}
+/* Account cards keep one geometry for every quota/refresh state: values, time and hook metadata have their own tracks. */
+#accs,#overview-quota{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:10px;min-width:0}
+.acc,.quota-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;min-width:0;padding:11px;border:1px solid var(--line);border-radius:7px;background:var(--bg)}
+.usage-identity,.quota-meter,.usage-meta>*{min-width:0}
+.usage-identity{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) min(108px,38%) min(74px,26%);align-items:center;gap:6px}
+.usage-name,.usage-clip{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.usage-name{color:var(--fg);font-size:13px;font-weight:650}
+.usage-state{display:inline-block;justify-self:start;border-radius:3px;padding:2px 5px;max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:14px;color:var(--dim);background:var(--panel)}
+.usage-state[data-kind=blocking],.usage-state[data-kind=login],.usage-state[data-kind=error]{color:var(--bad);background:color-mix(in srgb,var(--bad) 13%,var(--bg))}
+.usage-state[data-kind=threshold],.usage-state[data-kind=stale],.usage-state[data-kind=near]{color:var(--warn);background:color-mix(in srgb,var(--warn) 13%,var(--bg))}
+.usage-state[data-kind=normal]{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,var(--bg))}
+.usage-state[data-kind=refreshing]{color:var(--accent);background:var(--sel)}
+.usage-extra{height:14px;line-height:14px;font-size:10px;color:var(--dim);display:flex;gap:4px;align-items:center;min-width:0}
+.quota-meter{--quota-tone:var(--dim);grid-column:span 3;display:grid;grid-template-rows:22px 7px 14px 14px;gap:3px;align-items:center}
+.quota-meter[data-band=ok]{--quota-tone:var(--ok)}.quota-meter[data-band=warn]{--quota-tone:var(--warn)}.quota-meter[data-band=limit]{--quota-tone:var(--bad)}
+.quota-top{display:flex;align-items:baseline;justify-content:space-between;gap:2px;white-space:nowrap;min-width:0;color:var(--dim);font-size:11px}
+.quota-top .pct{color:var(--quota-tone);font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right;overflow:hidden;text-overflow:ellipsis;line-height:22px}
+.quota-track{height:6px;border-radius:5px;background:#303030;overflow:hidden}
+.quota-track i{height:100%;background:var(--quota-tone);display:block;border-radius:inherit}
+.quota-meter[data-band=empty] .quota-track{background:repeating-linear-gradient(90deg,#303030 0 3px,transparent 3px 6px)}
+.quota-band{color:var(--quota-tone);font-size:10px;line-height:14px}
+.usage-reset{color:var(--dim);font-size:10px;line-height:14px;font-variant-numeric:tabular-nums}
+.usage-actions{display:flex;align-items:center;gap:10px;min-height:32px;margin:4px 0 8px}
+.usage-actions button{flex:none;min-width:132px}.usage-actions .hint{min-width:0;overflow-wrap:anywhere}
+.usage-meta{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 10px;border-top:1px solid var(--line);padding-top:6px;color:var(--dim);font-size:10px;line-height:15px}
+.usage-hook[data-kind=blocking],.usage-error[data-kind=error]{color:var(--bad)}
+#overview-quota .quota-row{padding:8px 9px}
+#overview-quota .usage-meta{display:block;padding-top:4px}
+#overview-quota .usage-identity{grid-template-columns:minmax(0,1fr) min(108px,38%)}
+#overview-quota .usage-extra{display:none}
+.usage-empty{grid-column:1/-1;padding:10px 0;color:var(--dim);font-size:12px}
+@media (max-width:560px){
+ #accs,#overview-quota{grid-template-columns:minmax(0,1fr)}
+ .acc,.quota-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px}
+ .quota-meter{grid-column:span 1}
+}
 .hdr{color:var(--dim);font-size:11px;padding-bottom:4px;border-bottom:1px solid var(--line)}
 .spin{width:11px;height:11px;border:2px solid #2a3b4d;border-top-color:var(--busy);border-radius:50%;animation:sp .7s linear infinite;flex:none}
 @keyframes sp{to{transform:rotate(360deg)}}
-.busy .pb{animation:pulse 1.1s ease-in-out infinite}
-@keyframes pulse{50%{opacity:.45}}
 .set{display:grid;grid-template-columns:repeat(6,1fr);gap:10px 16px;max-width:980px}
 .set>label:not(.chk){grid-column:span 2}
 label{display:flex;flex-direction:column;gap:3px;color:var(--dim);font-size:11px}
@@ -52,16 +76,16 @@ footer b{color:var(--fg);font-weight:500}.dot{display:inline-block;width:7px;hei
 footer .spin{display:inline-block;margin-right:6px;vertical-align:-1px}
 .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:-2px 0 10px}.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);font:inherit;padding:2px 10px;cursor:pointer}
 .tab:hover{color:var(--fg)}.tab.on{color:var(--accent);border-bottom-color:var(--accent)}[hidden]{display:none!important}
-.compact .tabs{margin-bottom:6px}.compact .acc{padding:4px 0}
+.compact .tabs{margin-bottom:6px}
 .look>summary{cursor:pointer;color:var(--accent);font-size:12px;list-style:none;padding:2px 0}.look>summary::-webkit-details-marker{display:none}
 .look>summary::before{content:'▸ ';color:var(--dim)}.look[open]>summary::before{content:'▾ '}
 .al{display:grid;grid-template-columns:1fr 92px auto;gap:8px;align-items:center}.al span{color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .al input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:3px 8px;font:inherit;width:100%;user-select:text}
 .al input[type=text]:focus{outline:0;border-color:var(--accent)}#acclabels{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 18px;grid-column:span 6;max-height:170px;overflow-y:auto;padding-right:6px}
-.compact main{padding:10px 14px;gap:10px}.compact .box{padding:6px 12px}.compact .acc{padding:2px 0;gap:2px 16px}.compact .set{gap:6px 12px}
+.compact main{padding:10px 14px;gap:10px}.compact .box{padding:6px 12px}.compact .acc{padding:8px}.compact .set{gap:6px 12px}
 .compact .grp>span,.compact .sep{display:none}.compact .row{margin-top:8px}.compact .title{height:30px}
 @media (max-width:640px){.set{grid-template-columns:repeat(2,1fr)}.set>*{grid-column:1/-1!important}.set>label:not(.chk){grid-column:auto!important}.grp{grid-column:1/-1!important}.sep{grid-column:1/-1!important}}
-@media (max-width:560px){#accs{grid-template-columns:1fr}.acc{grid-template-columns:1fr 1fr}.acc .name{grid-column:1/-1}.err,.warn{grid-column:1/-1}main{padding:12px 10px}}
+@media (max-width:560px){main{padding:12px 10px}}
 @media (max-width:460px){.set>label:not(.chk){grid-column:1/-1!important}.title b+span,footer>span:not(#stat):not(#ver):not(#autofit){display:none}.wb{width:30px}}
 .rz{position:fixed;z-index:60}.rz.l{left:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}.rz.r{right:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}
 .rz.t{top:0;left:10px;right:10px;height:5px;cursor:ns-resize}.rz.b{bottom:0;left:10px;right:10px;height:5px;cursor:ns-resize}
@@ -108,7 +132,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
 .quick.localai-route #tool-localai.on{display:block}.quick #ocr-preview,.quick #ocr-in{display:none}.quick #ocr-status{display:block}.quick #tool-ocr .hint{display:none}.quick #tool-ocr .result{min-height:122px;max-height:156px}.quick .accent-picker{display:none}
 #quick-open-toolbox{display:none;margin-right:6px}.quick #quick-open-toolbox{display:block}.shortcut-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}.shortcut-fields input{width:100%}.shortcut-settings{grid-column:1/-1}.route-settings #settings-box:has(#shortcuts:not([hidden]))>.row{display:none}
 .ocr-popup .rz,.ocr-popup #ocr-remove{display:none}.ocr-popup #tool-ocr .result{min-height:44px;max-height:111px;overflow:auto;overflow-wrap:anywhere}.ocr-popup #ocr-out{margin-top:6px}.ocr-inline{margin-top:8px}.ocr-inline .toolactions{margin-top:5px}.ocr-popup #tool-ocr .toolactions{gap:5px}.ocr-popup #ocr-out:focus-visible,.ocr-popup #ocr-translation-out:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.quota-row{overflow-wrap:anywhere}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable]{cursor:text}.result[data-placeholder]:empty::before{content:attr(data-placeholder);color:var(--dim);pointer-events:none}.text-status{margin:7px 0 4px;overflow-wrap:anywhere}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
+.toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable]{cursor:text}.result[data-placeholder]:empty::before{content:attr(data-placeholder);color:var(--dim);pointer-events:none}.text-status{margin:7px 0 4px;overflow-wrap:anywhere}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
 </style></head><body>
 <div class="title"><div class="drag pywebview-drag-region" ondblclick="toggleMax()"><b>Kane's Tool Box</b><span id="sub"></span></div><label class="accent-picker" title="Màu giao diện">Màu giao diện<select id="accent" aria-label="Màu giao diện"><option value="orange">Cam</option><option value="blue">Xanh</option><option value="purple">Tím</option></select></label>
 <button class="b" id="quick-open-toolbox" onclick="openToolBox()">Mở Tool Box</button><button class="wb" title="thu nhỏ" onclick="api.minimize()">–</button><button class="wb" id="maxb" title="phóng to / khôi phục (nhấp đúp thanh tiêu đề)" onclick="toggleMax()">▢</button><button class="wb x" id="window-close" aria-label="Đóng" title="đóng" onclick="closeDash()">✕</button></div>
@@ -130,7 +154,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
  <section class="toolpanel" id="tool-ocr"><div class="box"><div class="lbl">OCR</div><p class="hint">Dán ảnh trực tiếp hoặc chụp vùng bằng nút bên dưới. Chỉ nhận PNG, JPEG, WebP (tối đa 6 MB).</p><textarea id="ocr-in" readonly placeholder="Chưa có ảnh — hãy dán ảnh hoặc chụp một vùng màn hình..." style="min-height:56px;margin-top:8px"></textarea><img id="ocr-preview" class="ocr-preview" alt="Xem trước ảnh OCR"><div class="toolactions"><button class="b" id="ocr-capture" onclick="captureOcr()">Chụp vùng màn hình</button><button class="b" id="ocr-remove" onclick="removeOcr()" disabled>Xoá ảnh</button><button class="b p" id="ocr-run" onclick="runTool('ocr')" disabled>Nhận chữ</button><button class="b" id="ocr-copy" onclick="copyResult('ocr-out')" disabled>Sao chép</button><button class="b" data-quick-translate onclick="translateOcr()" disabled>Dịch</button></div><span class="hint" id="ocr-status" role="status">Chưa có ảnh.</span><button hidden class="b" id="ocr-recovery" onclick="openAiRecovery('ocr')">Cài đặt Local AI</button><div class="result" id="ocr-out" contenteditable="true" role="textbox" aria-label="Kết quả OCR">Kết quả OCR sẽ hiển thị ở đây.</div><section class="ocr-inline" id="ocr-inline" aria-label="Bản dịch tiếng Việt" hidden><div class="lbl">Bản dịch tiếng Việt</div><div class="result" id="ocr-translation-out" tabindex="0" role="status"></div><div class="toolactions"><button class="b" id="ocr-translation-copy" onclick="copyResult('ocr-translation-out')" disabled>Sao chép bản dịch</button></div></section></div></section>
  <section class="toolpanel" id="tool-localai"><div class="box"><div class="lbl">LOCAL AI</div><label>Endpoint loopback<input id="ai-endpoint" type="text" value="http://127.0.0.1:11434"></label><label style="max-width:240px;margin-top:8px">Backend<select id="ai-backend"><option value="ollama">Ollama</option><option value="llama_cpp">llama.cpp server</option></select></label><label style="max-width:420px;margin-top:8px">Model<input id="ai-model" list="ai-models" value="hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0" autocomplete="off"><datalist id="ai-models"></datalist></label><div class="modelcard"><b>LiquidAI LFM2.5-VL-450M-GGUF</b><br><span class="hint">Ollama HF pattern Q4: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q4_K_M</code>; Q8: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0</code>.<br>llama.cpp chọn ID thực từ <code>/v1/models</code>; khởi chạy server ngoài với listen loopback và model path phù hợp.</span></div><div class="toolactions"><button class="b" id="ai-check" onclick="checkAi()">Kiểm tra kết nối</button><button class="b" id="model-list" onclick="listModels()">Lấy model</button><button class="b" id="ai-test" onclick="testAi()">Thử model với ảnh mẫu</button><button class="b p" id="ai-save" onclick="saveAi()">Lưu Local AI</button></div><div class="result" id="ai-status" role="status" data-state="unchecked">Chưa kiểm tra. Chọn backend, endpoint và model rồi kiểm tra.</div><div id="ai-save-status" role="status" class="hint"></div><button hidden class="b" id="ai-back" onclick="returnToAi()">Quay lại công cụ</button></div></section>
  <section class="toolpanel" id="tool-usage">
- <div class="box" id="usage-accounts"><div class="lbl">CLAUDE USAGE</div><div class="usage-actions"><button class="b" id="rbtn" onclick="refresh()">refresh</button> <span id="usage-policy-status" class="hint" role="status" hidden></span></div><div id="accs"></div></div>
+ <div class="box" id="usage-accounts"><div class="lbl">CLAUDE USAGE</div><div class="usage-actions"><button class="b" id="rbtn" onclick="refresh()">Làm mới quota</button> <span id="usage-policy-status" class="hint" role="status" hidden></span></div><div id="accs"></div></div>
  <div class="box" id="settings-box"><div class="lbl" id="settings-label">SETTINGS</div><div class="lbl" id="clean-label">DỌN Ổ</div>
   <div class="tabs"><button class="tab on" id="t-gen" onclick="tab('gen')">Chung</button><button class="tab" id="t-look" onclick="tab('look')">Widget</button><button class="tab" id="t-alerts" onclick="tab('alerts')">Cảnh báo</button><button class="tab" id="t-hooks" onclick="tab('hooks')">Hook CLI</button><button class="tab" id="t-ocrpopup" onclick="tab('ocrpopup')">OCR Popup</button><button class="tab" id="t-shortcuts" onclick="tab('shortcuts')">Phím tắt</button><button class="b" id="settings-ai" onclick="toolTab('localai')">Local AI readiness</button></div>
   <div class="set" id="gen">
@@ -262,8 +286,6 @@ function initManagedAi(){const box=$('tool-localai'),lbl=box&&box.querySelector(
 function effectiveAi(){return $('ai-managed')&&$('ai-managed').checked?managedAi:{endpoint:$('ai-endpoint').value,backend:$('ai-backend').value,model:$('ai-model').value}}
 function renderAiMode(){if(!$('ai-managed'))return;const on=$('ai-managed').checked,s=on?managedAi:aiManual;$('ai-endpoint').value=s.endpoint;$('ai-backend').value=s.backend;$('ai-model').value=s.model;$('ai-endpoint').readOnly=on;$('ai-backend').disabled=on;$('ai-model').readOnly=on;$('ai-managed-hint').textContent=on?'Lưu để tray nhận cấu hình. Sau đó kiểm tra endpoint; chưa kiểm tra không có nghĩa là model đang chạy.':'Bật để tray tự chạy llama.cpp ẩn; lần đầu có thể tải khoảng 482 MB.'}
 initManagedAi();
-function bar(p,c){const col=p>=c.block_pct?'var(--bad)':p>=c.warn_pct?'var(--warn)':'var(--ok)';
- return `<span class="pbw"><span class="pb"><i style="width:${Math.min(100,Math.max(0,p))}%;--c:${col}"></i></span><span class="pct" style="color:${col}">${p.toFixed(0)}%</span></span>`}
 function reset(iso){if(!iso)return'—';let s=(new Date(iso)-Date.now())/1000;if(!Number.isFinite(s))return'—';if(s<=0)return'đến giờ';
  let m=Math.floor(s/60),h=Math.floor(m/60);m%=60;const d=Math.floor(h/24);h%=24;return d?`${d}d${h}h`:`${h}h${String(m).padStart(2,'0')}m`}
 function ago(ts){if(!ts)return'?';const s=Math.max(0,Date.now()/1000-ts);return s<90?Math.round(s)+'s trước':s<5400?Math.round(s/60)+'m trước':Math.round(s/3600)+'h trước'}
@@ -335,35 +357,62 @@ function usageRows(cache,cfg,hooks,now=Date.now()/1000){
   (a.max===b.max?0:a.max>b.max?-1:1)||(a.name<b.name?-1:a.name>b.name?1:0));
 }
 const usageValue=(k,t)=>`<span class="v" data-k="${k}" data-t="${esc(t??'')}"></span>`;
-function usageState(row){
- const a=row.attention;
- const main={blocking:'Chính sách hook đang áp dụng',login:'Cần đăng nhập lại',threshold:'Chạm ngưỡng chặn',
-  stale:'Dữ liệu cũ',error:'Lỗi cập nhật',near:'Gần giới hạn',refreshing:'Đang cập nhật',normal:'Bình thường',waiting:'Chờ dữ liệu'}[a];
- const more=[];
- if(row.login&&a!=='login')more.push('Cần đăng nhập lại');
- if(row.stale&&a!=='stale')more.push('dữ liệu cũ');
- if(row.refreshing&&a!=='refreshing')more.push('đang cập nhật');
- return `<span class="usage-state" data-kind="${a}">${main}</span>${more.length?' · '+more.join(' · '):''}`;
+const USAGE_STATES={blocking:'Hook đang chặn',login:'Cần đăng nhập',threshold:'Chạm ngưỡng',stale:'Dữ liệu cũ',
+ error:'Lỗi cập nhật',near:'Gần ngưỡng',refreshing:'Đang cập nhật',normal:'Bình thường',waiting:'Chờ dữ liệu'};
+function usageIdentity(row){
+ const {name,attention,login,stale,refreshing}=row;
+ const extra=[login&&attention!=='login'?'Cần đăng nhập':'',stale&&attention!=='stale'?'Dữ liệu cũ':'',
+ refreshing&&attention!=='refreshing'?'Đang cập nhật':''].filter(Boolean).join(' · ');
+ const status=USAGE_STATES[attention];
+ return `<header class="usage-identity"><b class="usage-name" title="${esc(name)}">${esc(name)}</b>
+  <span class="usage-state" data-kind="${attention}" title="${status}">${status}</span>
+  <span class="usage-extra" title="${esc(extra)}">${refreshing?'<span class="spin" aria-hidden="true"></span>':''}<span class="usage-clip">${esc(extra)}</span></span>
+ </header>`;
 }
-function usageHook(row){return `<span class="usage-hook" data-kind="${esc(row.hook)}">${HOOK_LABELS[row.hook]||HOOK_LABELS.unknown}</span>`}
-function overviewQuota(rows){
- function quota(label,value,resetAt,row){
-  const state=value>=row.block?' · chạm ngưỡng chặn':value>=row.warn?' · gần giới hạn':'';
-  return Number.isFinite(value)?label+' '+value.toFixed(0)+'%'+state+' · reset '+usageValue('reset',resetAt):label+' — · reset —';
+function usageHook(row){
+ const label=HOOK_LABELS[row.hook]||HOOK_LABELS.unknown;
+ return `<span class="usage-hook usage-clip" data-kind="${esc(row.hook)}" title="${esc(label)}">${esc(label)}</span>`;
+}
+function quotaMeter(id,label,pct,at,row){
+ const has=Number.isFinite(pct), band=!has?'empty':pct>=row.block?'limit':pct>=row.warn?'warn':'ok';
+ const value=has?Math.round(pct)+'%':'—', range={ok:'Trong hạn',warn:'Gần ngưỡng',limit:'Chạm ngưỡng',empty:'Chưa có số'}[band];
+ const width=has?Math.min(100,Math.max(0,pct)):0;
+ return `<div class="quota-meter" data-window="${id}" data-band="${band}">
+  <div class="quota-top"><span>${label}</span><b class="pct" title="${value}">${value}</b></div>
+  <div class="quota-track" aria-hidden="true"><i style="width:${width}%"></i></div>
+  <span class="quota-band usage-clip" title="${range}">${range}</span>
+  <span class="usage-reset usage-clip" title="${esc(at||'')}">Reset ${usageValue('reset',at)}</span></div>`;
+}
+function quotaCard(row,compact){
+ const {name,p,refreshing,stale,attention}=row, err=p.err||'';
+ return `<article class="${compact?'quota-row':'acc'} ${stale?'stale':''} ${refreshing?'busy':''}" data-n="${esc(name)}" data-attention="${attention}">
+  ${usageIdentity(row)}${quotaMeter('5h','5 giờ',p.five,p.five_reset,row)}${quotaMeter('7d','7 ngày',p.week,p.week_reset,row)}
+  <div class="usage-meta">${usageHook(row)}${compact?'':`<span class="usage-fresh usage-clip">lần tải gần nhất: ${usageValue('ago',p.fetched_at)}</span>
+   <span class="usage-error usage-clip" data-kind="${err?'error':'none'}" title="${esc(err)}">${err?esc(err):'—'}</span>
+   <span class="usage-retry usage-clip">${p.retry_at?'thử lại sau '+usageValue('until',p.retry_at):'—'}</span>`}</div>
+ </article>`;
+}
+function renderQuotaCards(id,rows,compact,empty){
+ const list=$(id);
+ if(!rows.length){
+  if(list.firstElementChild?.className==='usage-empty'&&list.firstElementChild.textContent===empty)return false;
+  const message=document.createElement('div');message.className='usage-empty';message.textContent=empty;
+  list.replaceChildren(message);return true;
  }
- return rows.map(row=>{const {p,name,attention}=row;
-  return `<div class="quota-row" data-n="${esc(name)}" data-attention="${attention}"><b>${esc(name)}</b> · ${quota('5h',p.five,p.five_reset,row)} · ${quota('7d',p.week,p.week_reset,row)} · ${usageState(row)} · ${usageHook(row)}</div>`;
- }).join('')||'<div class="hdr">chưa có profile</div>';
-}
-function usageAccount(row){
- const {name,p,refreshing,stale,attention}=row;
- const sp=refreshing?'<span class="spin" title="đang gọi API"></span>':'';
- const m=(label,pct,at)=>`<div class="m" data-window="${label}"><div class="mr"><small>${label}</small>${Number.isFinite(pct)?bar(pct,{warn_pct:row.warn,block_pct:row.block}):'<span>—</span>'}</div><small class="usage-reset" title="${esc(at||'')}">Reset ${usageValue('reset',at)}</small></div>`;
- const err=p.err?`<span class="usage-error" title="${esc(p.err)}"> · ${esc(p.err)}</span>`:'';
- const retry=p.retry_at?' · thử lại sau '+usageValue('until',p.retry_at):'';
- return `<div class="acc ${stale?'stale':''} ${refreshing?'busy':''}" data-n="${esc(name)}" data-attention="${attention}">
-  <div class="name">${esc(name)}${sp}</div>${m('5h',p.five,p.five_reset)}${m('7d',p.week,p.week_reset)}
-  <div class="usage-meta">${usageState(row)} · ${usageHook(row)} · lần tải gần nhất: ${usageValue('ago',p.fetched_at)}${err}${retry}</div></div>`;
+ const existing=new Map([...list.children].map(card=>[card.dataset.n,card]));
+ let changed=false;
+ for(let i=0;i<rows.length;i++){
+  const row=rows[i],html=quotaCard(row,compact),old=existing.get(row.name);
+  let card=old;
+  if(card?._quotaHtml!==html){
+   const tpl=document.createElement('template');tpl.innerHTML=html;card=tpl.content.firstElementChild;
+   card._quotaHtml=html;old?.replaceWith(card);changed=true;
+  }
+  if(list.children[i]!==card){list.insertBefore(card,list.children[i]||null);changed=true;}
+  existing.delete(row.name);
+ }
+ for(const old of existing.values()){old.remove();changed=true;}
+ return changed;
 }
 function apply(s){if(!s)return 2000;
  if(!loaded){cfg=s.cfg;if(s.shortcuts)applyShortcuts(s.shortcuts);applyAccent(cfg.dashboard_accent);const backend=cfg.local_ai_backend||'ollama';lastBackend=backend;$('ai-backend').value=backend;$('ai-endpoint').value=cfg.local_ai_endpoint||endpointDefaults[backend];$('ai-model').value=cfg.local_ai_model||'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0';aiManual={endpoint:$('ai-endpoint').value,backend,model:$('ai-model').value};$('ai-managed').checked=aiManagedSaved=cfg.local_ai_managed===true;renderAiMode();$('interval').value=cfg.interval_sec;$('warn').value=cfg.warn_pct;$('block').value=cfg.block_pct;
@@ -374,27 +423,25 @@ function apply(s){if(!s)return 2000;
   $(id).hidden=!s.usage_policy_pending;
   setText(id,s.usage_policy_pending?'Chính sách đã lưu khác cache hiện hành. Hook vẫn dùng cache cho đến lần cập nhật tiếp theo.':'');
  }
- const c=s.cache;if(!c){lastAccs='';setHTML('overview-quota','<div class="hdr">đang poll lần đầu...</div>');$('accs').innerHTML='<div class="hdr">đang poll lần đầu...</div>';return 700}
+ const c=s.cache;if(!c){const wait='Đang chờ lần tải quota đầu tiên…';renderQuotaCards('overview-quota',[],true,wait);renderQuotaCards('accs',[],false,wait);return 700}
  if(!labelsBuilt){buildLabels(Object.keys(c.profiles),s.cfg);labelsBuilt=true;Object.assign(settingsBaseline,collectWidgetProfiles())}
  const busy=new Set(c.busy||[]);
- // Keep the DOM stable across polls; only times update in place.
- const rows=usageRows(c,s.cfg,s.usage_hooks||{});
- const h=rows.map(usageAccount).join('');
- const changed=h!==lastAccs;
- if(changed){$('accs').innerHTML=h;lastAccs=h}
- setHTML('overview-quota',overviewQuota(rows));
+ // Reconcile by account so changing one card does not rebuild unrelated rows.
+ const rows=usageRows(c,s.cfg,s.usage_hooks||{}),empty='Chưa có tài khoản Claude Usage.';
+ const changed=renderQuotaCards('accs',rows,false,empty);
+ renderQuotaCards('overview-quota',rows,true,empty);
  fillLive(c.profiles);
  const age=Math.round(Date.now()/1000-c.ts), inflight=busy.size>0||waitingRefresh>Date.now()/1000;
  setHTML('stat',inflight?`<span class="spin"></span><span style="color:var(--busy)">đang cập nhật${busy.size?' '+busy.size+' account':''}...</span>`
   :`<span class="dot" style="background:${age>s.cfg.interval_sec*2+30?'var(--bad)':'var(--ok)'}"></span><span>cập nhật ${age}s trước · mỗi ${s.interval||s.cfg.interval_sec}s</span>`);
- const mine=waitingRefresh>Date.now()/1000;$('rbtn').disabled=mine;$('rbtn').textContent=mine?'đang refresh…':'refresh';
+ const mine=waitingRefresh>Date.now()/1000;$('rbtn').disabled=mine;$('rbtn').textContent=mine?'Đang làm mới…':'Làm mới quota';
  // result of a manual refresh (what started, what was skipped and why)
  const r=c.refresh;if(r&&r.ts>seenRefresh&&r.ts>=waitingRefreshStart-1){seenRefresh=r.ts;waitingRefresh=0;
   const sk=r.skipped.map(x=>`${x.name}: ${x.why}`);
   toast(r.started.length?`đang refresh ${r.started.length} account`+(sk.length?` · bỏ qua ${sk.length}`:''):`không refresh: ${sk[0]||'không có account'}`,3200)}
  $('sub').textContent=' · '+Object.keys(c.profiles).length+' accounts';if(changed)fit();
  return inflight?400:2000}
-let waitingRefreshStart=Date.now()/1000,lastAccs='';
+let waitingRefreshStart=Date.now()/1000;
 // replace an element's HTML only when it really changed (a rewrite restarts the CSS animations inside it)
 function setHTML(id,html){const e=$(id);if(e._h!==html){e.innerHTML=html;e._h=html}}
 const LIVE={ago:t=>+t?ago(+t):'chưa có',until:t=>until(+t),reset:t=>reset(t)};
@@ -1015,7 +1062,7 @@ function save(quiet){
  return job;
 }
 async function refresh(){if($('rbtn').disabled)return;waitingRefreshStart=Date.now()/1000;waitingRefresh=waitingRefreshStart+8;
- $('rbtn').disabled=true;$('rbtn').textContent='đang refresh…';setHTML('stat','<span class="spin"></span><span style="color:var(--busy)">đang gửi yêu cầu...</span>');
+ $('rbtn').disabled=true;$('rbtn').textContent='Đang làm mới…';setHTML('stat','<span class="spin"></span><span style="color:var(--busy)">đang gửi yêu cầu...</span>');
  await api.refresh();schedule(400)}
 async function testNotify(){await api.test_notify();toast('đã gửi thông báo thử: xem góc màn hình',3000)}
 async function hook(kind){const r=await api[kind==='install'?'hook_install':'hook_uninstall']();toast(r.map(x=>x[0]+': '+x[1]).join(' · '),4000);hookStatus()}
