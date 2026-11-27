@@ -54,3 +54,16 @@ silent, speak into the mic and verify playback shows no signal. Record routing,
 hardware, observed signal and disposal timestamps; keep audio/transcript out of
 test results. Normal mic noise floors can need a hardware-calibrated threshold;
 report actual meters and do not infer isolation solely from a Boolean.
+
+## Optional operator package: license provenance
+
+The Windows packaging workflow bundles upstream NAudio 2.2.1 MIT text,
+validated against its checked-in SHA-256 at immutable upstream revision
+`b5d5ff83fd378f046398891fe5cd99426ce44732`. It also bundles the unmodified
+LICENSE.TXT and THIRD-PARTY-NOTICES.TXT from the same Microsoft Windows x64 .NET
+8 runtime pack used by the self-contained publish, not the notice files from
+whatever machine reads the ZIP. Packaging resolves the exact runtime version
+from the build's NuGet assets, requires the archive to match the cached
+NuGet SHA-512 and records the package URL, members and individual notice hashes
+in `notices/notice-provenance.json`. No additional runtime or network access is
+required to view those notices.

@@ -30,6 +30,7 @@ jobs:
           dotnet publish "$src/AudioProbe.csproj" -c Release -r win-x64 --self-contained true -p:AudioProofOperatorOnly=true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $out
           New-Item -ItemType Directory -Force $pkg,$dist | Out-Null
           Copy-Item "$out/AudioProbe.exe","$src/CHAY-TEST.cmd","$src/HUONG-DAN.txt" $pkg
+          & "$src/package-notices.ps1" -Assets "$src/obj/project.assets.json" -Destination "$pkg/notices"
           # Auditable gentle tone generated from math, not recorded audio.
           Add-Type -TypeDefinition @'
           using System;
@@ -61,6 +62,15 @@ jobs:
           $run = Join-Path $env:RUNNER_TEMP 'proof-smoke'
           Expand-Archive (Join-Path $env:RUNNER_TEMP 'proof-dist/sig4a-audio-proof-win-x64.zip') $run
           $probe = Join-Path $run 'AudioProbe.exe'
+          $noticeDir = Join-Path $run 'notices'
+          $proof = Get-Content -Raw -LiteralPath "$noticeDir/notice-provenance.json" | ConvertFrom-Json -AsHashtable
+          foreach ($name in @('NAudio-v2.2.1-LICENSE.txt','dotnet-runtime-LICENSE.txt','dotnet-runtime-THIRD-PARTY-NOTICES.txt')) {
+            $file = Join-Path $noticeDir $name
+            if (!(Test-Path -LiteralPath $file -PathType Leaf) -or (Get-Item -LiteralPath $file).Length -lt 100 -or
+                $proof[$name].sha256 -ine (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash) {
+              throw "Packaged license notice missing, truncated or has wrong checksum: $name"
+            }
+          }
           $status = & $probe --self-check | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or !$status.ok -or $status.mode -ne 'operator-only' -or $status.opened_endpoints -ne 0) {
             throw 'Operator-only package cannot perform its no-capture self-check.'
