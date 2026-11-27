@@ -137,18 +137,23 @@ public static class Sig4aPackageSmokeWin {
     }
     'Native UIA found visible Live Translate and Claude Usage in the extracted app.'
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
-    function Wait-PackageUia([string]$Pattern, [string]$Mode, [string]$Kind='', [int]$Seconds=12) {
+    function Wait-PackageUia([string]$Pattern, [string]$Mode, [string]$Kind='', [int]$Seconds=12, [string]$Id='') {
         $clock = [Diagnostics.Stopwatch]::StartNew()
         do {
             $uiaArgs = @('-NoProfile','-STA','-File',$uia,'-Hwnd',"$($hwnd.ToInt64())",'-Name',$Pattern,'-Mode',$Mode)
             if ($Kind) { $uiaArgs += @('-Kind',$Kind) }
+            if ($Id) { $uiaArgs += @('-Id',$Id) }
             $raw = & powershell.exe @uiaArgs
             if ($LASTEXITCODE -ne 0) { throw 'Native Quick Check UI automation failed.' }
             $item = ($raw -join "`n") | ConvertFrom-Json
             if ($item.found) { return $item }
             Start-Sleep -Milliseconds 200
         } until ($clock.Elapsed.TotalSeconds -gt $Seconds)
-        throw "Native Quick Check UI did not reach expected control: $Pattern ($Mode)"
+        # Only allowlisted fixed UI labels/identifiers in diagnostics, never model samples.
+        $known = '^(Cài đặt|Chung|Widget|Cảnh báo|Hook CLI|OCR Popup|Phím tắt|Kiểm tra nhanh|Làm mới trạng thái|Thử Translation|Thử Grammar)$'
+        $detail = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($hwnd.ToInt64())" -Name $known -Mode list -Patterns
+        $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow() -eq $hwnd
+        throw "Native Quick Check UI did not reach $Pattern ($Mode, id=$Id, foreground=$foreground). Fixed controls: $($detail -join ' ')"
     }
     function Assert-PackageRefusalBoundary([string]$Phase) {
         if ($refusalListener.Pending()) { throw "$Phase connected to the unauthorized endpoint." }
@@ -159,14 +164,16 @@ public static class Sig4aPackageSmokeWin {
         }
         if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw "$Phase started the Live Translate helper." }
     }
-    Wait-PackageUia '^Cài đặt$' 'invoke' 'Button' | Out-Null
-    Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button' | Out-Null
+    $settings = Wait-PackageUia '^Cài đặt$' 'invoke' 'Button'
+    Wait-PackageUia '^Widget$' 'state' 'Button|TabItem' -Id 't-look' | Out-Null
+    $quick = Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button|TabItem' -Id 't-quick-check-settings'
+    Write-Host "Quick Check native UIA activation: Settings=$($settings.pattern), Quick Check=$($quick.pattern)."
     Wait-PackageUia '^Chưa kiểm tra[.]$' 'state' | Out-Null
     Start-Sleep -Milliseconds 500
     Assert-PackageRefusalBoundary 'Quick Check opening'
-    Wait-PackageUia '^Làm mới trạng thái$' 'invoke' 'Button' | Out-Null
+    Wait-PackageUia '^Làm mới trạng thái$' 'invoke' 'Button' -Id 'qc-refresh' | Out-Null
     Wait-PackageUia '^Đã làm mới; có trạng thái chưa xác minh[.]$' 'state' | Out-Null
-    Wait-PackageUia '^Thử Translation$' 'invoke' 'Button' | Out-Null
+    Wait-PackageUia '^Thử Translation$' 'invoke' 'Button' -Id 'qc-translation' | Out-Null
     Wait-PackageUia 'Mẫu thử chỉ hỗ trợ Ollama chính thức trên cổng mặc định' 'state' | Out-Null
     Assert-PackageRefusalBoundary 'Refresh and fixed model sample refusal'
     'Ordinary Quick Check Settings route verified: passive entry and real refusal with no connection/config write/hook/flag/helper.'
@@ -190,10 +197,12 @@ public static class Sig4aPackageSmokeWin {
         if ($hwnd -eq [IntPtr]::Zero) { throw 'Extracted proof dashboard did not become visible.' }
         [void][Sig4aPackageSmokeWin]::SetWindowPos($hwnd, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014)
         [void][Sig4aPackageSmokeWin]::SetForegroundWindow($hwnd)
-        Wait-PackageUia '^Cài đặt$' 'invoke' 'Button' | Out-Null
-        Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button' | Out-Null
+        $settings = Wait-PackageUia '^Cài đặt$' 'invoke' 'Button'
+        Wait-PackageUia '^Widget$' 'state' 'Button|TabItem' -Id 't-look' | Out-Null
+        $quick = Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button|TabItem' -Id 't-quick-check-settings'
+        Write-Host "Quick Check native UIA activation: Settings=$($settings.pattern), Quick Check=$($quick.pattern)."
         foreach ($label in @('Translation','Grammar')) {
-            Wait-PackageUia ("^Thử $label$") 'invoke' 'Button' | Out-Null
+            Wait-PackageUia ("^Thử $label$") 'invoke' 'Button' -Id ("qc-"+$label.ToLowerInvariant()) | Out-Null
             $state = Wait-PackageUia ("^$label.+Mẫu khớp[.] Ollama báo Cloud đã tắt[.]") 'state' '' 36
             Write-Host "PRODUCTION_SAMPLE_MATCH: $($state.name)"
         }

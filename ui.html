@@ -77,6 +77,14 @@ footer .spin{display:inline-block;margin-right:6px;vertical-align:-1px}
 .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:-2px 0 10px}.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);font:inherit;padding:2px 10px;cursor:pointer}
 .tab:hover{color:var(--fg)}.tab.on{color:var(--accent);border-bottom-color:var(--accent)}[hidden]{display:none!important}
 .compact .tabs{margin-bottom:6px}
+/* Keep the eight Settings controls on one row at the regular dashboard width.
+   At 420px the same buttons wrap naturally, without clipped labels or hiding Quick Check. */
+#settings-box>.tabs{column-gap:4px;row-gap:3px;align-items:center}
+#settings-box>.tabs .tab{white-space:nowrap;font-size:12px;padding-inline:5px}
+#settings-box>.tabs #settings-ai{white-space:nowrap;font-size:12px;padding:2px 7px}
+#settings-box>.tabs button:focus-visible{outline:1px solid var(--accent);outline-offset:1px;border-radius:3px}
+@media (min-width:755px){#settings-box>.tabs{flex-wrap:nowrap}}
+
 .look>summary{cursor:pointer;color:var(--accent);font-size:12px;list-style:none;padding:2px 0}.look>summary::-webkit-details-marker{display:none}
 .look>summary::before{content:'▸ ';color:var(--dim)}.look[open]>summary::before{content:'▾ '}
 .al{display:grid;grid-template-columns:1fr 92px auto;gap:8px;align-items:center}.al span{color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -3,7 +3,8 @@ param(
  [string]$Id='',
  [string]$Name='',
  [string]$Kind='',
- [ValidateSet('point','focus','state','list','invoke')][string]$Mode='point'
+ [ValidateSet('point','focus','state','list','invoke')][string]$Mode='point',
+ [switch]$Patterns
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,WindowsBase
@@ -38,6 +39,9 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
       if($c.Name -and $names.Count -lt 300){
         $rect=$c.BoundingRectangle
         $item=@{name=$c.Name;id=$c.AutomationId;kind=$c.ControlType.ProgrammaticName;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen}
+        if($Patterns){
+          try {$item.patterns=@($e.GetSupportedPatterns() | ForEach-Object ProgrammaticName)} catch {}
+        }
         if(!$rect.IsEmpty){
           $item.left=[int][Math]::Round($rect.Left);$item.top=[int][Math]::Round($rect.Top)
           $item.right=[int][Math]::Round($rect.Right);$item.bottom=[int][Math]::Round($rect.Bottom)
@@ -52,8 +56,34 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
     if($Mode -eq 'focus' -and $c.IsEnabled){ try{$e.SetFocus()}catch{continue} }
     if($Mode -eq 'invoke'){
       if(!$c.IsEnabled){continue}
-      try{$e.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()}catch{continue}
-      @{found=$true;name=$c.Name;id=$c.AutomationId}|ConvertTo-Json -Compress
+      if($c.IsOffscreen){
+        try {$e.GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView()} catch {}
+        $c=$e.Current
+        if($c.IsOffscreen){
+          try {$e.SetFocus()} catch {}
+          $c=$e.Current
+        }
+        if($c.IsOffscreen){continue}
+      }
+      # aria-pressed Chromium buttons expose TogglePattern, not always InvokePattern.
+      # A real UIA activate is required; the caller still verifies the resulting page/status.
+      $activated=''
+      try {
+        $p=$null
+        if($e.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$p)){
+          ([Windows.Automation.InvokePattern]$p).Invoke()
+          $activated='Invoke'
+        } elseif($e.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern,[ref]$p)){
+          ([Windows.Automation.TogglePattern]$p).Toggle()
+          $activated='Toggle'
+        } elseif($c.ControlType -eq [Windows.Automation.ControlType]::TabItem -and
+                 $e.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern,[ref]$p)){
+          ([Windows.Automation.SelectionItemPattern]$p).Select()
+          $activated='Select'
+        }
+      } catch { continue }
+      if(!$activated){continue}
+      @{found=$true;name=$c.Name;id=$c.AutomationId;pattern=$activated}|ConvertTo-Json -Compress
       exit 0
     }
     $item=@{found=$true;name=$c.Name;id=$c.AutomationId;kind=$c.ControlType.ProgrammaticName;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen;focused=$e.Current.HasKeyboardFocus}

@@ -28,6 +28,16 @@ $('qc-grammar').click();
 check('real unauthorized endpoint Grammar refuses with no output',
  await waitFor(()=>get('grammar').includes('Ollama chính thức')&&$('qc-grammar-output').hidden&&buttonsReady(),2500));
 await stage('refused-live-transport');
+// Size after the read-only baseline so geometry persistence isn't mistaken for a Quick Check side effect.
+const qcRect=await api.rect(), qcDpr=window.devicePixelRatio||1;
+await api.set_rect(qcRect[0],qcRect[1],Math.round(420*qcDpr),Math.round(700*qcDpr));
+await syncWin();
+const narrow=await waitFor(()=>Math.abs(innerWidth-420)<=2,2500);
+const quickTab=$('t-quick-check-settings');quickTab.focus({preventScroll:true});
+const quickBounds=quickTab.getBoundingClientRect();
+check('Quick Check tab remains readable and keyboard focusable at 420px',narrow&&document.activeElement===quickTab&&
+ quickBounds.width>0&&quickBounds.left>=0&&quickBounds.right<=innerWidth&&
+ document.documentElement.scrollWidth<=innerWidth,JSON.stringify({width:innerWidth,left:quickBounds.left,right:quickBounds.right}));
 check('debug fixture requires explicit script activation',await api.__e2e_quick_check_fixture()===true);
 $('qc-refresh').click();
 check('metadata fixture never marks a text sample passed',await waitFor(()=>get('ai').includes('Chưa chạy mẫu')&&buttonsReady(),3000)&&$('qc-translation-output').hidden);
