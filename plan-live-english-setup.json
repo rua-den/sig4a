@@ -1,13 +1,13 @@
 {
   "title": "Cài model phụ đề tiếng Anh ngay trong Live Translate",
-  "status": "in_progress",
-  "delivery": "Independent opt-in English model setup only; no coding or acceptance yet.",
+  "status": "passed",
+  "delivery": "Explicit opt-in English model setup verified in the ordinary extracted Windows package. No automatic capture or installation.",
   "base": "59e12b6815d57c8051597b0c47613986d4159a5d",
   "integration_evidence": {
     "source": "Verified origin/main after merged PR #36 (Safe Diagnostics export).",
     "revision": "59e12b6815d57c8051597b0c47613986d4159a5d",
     "preserved": "Safe Diagnostics and hardened visible-dashboard smoke remain integrated with explicit English model setup, actual extracted-dashboard installer and isolated offline engine gates.",
-    "result": "Integrated baseline only; acceptance remains pending full hosted Windows tests on the merged revision."
+    "result": "Exact integrated candidate passed standard, full workspace, native-engine and ordinary package Windows gates."
   },
   "scope": {
     "included": [
@@ -125,7 +125,7 @@
     },
     {
       "id": "native_and_ui",
-      "status": "in_progress",
+      "status": "passed",
       "acceptance": [
         "One verified installer core drives both entry points. Live Translate UI has accessible keyboard/focus, deliberate confirmation and truthful progress/terminal statuses. No network/materialization prior to confirmation, no implicit launch/capture/install on view/status/startup, no audio/translation/scan concurrency, and status/repair UX works with both archive styles.",
         "Requests bounded by exact model/URL, all digests verified, installation atomically publishable and idempotent without network for matching preexisting assets. Handles early cancel, no renderer/owner, partial/corrupt archives, low disk, unwritable path, invalid existing target and controlled retries. Reject reparse/paths/subprocess cross-mode and ignore stale generations. Existing source, Audio Check, settings, shortcut, Local AI and optional VI behavior unchanged. Under package lock, validate stable non-delete-share handles and commit with no-overwrite native stage-handle rename; unsupported handle semantics fail closed. Installer publishes neither an unreviewed dependency nor an extraction API that follows paths."
@@ -133,7 +133,7 @@
     },
     {
       "id": "verification",
-      "status": "pending",
+      "status": "passed",
       "acceptance": [
         "Managed tests with a small generated synthetic archive and controlled fake transport (test assembly only, no production URL/asset injection): HTTPS allowlist/redirect/replay, oversize and short reads, hash mismatch, delayed abort, archive links/path/duplicates/overflow, atomic race/recovery, valid existing model, staged cleanup, no untrusted deletion and no audio. Include stale view after blocking native dialog; package lock contention with wrapper, actual capture and a second installer; UNC/reparse and replaced-parent/stage races rejected before commit. A real isolated Windows NTFS fixture pauses inside the live pre-rename window and attempts benign concurrent parent and stage replace/rename; replacements must not succeed while the exact object handles are pinned, and after the guarded rename verify expected target identity. Include same-window target creation to prove no overwrite and unchanged foreign data.",
         "Actual Windows WebView2 dashboard exercise: explicit button/dialog, declining does nothing, progress, Cancel, retry, existing/missing/unwritable/malformed UX, renderer/job teardown and source guards. Test-only stub is unshipped; include an ordinary extracted preview/full ZIP end-to-end install at least once from the actual page using the pinned official source (or clearly hold that gate if globally offline), verify manifest and no capture/network after installation. Locally instrument pre-egress counters proving zero requests on decline, stale post-modal heartbeat, or view loss before grant. Do not attach signed URLs, transcripts, or raw diagnostic payload.",
@@ -143,8 +143,34 @@
     }
   ],
   "gate": {
-    "status": "pending",
-    "rule": "This draft is proposal-only. Start coding only after audio dependency merges and strong Advisor reviews exact plan. An ordinary app, explicit consent, a digest-verified full Windows install driven through UI, and actual local hosted inference are separate evidence. Lack of real-user hardware never becomes fabricated physical proof."
+    "status": "passed",
+    "rule": "This draft is proposal-only. Start coding only after audio dependency merges and strong Advisor reviews exact plan. An ordinary app, explicit consent, a digest-verified full Windows install driven through UI, and actual local hosted inference are separate evidence. Lack of real-user hardware never becomes fabricated physical proof.",
+    "verification": {
+      "tested_remote_revision": "83f1839df5f5bf849364f6c36d8b9016221dcb81",
+      "tested_tree": "dfe0a1043ceaa5f8188e6dd7602dc024fbc0b426",
+      "advisor_review": {
+        "product_local_revision": "84fc406143b50c916eba99c1ecf2a2e5d037ad94",
+        "exact_packaged_proof_local_revision": "7838baa18c670a60510674583f2a7bab7a5db6e5",
+        "result": "Independent stronger-model source review approved the product and exact test-only final tree; native and ordinary gates then passed at the equivalent hosted tree."
+      },
+      "standard_windows": "https://github.com/rua-den/sig4a/actions/runs/46064563579",
+      "full_windows": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650603",
+      "native_engine": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650977",
+      "ordinary_package": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650879",
+      "exact_artifact": "https://github.com/rua-den/sig4a/actions/runs/46064563653/artifacts/15229383867",
+      "full_regression": {
+        "passed": 249,
+        "failed": 0,
+        "ignored": 1
+      },
+      "ordinary": "Normal extracted dashboard; native decline and stale accept did not spawn the helper or stage files. Fresh native affirmation launched exactly one helper, fetched the pinned publisher archive, atomically committed Ready, verified all member lengths and SHA-256 digests, and ran true offline synthetic English recognition against these same assets. Exact bundled dependency and license hashes checked by the package smoke.",
+      "native": "Real Windows NTFS rooted reparse refusal, legacy compatibility, no-overwrite and replacement races, owned rollback, lease, cancellation and forced-kill recovery. Controlled transport asserts only the pinned publisher/single HTTPS CDN handoff; this is not host-wide packet capture.",
+      "implementation_addenda": [
+        "plan-live-english-setup-pointer-addendum.json",
+        "plan-live-english-setup-native-rename-correction.json"
+      ],
+      "limits": "Hosted Windows did not expose an active playback endpoint. No physical mic/system audio, real meeting, prolonged soak, cloud inference or host-wide egress telemetry was exercised. WMI observed setup process starts, not packets."
+    }
   },
   "advisor_revision": "Applied mandatory preliminary Advisor refinements plus verified archive byte lengths, exact dependency/notice, and handle-based no-overwrite proof requirements. Exact draft still uses base placeholder pending approved Audio Check merge; final strong-model re-approval before code.",
   "managed_bzip2_dependency": {
