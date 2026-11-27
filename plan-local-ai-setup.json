@@ -1,7 +1,7 @@
 {
   "title": "Local AI diagnostics and one-click Windows setup",
   "baseline": "e74a86be9c5a321825e3354f538e54cccaa0e84f",
-  "status": "in_progress",
+  "status": "passed",
   "scope": "Dashboard Local AI and current OCR image path; does not install Live Translate, GPU drivers or other unrelated components.",
   "privacy": "Diagnostics are metadata-only on the configured validated loopback endpoint. Setup may access Microsoft WinGet / Ollama model registry only after the explicit setup action; no user text or image, account sign-in, cloud fallback, public bind, or background setup on page load.",
   "phases": [
@@ -23,7 +23,7 @@
     },
     {
       "id": "windows-setup",
-      "status": "in_progress",
+      "status": "passed",
       "acceptance": [
         "Explicit 'Cài phần còn thiếu' action describes source and multi-GB download, uses fixed official Ollama.Ollama WinGet package and local gemma4:e2b preset, only installs what is absent, with bounded steps and actionable progress/failures. Show the publisher, sources, and size before the click. Do not bypass integrity checks or silently accept unexpected agreements.",
         "Only reuse a verified Ollama listener, not any process on the default port. Otherwise report the conflict. Start by absolute path with a child-only 127.0.0.1 bind and no-cloud flag. Never kill or reconfigure an existing Ollama or claim its cloud setting has been verified.",
@@ -31,16 +31,35 @@
         "Check/list never triggers installation or any external network call. Stub the install boundary for routine CI; use a separate hosted Windows full installation smoke where practical.",
         "Use OS trusted absolute executable paths and expected Ollama publisher/identity; no PATH or working-directory search, arbitrary args, shell fragments, elevation or force. Fail closed on missing trust or uncertain ownership.",
         "Use a background bounded single-flight operation shared across dashboard processes, observable progress and cancellation limited to owned work. Test missing provider, unexpected listener, failed install, timeout, and duplicate setup."
-      ]
+      ],
+      "evidence": {
+        "windows_setup_scope": "Native WebView2 exercised setup controls with a simulated installer, progress, cancellation, retry, and preservation of user settings. The test bridge blocked real install and pull. Native Win32 tests exercised loopback PID identification, wildcard rejection, single-flight mutex, UTF-16 parsing, and fail-closed process/bind preflight.",
+        "limitations": "The clean end-to-end WinGet install, Gemma model download, and Windows Gemma inference were not performed. Linux llama.cpp Gemma 4 synthetic-image proof is recorded separately. No changes were made to the user's device."
+      }
     },
     {
       "id": "verification",
-      "status": "pending",
+      "status": "passed",
       "acceptance": [
         "Independent strong Advisor reviews plan before coding and implementation before merge.",
         "Pass Rust tests and real WebView2 tests for check, progress, retry, unchanged settings and image request, plus full Windows regression and extracted ZIP smoke.",
         "Record the exact verified head and actual evidence in this JSON; only then merge through an expected-head lease."
-      ]
+      ],
+      "evidence": {
+        "tested_commit": "21857383f0e28fb4b7777f418fa53d1ed85de2bf",
+        "reviewed_tree": "54109a36a0fbdaa772d1d0b78671018002de8a05",
+        "advisor": "GPT-6.2 Astra approved plan 90a3f29096551286c5cd8d214630bb494b485e1b and final local commit fcd82b1de383ab74fbed0bca990a3828193ca616.",
+        "windows_validation": "https://github.com/rua-den/sig4a/actions/runs/46039624539",
+        "dashboard_unit_tests": 51,
+        "windows_full": "https://github.com/rua-den/sig4a/actions/runs/46039624518/attempts/2",
+        "full_windows_tests": {
+          "passed": 228,
+          "failed": 0,
+          "ignored": 1
+        },
+        "package_smoke": "Built the actual ZIP and confirmed the visible native UI Automation navigation and companion safety checks on the identical commit in attempt 2. Previous attempt timed out choosing a non-visible window; no production or smoke-test changes were used for the retry.",
+        "english_runtime": "Synthetic local English inference passed; optional publisher-gated Vietnamese engine and physical endpoints were not tested."
+      }
     }
   ]
 }
