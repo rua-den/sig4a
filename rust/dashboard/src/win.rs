@@ -8,7 +8,7 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
 use windows_sys::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow};
-use windows_sys::Win32::UI::Shell::{SetWindowSubclass, SUBCLASSPROC};
+use windows_sys::Win32::UI::Shell::{ShellExecuteW, SetWindowSubclass, SUBCLASSPROC};
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 pub const CLASS: &str = "ClaudeUsageDashboard";
@@ -222,6 +222,17 @@ pub fn open_toolbox() -> bool {
     }
 }
 
+pub fn open_model_folder(hwnd: isize, path: &Path) -> bool {
+    use std::os::windows::ffi::OsStrExt;
+    let Ok(canonical) = std::fs::canonicalize(path) else { return false; };
+    if canonical != path || !canonical.is_dir() { return false; }
+    let target: Vec<u16> = canonical.as_os_str().encode_wide().chain([0]).collect();
+    // SAFETY: fixed, canonical app-owned folder and NUL-terminated verb/path.
+    unsafe {
+        ShellExecuteW(h(hwnd), wide("open").as_ptr(), target.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) as isize > 32
+    }
+}
+
 pub fn message_box(text: &str) {
     // SAFETY: NUL-terminated strings.
     unsafe {
@@ -232,6 +243,14 @@ pub fn message_box(text: &str) {
             MB_OK | MB_ICONWARNING,
         )
     };
+}
+
+/// Native explicit consent prompt for networked Live Translate model installation.
+pub fn confirm_model_install(hwnd: isize) -> bool {
+    let text = "Cài model nhận dạng tiếng Anh sherpa-onnx-streaming-zipformer-en-2023-06-26 từ nhà phát hành k2-fsa?\n\nNguồn chính thức (GitHub):\nhttps://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2\n\nTải 310 MB, giữ lại khoảng 72,5 MB trong thư mục app; cần ít nhất 450 MB trống. Chỉ tải tệp model này. Không gửi âm thanh hay phụ đề; app không tự bật nghe sau khi cài. Chọn Yes để tải hoặc No để không thay đổi gì.";
+    unsafe {
+        MessageBoxW(h(hwnd), wide(text).as_ptr(), wide("Live Translate · English model").as_ptr(), MB_YESNO | MB_ICONINFORMATION | MB_DEFBUTTON2) == IDYES
+    }
 }
 
 /// `core.set_autostart`: same value name as the tray build and the Python one, so there is only ever one entry.

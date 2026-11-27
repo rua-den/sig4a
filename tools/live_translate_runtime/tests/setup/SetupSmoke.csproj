@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <AssemblyName>Sig4a.LiveTranslate.SetupSmoke</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../Sig4a.LiveTranslate.csproj" /></ItemGroup>
+</Project>

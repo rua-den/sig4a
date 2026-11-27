@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="inference/**/*.cs" />
+    <Compile Remove="inference/**/*.cs;setup/**/*.cs" />
     <Compile Include="../CheckTiming.cs" Link="CheckTiming.cs" />
     <Compile Include="../Protocol.cs" Link="Protocol.cs" />
   </ItemGroup>

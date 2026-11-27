@@ -56,3 +56,35 @@ try {
 if (@(Probe "{`"v`":1,`"type`":`"check_stop`",`"session`":99}`n" 0).Count -ne 0) { throw 'Stale audio-check stop emitted an event.' }
 if (@(Probe "{`"v`":1,`"type`":`"check_start`",`"session`":1,`"source`":`"mic`",`"device_id`":`"test`",`"translate`":true}`n" 2)[0].code -ne 'protocol_error') { throw 'Audio check rejected-field refusal missing.' }
 'Windows companion audio-check command shape passed without capture.'
+
+# A real setup-mode process without an authorized frame, and explicit offline
+# verification in a model-free package, must leave no model storage behind.
+function Probe-Setup([string]$Request) {
+    $s = [Diagnostics.ProcessStartInfo]::new($exe)
+    $s.UseShellExecute = $false
+    $s.CreateNoWindow = $true
+    $s.RedirectStandardInput = $true
+    $s.RedirectStandardOutput = $true
+    $s.ArgumentList.Add('--english-model-setup')
+    $p = [Diagnostics.Process]::Start($s)
+    try {
+        if ($Request) {
+            $p.StandardInput.WriteLine($Request)
+            $p.StandardInput.Flush()
+        } else { $p.StandardInput.Close() }
+        $stdout = $p.StandardOutput.ReadToEndAsync()
+        if (!$p.WaitForExit(7000) -or !$stdout.Wait(1000)) { throw 'English model no-capture setup smoke timed out.' }
+        if (Test-Path -LiteralPath (Join-Path $path 'models')) { throw 'Offline setup smoke mutated package.' }
+        return @{code=$p.ExitCode;events=@($stdout.Result -split '\r?\n' | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })}
+    } finally { if (!$p.HasExited) { $p.Kill($true) }; $p.Dispose() }
+}
+$noGrant = Probe-Setup ''
+if ($noGrant.code -ne 0 -or $noGrant.events.Count -ne 0) { throw 'Setup without explicit grant was not inert.' }
+$malformed = Probe-Setup '{"v":1,"type":"model_setup_start","session":8,"action":"verify","url":"https://example.invalid"}'
+if ($malformed.code -ne 2 -or $malformed.events.Count -ne 0) { throw 'Setup accepted unsupported destination.' }
+$verify = Probe-Setup '{"v":1,"type":"model_setup_start","session":8,"action":"verify"}'
+if ($verify.code -ne 1 -or $verify.events.Count -ne 2 -or $verify.events[0].state -ne 'checking_files' -or
+    $verify.events[1].state -ne 'failed' -or $verify.events[1].code -ne 'not_installed') {
+    throw 'Expected offline verifier exact no-model result.'
+}
+'Windows companion English setup smoke passed without grant, staging, or capture.'

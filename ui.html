@@ -140,6 +140,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
 #live-vi{font-size:14px;border-left:2px solid var(--acc);padding-left:8px;white-space:pre-wrap;overflow-wrap:anywhere}
 #live-lamp[data-listening="true"]{color:#72d69b;font-weight:700}
 .live-field{max-width:420px;margin-top:8px}
+#live-model-progress{display:block;width:100%;height:14px;margin-top:8px;accent-color:var(--accent)}
 </style></head><body>
 <div class="title"><div class="drag pywebview-drag-region" ondblclick="toggleMax()"><b>Kane's Tool Box</b><span id="sub"></span></div><label class="accent-picker" title="Màu giao diện">Màu giao diện<select id="accent" aria-label="Màu giao diện"><option value="orange">Cam</option><option value="blue">Xanh</option><option value="purple">Tím</option></select></label>
 <button class="b" id="quick-open-toolbox" onclick="openToolBox()">Mở Tool Box</button><button class="wb" title="thu nhỏ" onclick="api.minimize()">–</button><button class="wb" id="maxb" title="phóng to / khôi phục (nhấp đúp thanh tiêu đề)" onclick="toggleMax()">▢</button><button class="wb x" id="window-close" aria-label="Đóng" title="đóng" onclick="closeDash()">✕</button></div>
@@ -164,6 +165,18 @@ textarea:focus{outline:0;border-color:var(--accent)}
   <div class="box">
    <div class="lbl">LIVE TRANSLATE · THỬ NGHIỆM</div>
    <p class="hint" id="live-privacy">Phụ đề tiếng Anh chạy trên máy. Chỉ nghe sau khi bấm Bắt đầu hoặc Tiếp tục. Không lưu âm thanh hay phụ đề.</p>
+   <section class="modelcard" id="live-model-setup" aria-labelledby="live-model-heading">
+    <b id="live-model-heading">Model tiếng Anh chạy offline</b>
+    <p class="hint">Cài model nhận dạng giọng nói Sherpa-ONNX từ GitHub chính thức. Tải khoảng 310 MB, giữ lại khoảng 72,5 MB trong thư mục app và cần ít nhất 450 MB trống. Không gửi âm thanh hay phụ đề; cài xong cũng không tự bật microphone. Có thể kiểm tra model đã có mà không tải gì.</p>
+    <div class="toolactions" aria-label="Quản lý model tiếng Anh">
+     <button class="b" id="live-model-verify" type="button">Kiểm tra model đã cài</button>
+     <button class="b p" id="live-model-install" type="button">Cài model tiếng Anh</button>
+     <button class="b" id="live-model-open-folder" type="button" hidden>Mở thư mục Live Translate để tự kiểm tra</button>
+     <button class="b" id="live-model-cancel" type="button" hidden>Hủy</button>
+    </div>
+    <progress id="live-model-progress" max="310414022" value="0" hidden aria-label="Tiến độ tải model"></progress>
+    <p class="hint text-status" id="live-model-status" role="status" aria-live="polite">Chưa xác minh model. Chọn kiểm tra hoặc cài khi cần.</p>
+   </section>
    <label class="live-field">Nguồn âm thanh<select id="live-source"><option value="playback">Tiếng máy</option><option value="mic">Micro</option></select></label>
    <label class="live-field">Thiết bị<select id="live-device"></select></label>
    <p class="hint" id="live-source-hint">Tiếng máy nghe mọi ứng dụng phát âm thanh qua thiết bị đã chọn, gồm cả thông báo.</p>
@@ -756,23 +769,83 @@ const liveErrors={
  protocol_error:'Helper không tương thích hoặc đã ngắt. Phiên đã dừng.',
  internal:'Không thể khởi động hoặc giám sát helper. Cài lại gói helper.'
 };
-let liveState={phase:'idle',listing:false,devices:[],en:'',vi:null,checking:false,check:null},liveLoop=null,liveEpoch=0,liveRequest=false,livePollPending=false,liveDevicesKey=null,liveNonce=null,liveHeartbeatLoop=null;
+let liveState={phase:'idle',listing:false,devices:[],en:'',vi:null,checking:false,check:null},liveLoop=null,liveEpoch=0,liveRequest=false,livePollPending=false,liveDevicesKey=null,liveNonce=null,liveHeartbeatLoop=null,liveModelLoop=null;
+let liveModelState={active:false,state:'unchecked',session:null},liveModelRequest=false,liveModelEpoch=0;
+const liveModelMessages={
+ unchecked:'Chưa xác minh model. Chọn kiểm tra hoặc cài khi cần.',missing_helper:'Thiếu helper Live Translate. Cài gói ZIP đầy đủ của Sig4a rồi thử lại.',not_installed:'Chưa thấy model trong thư mục ứng dụng. Chọn Cài model để tải và cài ngoại tuyến.',verify_existing:'Có model trong thư mục ứng dụng nhưng chưa xác minh. Chọn Kiểm tra để xác minh trước khi dùng.',needs_repair:'Thư mục model có cấu trúc bất thường. Không tự ghi đè; mở thư mục để tự kiểm tra hoặc sửa.',
+ awaiting_heartbeat:'Đã xác nhận. Đang kiểm tra cửa sổ rồi mới bắt đầu…', starting:'Đang khởi chạy bộ cài…',
+ downloading:'Đang tải model tiếng Anh…',checking_archive:'Đang xác minh gói tải…',extracting:'Đang giải nén model…',
+ checking_files:'Đang xác minh các tệp model…',committing:'Đang lưu model vào thư mục ứng dụng…',ready:'Model tiếng Anh đã được xác minh và sẵn sàng. Bấm Bắt đầu khi bạn muốn nghe.',
+ cancelled:'Đã hủy cài đặt.',declined:'Bạn đã từ chối. Không có tệp hay dữ liệu mạng nào được tạo.',
+ failed:'Không hoàn tất. Hãy xem nguyên nhân và thử lại.'
+};
+const liveModelErrors={backend_missing:'Thiếu helper Live Translate. Cài gói ZIP đầy đủ của Sig4a rồi thử lại.',busy:'Live Translate đang bận. Dừng phiên hoặc lần thử âm thanh trước.',not_installed:'Chưa có model tiếng Anh trong thư mục ứng dụng.',needs_repair:'Model hiện có không khớp. Không tự ghi đè; hãy xử lý bản hiện tại rồi kiểm tra lại.',access_denied:'Không có quyền ghi vào thư mục model. Giải nén ứng dụng vào thư mục bạn có quyền ghi.',insufficient_space:'Không đủ dung lượng trống. Cần ít nhất 450 MB.',network_unavailable:'Không tải được từ máy chủ phát hành chính thức. Kiểm tra mạng rồi thử lại.',timeout:'Tác vụ hết thời gian chờ. Hãy kiểm tra mạng hoặc thử lại.',digest_mismatch:'Tệp tải không khớp chữ ký nội dung đã ghim; đã dừng an toàn.',archive_invalid:'Gói model không hợp lệ; chưa cài đặt.',invalid_path:'Đường dẫn không an toàn hoặc đã có tệp khác; chưa ghi đè.',cleanup_incomplete:'Không thể xác nhận đã dọn tệp tạm. Đóng app rồi thử lại.',installer_internal:'Bộ cài không hoàn tất. Đóng app, giải nén lại ZIP đầy đủ và thử lại.'};
+function renderLiveModel(state){
+ if(!state||typeof state.state!=='string')return;
+ if(state.session&&liveModelState.session&&state.session!==liveModelState.session&&liveModelState.active)return;
+ liveModelState={...liveModelState,...state};
+ const active=state.active===true||['awaiting_heartbeat','starting','downloading','checking_archive','extracting','checking_files','committing','cancelling'].includes(state.state);
+ if(state.session)liveModelState.session=state.session;
+ const progress=$('live-model-progress');progress.hidden=state.state!=='downloading';
+ if(state.state==='downloading'){progress.max=310414022;progress.value=Math.min(310414022,state.received||0);}
+ const status=state.code?liveModelErrors[state.code]||liveModelErrors.installer_internal:liveModelMessages[state.state]||liveModelMessages.unchecked;
+ $('live-model-status').textContent=state.state==='downloading'&&Number.isFinite(state.received)?`${status} ${Math.round(state.received/1000000)} / 310 MB` : status;
+ $('live-model-verify').disabled=active||liveModelRequest||liveState.phase!=='idle'||liveState.listing===true||liveState.checking===true;
+ $('live-model-install').disabled=active||liveModelRequest||liveState.phase!=='idle'||liveState.listing===true||liveState.checking===true;
+ $('live-model-cancel').hidden=!active;$('live-model-cancel').disabled=!active||state.state==='cancelling';
+ $('live-model-open-folder').hidden=state.state!=='needs_repair';$('live-model-open-folder').disabled=active||liveModelRequest;
+ syncLiveControls();
+}
+async function pollLiveModel(){
+ if(activeRoute!=='live'||!liveNonce||liveModelRequest||!api)return;
+ const epoch=liveModelEpoch,page=liveNonce;
+ try{const state=await api.live_model_state(page);if(epoch===liveModelEpoch&&activeRoute==='live'&&liveNonce===page)renderLiveModel(state)}catch(_){}
+}
+async function beginLiveModel(action){
+ if(activeRoute!=='live'||liveModelRequest||!api)return;
+ const epoch=liveModelEpoch,page=liveNonce;
+ const current=()=>epoch===liveModelEpoch&&activeRoute==='live'&&liveNonce===page;
+ if(!page)return;
+ liveModelRequest=true;syncLiveControls();$('live-model-status').textContent=action==='install'?'Đang mở xác nhận của Windows…':'Đang yêu cầu xác minh model ngoại tuyến…';
+ try{
+  const response=action==='install'?await api.live_model_install(page):await api.live_model_verify(page);
+  if(!current())return;
+  if(response?.state==='awaiting_heartbeat'&&Number.isSafeInteger(response.session)&&typeof response.challenge==='string'&&/^[0-9a-f]{32}$/.test(response.challenge)){
+   renderLiveModel({...response,active:true});
+   // The grant nonce did not exist before the modal returned. Only this fresh scoped
+   // message can start the helper; ordinary interval heartbeats never carry a grant.
+   const granted=await api.live_model_heartbeat(page,response.challenge);
+   if(current())renderLiveModel(granted);
+  }else if(response)renderLiveModel(response);
+ }catch(_){if(current())$('live-model-status').textContent='Không kết nối được với dashboard Windows.'}
+ finally{if(current()){liveModelRequest=false;syncLiveControls();void pollLiveModel()}}
+}
+async function cancelLiveModel(){
+ const epoch=liveModelEpoch,page=liveNonce,session=liveModelState.session;
+ const current=()=>epoch===liveModelEpoch&&activeRoute==='live'&&liveNonce===page;
+ if(!Number.isSafeInteger(session)||!api||!page)return;
+ liveModelState.active=true;liveModelState.state='cancelling';renderLiveModel(liveModelState);
+ try{const result=await api.live_model_cancel(page,session);if(current())renderLiveModel(result)}catch(_){if(current())$('live-model-status').textContent='Không gửi được yêu cầu hủy. Đóng app để dừng tiến trình.'}
+}
 function syncLiveControls(){
  const active=['starting','listening','stopping'].includes(liveState.phase);
  const work=active||liveState.listing||liveRequest;
  const noMic=$('live-source').value==='mic'&&!$('live-device').value;
  const checkActive=liveState.checking===true;
+ const modelWork=liveModelRequest||liveModelState.active===true;
  // A source/device change may cancel a check; regular capture still locks these selectors.
- const sourceLocked=(active&&!checkActive)||liveState.listing||liveRequest;
+ const sourceLocked=(active&&!checkActive)||liveState.listing||liveRequest||modelWork;
  $('live-source').disabled=sourceLocked;$('live-device').disabled=sourceLocked;
  $('live-translate').disabled=work;$('live-consent').disabled=work;
  const vi=$('live-translate').checked;
  $('live-vi-warning').hidden=!vi;$('live-consent-row').hidden=!vi;
- $('live-start').disabled=work||(vi&&!$('live-consent').checked)||noMic;
+ $('live-start').disabled=work||modelWork||(vi&&!$('live-consent').checked)||noMic;
  const paused=liveState.phase==='paused';
- $('live-check-start').disabled=work||noMic||paused;
+ $('live-model-verify').disabled=work||modelWork||liveState.phase!=='idle';
+ $('live-model-install').disabled=work||modelWork||liveState.phase!=='idle';
+ $('live-check-start').disabled=work||modelWork||noMic||paused;
  $('live-check-start').title=paused?'Dừng phiên đang tạm dừng trước khi thử âm thanh.':'';
- $('live-check-stop').disabled=!checkActive||liveState.phase==='stopping';
+ $('live-check-stop').disabled=modelWork||!checkActive||liveState.phase==='stopping';
  $('live-start').textContent=liveState.phase==='paused'?'Tiếp tục':'Bắt đầu';
  $('live-pause').disabled=liveState.phase!=='listening'||liveRequest||checkActive;
  $('live-stop').disabled=checkActive||(!active&&liveState.phase!=='paused')||liveState.phase==='stopping';
@@ -873,14 +946,17 @@ function openLiveView(){
  if(!api||window.__QUICK_MODE__)return;
  const token=++liveEpoch;
  liveNonce=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
- void api.live_view(true,liveNonce).then(state=>{if(token===liveEpoch&&activeRoute==='live')renderLive(state);sendLiveHeartbeat()}).catch(()=>{});
+ const page=liveNonce;
+ void api.live_view(true,page).then(state=>{if(token!==liveEpoch||activeRoute!=='live'||liveNonce!==page)return;renderLive(state);sendLiveHeartbeat();void pollLiveModel()}).catch(()=>{});
  clearInterval(liveLoop);liveLoop=setInterval(livePoll,160);
  clearInterval(liveHeartbeatLoop);liveHeartbeatLoop=setInterval(sendLiveHeartbeat,600);
+ clearInterval(liveModelLoop);liveModelLoop=setInterval(pollLiveModel,700);
 }
 function leaveLiveView(){
  const past=liveNonce;liveNonce=null;
  liveEpoch++;liveRequest=false;clearInterval(liveLoop);liveLoop=null;
  clearInterval(liveHeartbeatLoop);liveHeartbeatLoop=null;
+ clearInterval(liveModelLoop);liveModelLoop=null;liveModelEpoch++;liveModelRequest=false;liveModelState={active:false,state:'unchecked',session:null};
  const releasing=['starting','listening','stopping'].includes(liveState.phase);
  const lamp=$('live-lamp');lamp.dataset.listening='false';
  lamp.textContent=releasing?liveLabels.stopping:liveLabels.idle;
@@ -897,6 +973,10 @@ $('live-translate').addEventListener('change',()=>{$('live-consent').checked=fal
 $('live-consent').addEventListener('change',syncLiveControls);
 $('live-pin').addEventListener('change',()=>{if(api)void api.live_pin($('live-pin').checked,liveNonce).catch(()=>{})});
 $('live-refresh').addEventListener('click',()=>void liveCommand('live_list'));
+$('live-model-verify').addEventListener('click',()=>void beginLiveModel('verify'));
+$('live-model-install').addEventListener('click',()=>void beginLiveModel('install'));
+$('live-model-cancel').addEventListener('click',()=>void cancelLiveModel());
+$('live-model-open-folder').addEventListener('click',async()=>{const epoch=liveModelEpoch,page=liveNonce,current=()=>epoch===liveModelEpoch&&activeRoute==='live'&&liveNonce===page;if(!api||!page)return;try{const opened=await api.live_model_open_folder(page);if(current()&&!opened)$('live-model-status').textContent='Không thể mở thư mục model an toàn. Không có tệp nào được thay đổi.'}catch(_){if(current())$('live-model-status').textContent='Không thể mở thư mục model an toàn.'}});
 $('live-check-start').addEventListener('click',()=>{
  const payload={source:$('live-source').value,device_id:$('live-device').value||null};
  void liveCommand('live_check_start',payload);

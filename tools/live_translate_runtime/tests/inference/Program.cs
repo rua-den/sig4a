@@ -6,10 +6,12 @@ using NAudio.Wave;
 
 if (!OperatingSystem.IsWindows() || args.Length is < 1 or > 2 ||
     args.Length == 2 && args[1] != "--vi") throw new InvalidOperationException();
-using (var model = Session.LoadModel())
-using (var stream = model.CreateStream())
+using (var packageLease = WindowsModelPaths.Acquire(EnglishModelInstaller.Root))
+using (var modelLease = Session.LoadModel(packageLease.Root))
+using (var stream = modelLease.Recognizer.CreateStream())
 using (var wave = new WaveFileReader(args[0]))
 {
+    var model = modelLease.Recognizer;
     var rate = wave.WaveFormat.SampleRate;
     if (wave.WaveFormat.Encoding != WaveFormatEncoding.Pcm || wave.WaveFormat.Channels != 1 ||
         wave.WaveFormat.BitsPerSample != 16 || rate != 16000 || wave.TotalTime.TotalSeconds > 12)

@@ -1,5 +1,5 @@
 # Hosted Windows smoke of the ordinary extracted package. Does not open a physical endpoint.
-param([Parameter(Mandatory)][string]$Archive)
+param([Parameter(Mandatory)][string]$Archive,[switch]$InstallEnglishFromUI)
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 $root = Join-Path $env:RUNNER_TEMP ('sig4a-extracted-' + [guid]::NewGuid())
@@ -79,6 +79,26 @@ public static class Sig4aPackageSmokeWin {
         }, IntPtr.Zero);
         return result;
     }
+    [DllImport("user32.dll",CharSet=CharSet.Unicode,ExactSpelling=true)] static extern int GetWindowTextW(IntPtr hwnd,StringBuilder text,int n);
+    public static IntPtr ModelDialog(uint expectedPid) {
+        IntPtr result=IntPtr.Zero;
+        EnumWindows(delegate(IntPtr wnd,IntPtr p) {
+            uint owner;
+            if (GetWindowThreadProcessId(wnd,out owner)==0 || owner!=expectedPid) return true;
+            var classname=new StringBuilder(128);
+            var title=new StringBuilder(256);
+            if (GetClassNameW(wnd,classname,classname.Capacity)>0 && classname.ToString()=="#32770" &&
+                GetWindowTextW(wnd,title,title.Capacity)>0 && title.ToString()=="Live Translate · English model") {
+                result=wnd;return false;
+            }
+            return true;
+        },IntPtr.Zero);
+        return result;
+    }
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr wnd,int cmd);
+    [DllImport("user32.dll",ExactSpelling=true)] public static extern bool PostMessageW(IntPtr wnd,uint msg,IntPtr wp,IntPtr lp);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint dx,uint dy,uint data,UIntPtr ext);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr wnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr wnd);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr wnd);
@@ -121,6 +141,9 @@ public static class Sig4aPackageSmokeWin {
     'Native UIA found visible Live Translate and Claude Usage in the extracted app.'
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
     'SIG4A archive verified: actual released dashboard, explicit inventory, invalid source no fallback, no passive helper/capture. No physical endpoints accessed.'
+    if ($InstallEnglishFromUI) {
+        & (Join-Path $PSScriptRoot 'smoke-english-install-ui.ps1') -Dashboard $app -Window $hwnd -Package $root -Uia $uia
+    }
 } finally {
     foreach ($p in @($probe,$app)) {
         if ($p) {

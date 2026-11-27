@@ -15,19 +15,39 @@ From the source repository on Windows (.NET 8 SDK and PowerShell 7):
 
 The shipped folder is self-contained. Keep the EXE and DLLs together next to
 the SIG4A EXEs under `live-translate`; the extracted users do not need any
-.NET installation. Models are not bundled and must be installed on purpose:
+.NET installation. Models are not bundled. In the dashboard, open **Live Translate → Cài model
+tiếng Anh** and accept the native Windows confirmation to download the exact
+310,414,022-byte archive (310.4 MB); about 450 MB of free space on a local
+NTFS drive is required.
+The app does not download or verify on launch. **Kiểm tra model** explicitly
+checks a model already installed without network access. Choosing **Hủy**
+stops installation before its final atomic publish; if final publication
+has already completed the verified model remains installed. Installation
+does not start listening or change the optional Vietnamese model.
+
+For administrators or a source checkout, this explicit command uses the same
+installer, locks, and checksum verification as the dashboard:
 
 ```powershell
 pwsh -NoProfile -File .\live-translate\Provision-Model.ps1
 ```
 
-The installer uses Windows curl/tar, downloads the pinned Sherpa-ONNX artifact
-from upstream (~200 MB), verifies the archive and individual files, and
-atomically stages the English offline model. There is no download during
-capture. Missing or changed assets prevent hardware from starting.
-The June 26 English model attribution from the archive is copied unchanged.
+The helper verifies the pinned upstream Sherpa-ONNX archive and all selected
+files, then commits a small guarded marker. An already valid legacy install
+is not modified or downloaded again. There is no download during capture;
+missing or changed assets prevent normal English capture from starting. The
+June 26 English model attribution is copied unchanged. The preexisting
+optional audio test can still show a meter without a model.
 
-Dependencies: NAudio.Wasapi 2.2.1 MIT, sherpa-onnx 1.12.30 Apache-2.0,
+If the whole computer or process stops unexpectedly before publication, a
+private, unreferenced `.sig4a-en-*` directory may remain under
+`live-translate/models`; the probe does not adopt or remove unknown data on
+a later run. Retry without modifying the old folder or any model marker.
+Model changes require restarting capture; use the dashboard status before
+relying on captions.
+
+Dependencies: NAudio.Wasapi 2.2.1 MIT, SharpZipLib 1.4.2 MIT (bounded BZip2),
+sherpa-onnx 1.12.30 Apache-2.0,
 ONNX Runtime 1.23.2 MIT (bundled by the Sherpa Win-x64 native runtime),
 and the actual installed build SDK's matching .NET 8 Windows runtime. The
 packager verifies notices for the exact runtime archive and vendor docs.
