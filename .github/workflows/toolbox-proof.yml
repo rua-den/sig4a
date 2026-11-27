@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 env:
-  PRODUCT_SHA: 5ff45a76f33bc1459530fefc65d0a6d7d23a75fd
+  PRODUCT_SHA: 4c183b24127ee5ab51f220d4ea0fa03171f9107d
 jobs:
   native-toolbox:
     runs-on: windows-2025
