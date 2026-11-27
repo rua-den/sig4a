@@ -34,7 +34,14 @@ $versions = @(
     if ($key -ilike "$pack/*") { $key.Substring($pack.Length + 1) }
   }
 )
-$versions = @($versions | ForEach-Object { $_.Trim([char[]]'[]') } | Sort-Object -Unique)
+$versions = @(
+  $versions | ForEach-Object {
+    # NuGet serializers may use either [v] or [v, v] for an exact range.
+    if ($_ -cmatch '^8\.0\.\d+$') { $_ }
+    elseif ($_ -cmatch '^\[(8\.0\.\d+)(?:,\s*\1)?\]$') { $Matches[1] }
+    else { throw 'Runtime pack version is not an exact .NET 8 patch.' }
+  } | Sort-Object -Unique
+)
 if ($versions.Count -ne 1 -or $versions[0] -cnotmatch '^8\.0\.\d+$') {
   throw 'Cannot identify an exact .NET 8 Windows x64 runtime package in publish assets.'
 }
