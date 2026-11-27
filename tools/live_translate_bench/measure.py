@@ -115,7 +115,7 @@ def freeze(args):
         json.dump(meta, out, indent=2)
 
 
-def run(args):
+def run(args, *, sherpa_type=None, translator=None, evidence=None):
     if platform.system() != "Windows":
         raise RuntimeError("Use a Windows desktop for this runner")
     manifest = load()
@@ -143,13 +143,15 @@ def run(args):
             entries.append((row, b"\0" * (2 * RATE * row["duration_ms"] // 1000), 0))
         else:
             entries.append((row, *audio(row["id"])))
+    if translator is None:
+        translator = lambda text: translate(args.ollama_port, text, args.translator_backend)
     sherpa = None
     cold_model_start = time.monotonic()
     if args.sherpa_model_dir:
         from sherpa_adapter import Sherpa
         if args.whisper_model or args.whisper_version:
             raise ValueError("select one ASR candidate per run")
-        sherpa = Sherpa(args.sherpa_model_dir, args.threads)
+        sherpa = (sherpa_type or Sherpa)(args.sherpa_model_dir, args.threads)
         recognizer, model_files = sherpa.recognize, sherpa.files
         engine_name, version = sherpa.engine_id, sherpa.version
         asr_model_init = round((time.monotonic() - cold_model_start) * 1000)
@@ -158,7 +160,7 @@ def run(args):
             raise ValueError("Whisper model and exact version are required for the Whisper candidate")
         recognizer = lambda pcm: whisper(args.whisper_port, pcm)
         model_files = {"model": args.whisper_model}
-        engine_name, version = "whisper.cpp-base.en", args.whisper_version
+        engine_name, version = getattr(args, "whisper_label", "whisper.cpp-base.en"), args.whisper_version
         asr_model_init = None  # external prestarted server
 
     # Warm the recognizer and translator separately on unscored synthetic speech.
@@ -167,7 +169,7 @@ def run(args):
     asr_ready = time.monotonic()
     if not asr_warm:
         raise RuntimeError("ASR warmup returned no speech")
-    if not translate(args.ollama_port, "This is a synthetic warmup sentence.", args.translator_backend)[0]:
+    if not getattr(args, "asr_only", False) and not translator("This is a synthetic warmup sentence.")[0]:
         raise RuntimeError("Translator warmup returned no text")
     warmed = time.monotonic()
     metadata = {
@@ -176,18 +178,19 @@ def run(args):
                         if sherpa else "whisper.cpp HTTP segmented WAV, not native streaming"),
         "asr_engine": engine_name, "asr_version": version,
         "asr_model_init_ms_in_process": asr_model_init,
-        "translation_model": TRANSLATOR, "synthetic_only": True,
+        "translation_model": getattr(args, "translator_label", TRANSLATOR), "synthetic_only": True,
         "translator_backend": args.translator_backend, "translator_version": args.ollama_version,
         "repository_revision": args.revision,
         "asr_models": {key: {"sha256": digest(path), "bytes": path.stat().st_size}
                        for key, path in model_files.items()},
-        "translator_model_sha256": digest(args.translator_blob),
-        "translator_model_bytes": args.translator_blob.stat().st_size,
+        "translator_model_sha256": digest(args.translator_blob) if args.translator_blob else None,
+        "translator_model_bytes": args.translator_blob.stat().st_size if args.translator_blob else None,
         "fixture_sha256": frozen["fixture_sha256"], "frozen_sha256": digest(args.frozen),
         "asr_warmup_ms_model_prestarted": round((asr_ready - cold) * 1000),
         "translator_warmup_ms": round((warmed - asr_ready) * 1000),
         "metric_limit": "Tk update_idletasks publication proxy, not compositor or SIG4A overlay proof; scheduled WAV sections, no live segmentation gate",
     }
+    metadata.update(evidence or {})
     args.output.with_suffix(".metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     todo = queue.Queue(maxsize=4)
     results = queue.Queue(maxsize=64)
@@ -273,7 +276,7 @@ def run(args):
                     data["recognition_start_ms"] = now_ms()
                     data["transcript"] = recognizer(pcm)
                     data["recognition_final_ms"] = now_ms()
-                data["translation"], data["translation_load_ns"], data["translation_eval_ns"] = translate(args.ollama_port, data["transcript"], args.translator_backend)
+                data["translation"], data["translation_load_ns"], data["translation_eval_ns"] = translator(data["transcript"])
                 data["translation_final_ms"] = now_ms()
             except (OSError, ValueError, KeyError, RuntimeError, http.client.HTTPException) as error:
                 data["error"] = type(error).__name__
