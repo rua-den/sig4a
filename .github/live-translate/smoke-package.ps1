@@ -122,29 +122,52 @@ public static class Sig4aPackageSmokeWin {
         var name = new StringBuilder(256);
         return GetClassNameW(wnd, name, name.Capacity) > 0 ? name.ToString() : "<unavailable>";
     }
-    public static bool IsVisibleOwnedRoot(IntPtr wnd, uint expectedPid) {
+    private static bool IsOwnedDashboardRoot(IntPtr wnd, uint expectedPid) {
         return wnd != IntPtr.Zero && expectedPid != 0 && OwnerPid(wnd) == expectedPid &&
-            IsWindowVisible(wnd) && GetAncestor(wnd, 2) == wnd; // GA_ROOT
+            GetAncestor(wnd, 2) == wnd && // GA_ROOT
+            String.Equals(WindowClass(wnd), "ClaudeUsageDashboard", StringComparison.Ordinal);
+    }
+    public static bool IsVisibleOwnedRoot(IntPtr wnd, uint expectedPid) {
+        return IsOwnedDashboardRoot(wnd, expectedPid) && IsWindowVisible(wnd) && !IsIconic(wnd);
     }
     public static IntPtr[] DashboardCandidates(uint expectedPid) {
+        return DashboardRoots(expectedPid, true);
+    }
+    public static IntPtr[] DashboardRoots(uint expectedPid, bool visibleOnly) {
         var candidates = new List<IntPtr>();
         EnumWindows(delegate(IntPtr wnd, IntPtr unused) {
-            if (IsVisibleOwnedRoot(wnd, expectedPid) &&
-                String.Equals(WindowClass(wnd), "ClaudeUsageDashboard", StringComparison.Ordinal)) {
+            if (IsOwnedDashboardRoot(wnd, expectedPid) &&
+                (!visibleOnly || (IsWindowVisible(wnd) && !IsIconic(wnd)))) {
                 candidates.Add(wnd);
             }
             return true;
         }, IntPtr.Zero);
         // MainWindowHandle can be Tao's event target (or another auxiliary
-        // window). Keep it diagnostic only; never lay out or probe those roots.
+        // window). Keep it diagnostic only; never show or probe those roots.
         return candidates.ToArray();
+    }
+    public static bool CanRelaunchDashboard(IntPtr wnd, uint expectedPid) {
+        Rect rect;
+        if (!IsOwnedDashboardRoot(wnd, expectedPid) ||
+            !GetWindowRect(wnd, out rect) || rect.right <= rect.left || rect.bottom <= rect.top ||
+            (IsWindowVisible(wnd) && !IsIconic(wnd))) return false;
+        var roots = 0;
+        EnumWindows(delegate(IntPtr h, IntPtr unused) {
+            if (GetAncestor(h, 2) == h &&
+                String.Equals(WindowClass(h), "ClaudeUsageDashboard", StringComparison.Ordinal)) roots++;
+            return roots < 2;
+        }, IntPtr.Zero);
+        // The production second-open path does a plain FindWindowW by class.
+        // Prove that it can only select the original owned root before invoking it.
+        return roots == 1 && FindWindowW("ClaudeUsageDashboard", null) == wnd &&
+            IsOwnedDashboardRoot(wnd, expectedPid);
     }
     public static string Describe(IntPtr wnd) {
         Rect rect;
         string bounds = GetWindowRect(wnd, out rect)
             ? String.Format("{0},{1},{2},{3}", rect.left, rect.top, rect.right, rect.bottom) : "<unavailable>";
-        return String.Format("HWND={0}, class={1}, PID={2}, visible={3}, root={4}, bounds={5}",
-            wnd, WindowClass(wnd), OwnerPid(wnd), IsWindowVisible(wnd), GetAncestor(wnd, 2), bounds);
+        return String.Format("HWND={0}, class={1}, PID={2}, visible={3}, iconic={4}, root={5}, bounds={6}",
+            wnd, WindowClass(wnd), OwnerPid(wnd), IsWindowVisible(wnd), IsIconic(wnd), GetAncestor(wnd, 2), bounds);
     }
     public static string DescribeOwned(uint expectedPid) {
         var windows = new List<string>();
@@ -156,15 +179,21 @@ public static class Sig4aPackageSmokeWin {
     }
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr wnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr wnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr wnd);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
+    private static extern IntPtr FindWindowW(string className, string windowName);
+
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr wnd);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr wnd, IntPtr root, int x, int y, int w, int h, uint flags);
 }
 '@
     $uia = Join-Path $PSScriptRoot 'desktop-uia.ps1'
-    function Find-VerifiedPackagedDashboard([Diagnostics.Process]$App,[string]$IsolatedProfile,[string]$Uia) {
+    function Find-VerifiedPackagedDashboard([Diagnostics.Process]$App,[string]$IsolatedProfile,[string]$Uia,[string]$Dashboard,[string]$PackageRoot) {
         $timer = [Diagnostics.Stopwatch]::StartNew()
         [uint32]$launchPid = $app.Id
+        $activation = 'not requested'
+        $activatedRoot = [IntPtr]::Zero
         do {
             Start-Sleep -Milliseconds 250
             $app.Refresh()
@@ -173,12 +202,35 @@ public static class Sig4aPackageSmokeWin {
                 throw "Extracted dashboard exited early ($($app.ExitCode)). Startup: $startup"
             }
             $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
+            # First allow normal startup to reveal itself. If the genuine product
+            # HWND remains hidden, run the ordinary second-open path exactly
+            # once. Passing still requires visibility and the original HWND's UI.
+            if ($candidates.Count -eq 0 -and $activation -eq 'not requested' -and $timer.Elapsed.TotalSeconds -ge 8) {
+                $roots = @([Sig4aPackageSmokeWin]::DashboardRoots($launchPid, $false))
+                if ($roots.Count -eq 1 -and [Sig4aPackageSmokeWin]::CanRelaunchDashboard($roots[0], $launchPid)) {
+                    $candidate = $roots[0]
+                    $details = [Sig4aPackageSmokeWin]::Describe($candidate)
+                    Write-Host "Existing dashboard confirmed before ordinary second open: $details"
+                    $reopen = Start-Process -FilePath $Dashboard -WorkingDirectory $PackageRoot -PassThru
+                    try {
+                        if (!$reopen.WaitForExit(5000)) { throw 'Ordinary dashboard second-open did not return within five seconds.' }
+                        if ($reopen.ExitCode -ne 0) { throw "Ordinary dashboard second-open returned $($reopen.ExitCode)." }
+                        $app.Refresh()
+                        if ($app.HasExited) { throw 'Original packaged dashboard exited during ordinary second-open.' }
+                        $activation = "ordinary second-open completed for $details"
+                        $activatedRoot = $candidate
+                    } finally {
+                        if (!$reopen.HasExited) { $reopen.Kill($true); [void]$reopen.WaitForExit(3000) }
+                        $reopen.Dispose()
+                    }
+                }
+            }
         } until ($candidates.Count -gt 0 -or $timer.Elapsed.TotalSeconds -gt 20)
         if ($candidates.Count -eq 0) {
             $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
             $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
             $startup = Read-IsolatedStartupSummary $IsolatedProfile
-            throw "Extracted dashboard has no visible owned ClaudeUsageDashboard root (launch PID=$launchPid; process main: $main; owned windows: $owned). Startup: $startup"
+            throw "Extracted dashboard has no visible owned ClaudeUsageDashboard root (launch PID=$launchPid; process main: $main; owned windows: $owned; native activation: $activation). Startup: $startup"
         }
         # A native HWND alone can be a dialog or a blank/framework window. Only pass
         # when the same visible owned root exposes canonical dashboard navigation.
@@ -196,6 +248,7 @@ public static class Sig4aPackageSmokeWin {
             }
             $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
             foreach ($h in $candidates) {
+                if ($activatedRoot -ne [IntPtr]::Zero -and $h -ne $activatedRoot) { continue }
                 if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) { continue }
                 $examined = [Sig4aPackageSmokeWin]::Describe($h)
                 if ($placed.Add($h)) { [void][Sig4aPackageSmokeWin]::SetWindowPos($h, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014) }
@@ -250,11 +303,11 @@ public static class Sig4aPackageSmokeWin {
             throw "Extracted native dashboard navigation missing (launch PID=$launchPid; foreground=$foreground; process main: $main; owned: $owned; last examined: $examined). Per-dashboard UIA observations: $summary. Startup: $startup"
         }
         $verifiedWindow = [Sig4aPackageSmokeWin]::Describe($hwnd)
-        Write-Host "Native UIA found visible Live Translate, Claude Usage and Settings buttons within the extracted app root ($verifiedWindow)."
+        Write-Host "Native UIA found visible Live Translate, Claude Usage and Settings buttons within the extracted app root ($verifiedWindow). Startup activation: $activation."
         return $hwnd
     }
     $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
-    $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia
+    $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia $dashboard $root
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
     function Wait-PackageUia([string]$Pattern, [string]$Mode, [string]$Kind='', [int]$Seconds=12, [string]$Id='') {
         $clock = [Diagnostics.Stopwatch]::StartNew()
@@ -308,7 +361,7 @@ public static class Sig4aPackageSmokeWin {
         $config | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $fixtureConfig -Encoding utf8NoBOM
         $fixtureHash = (Get-FileHash -LiteralPath $fixtureConfig).Hash
         $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
-        $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia
+        $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia $dashboard $root
         $settings = Wait-PackageUia '^Cài đặt$' 'invoke' 'Button'
         Wait-PackageUia '^Widget$' 'state' 'Button|TabItem' -Id 't-look' | Out-Null
         $quick = Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button|TabItem' -Id 't-quick-check-settings'
