@@ -1,43 +1,61 @@
-# Explicit, opt-in model setup for a colocated Live Translate helper. No logs/audio or auto-start.
+# Optional manual/CI wrapper. Invoking it is the explicit request to install the
+# same pinned English model (~310 MB). Users can instead use Live Translate UI.
 $ErrorActionPreference = 'Stop'
-$PSNativeCommandUseErrorActionPreference = $true
-if (!(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'Sig4a.LiveTranslate.exe') -PathType Leaf)) {
+$exe = Join-Path $PSScriptRoot 'Sig4a.LiveTranslate.exe'
+if (!(Test-Path -LiteralPath $exe -PathType Leaf)) {
     throw 'Run this from the live-translate directory of the extracted SIG4A package.'
 }
-$manifest = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'model-assets.json') | ConvertFrom-Json -AsHashtable
-$name = 'sherpa-onnx-streaming-zipformer-en-2023-06-26'
-$archiveDigest = '639e25b578e9e997131402199419c13a941f8e4e198e2da1ce57dbf5cf401282'
-$base = Join-Path $PSScriptRoot 'models'
-if (Test-Path -LiteralPath $base) {
-    $item = Get-Item -Force -LiteralPath $base
-    if (!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-        throw 'Models folder must be a normal local directory.'
-    }
-} else { [void][IO.Directory]::CreateDirectory($base) }
-$target = Join-Path $base 'zipformer'
-if (Test-Path -LiteralPath $target) { throw 'zipformer already exists. Stop Live Translate and move the old folder aside before retrying.' }
-$temp = Join-Path $base ('install-' + [Guid]::NewGuid().ToString('N'))
-[void][IO.Directory]::CreateDirectory($temp)
-$archive = Join-Path $temp 'zipformer.tar.bz2'
-$members = @()
+Write-Host 'Installing the pinned English model (~310 MB download, ~72.5 MB retained). No room audio or inference is started.'
+$s = [Diagnostics.ProcessStartInfo]::new($exe)
+$s.UseShellExecute = $false
+$s.RedirectStandardInput = $true
+$s.RedirectStandardOutput = $true
+$s.RedirectStandardError = $true
+$s.ArgumentList.Add('--english-model-setup')
+$p = [Diagnostics.Process]::Start($s)
+$discard = $p.StandardError.BaseStream.CopyToAsync([IO.Stream]::Null)
+$time = [Diagnostics.Stopwatch]::StartNew()
+$terminal = $false
 try {
-    curl.exe --proto '=https' --proto-redir '=https' -fsSL --retry 2 --connect-timeout 15 --max-time 360 --output $archive "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/$name.tar.bz2"
-    if ($LASTEXITCODE -ne 0 -or (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine $archiveDigest) {
-        throw 'Model download failed or did not match its publisher archive checksum.'
-    }
-    foreach ($member in $manifest.files.Keys) {
-        if ($member -cnotmatch '^([A-Za-z0-9_-]+\.)+(txt|onnx|md)$') { throw 'Unexpected model path.' }
-        $members += "$name/$member"
-    }
-    tar.exe -xf $archive -C $temp @members
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to extract the pinned English model.' }
-    $ready = Join-Path $temp $name
-    foreach ($member in $manifest.files.Keys) {
-        $file = Join-Path $ready $member
-        if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ine $manifest.files[$member]) {
-            throw "Checksum mismatch for selected model member $member."
+    $p.StandardInput.WriteLine('{"v":1,"type":"model_setup_start","session":1,"action":"install"}')
+    $p.StandardInput.Flush()
+    while ($time.Elapsed.TotalMinutes -lt 13) {
+        $pending = $p.StandardOutput.ReadLineAsync()
+        if (!$pending.Wait([TimeSpan]::FromMinutes(13) - $time.Elapsed)) { throw 'English model setup timed out.' }
+        if (!$pending.Result) { break }
+        $event = $pending.Result | ConvertFrom-Json
+        if ($event.v -ne 1 -or $event.type -ne 'model_setup' -or $event.session -ne 1) {
+            throw 'Malformed English setup response.'
         }
+        switch ($event.state) {
+            'downloading' {
+                if ($event.total -ne 310414022 -or $event.received -lt 0 -or $event.received -gt $event.total) {
+                    throw 'Invalid setup byte count.'
+                }
+                Write-Progress -Activity 'Installing offline English model' -PercentComplete (100 * $event.received / $event.total)
+            }
+            { $_ -in 'checking_archive','extracting','checking_files','committing' } {
+                Write-Progress -Activity 'Installing offline English model' -Status $_
+            }
+            'ready' { $terminal = $true; break }
+            'cancelled' { throw 'English model setup was cancelled.' }
+            'failed' {
+                $allowed = 'busy','not_installed','needs_repair','access_denied','insufficient_space','network_unavailable',
+                    'timeout','digest_mismatch','archive_invalid','invalid_path','cleanup_incomplete','installer_internal'
+                $reason = if ($event.code -cin $allowed) { $event.code } else { 'installer_internal' }
+                throw "English model setup failed: $reason."
+            }
+            default { throw 'Unknown English setup stage.' }
+        }
+        if ($terminal) { break }
     }
-    [IO.Directory]::Move($ready, $target)
-    Write-Host 'English model has been installed locally. Live Translate remains stopped until you press Start.'
-} finally { if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force } }
+    if (!$terminal -or !$p.WaitForExit(3000) -or $p.ExitCode -ne 0) { throw 'English model setup did not complete.' }
+    Write-Host 'English model verified and ready. Capture remains stopped until you press Start.'
+} finally {
+    Write-Progress -Activity 'Installing offline English model' -Completed
+    if (!$p.HasExited) {
+        try { $p.StandardInput.WriteLine('{"v":1,"type":"model_setup_cancel","session":1}'); $p.StandardInput.Close() } catch {}
+        if (!$p.WaitForExit(2000)) { $p.Kill($true); $p.WaitForExit() }
+    }
+    $p.Dispose()
+}

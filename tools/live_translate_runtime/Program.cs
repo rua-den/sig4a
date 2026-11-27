@@ -9,7 +9,28 @@ static class Program
     static Session? Active;
     static CheckSession? Checking;
     static bool lastWasCheck;
+    static WindowsModelPaths.PackageLease? packageLease;
     static long lastId;
+
+    static bool AcquirePackage(long session)
+    {
+        try
+        {
+            packageLease = WindowsModelPaths.Acquire(EnglishModelInstaller.Root);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            var code = EnglishModelInstaller.ErrorCode(ex);
+            Error(session, code == "busy" ? "busy" : "backend_missing");
+            return false;
+        }
+    }
+    static void ReleasePackage()
+    {
+        packageLease?.Dispose();
+        packageLease = null;
+    }
     static bool closing;
 
     internal static void Send<T>(T message)
@@ -122,6 +143,7 @@ static class Program
         {
             if (Active != source) return;
             Active = null;
+            if (released) ReleasePackage();
             if (closing) return;
             if (!released)
             {
@@ -180,6 +202,7 @@ static class Program
             if (Checking != source) return;
             if (!released) Environment.Exit(3);
             Checking = null;
+            ReleasePackage();
             if (closing) return;
             if (error is not null) Error(source.Id, error);
             if (completed) Send(new { v = 1, type = "check_meter", session = source.Id, level = 0, signal });
@@ -190,7 +213,9 @@ static class Program
     [MTAThread]
     static async Task<int> Main(string[] args)
     {
-        if (args.Length != 0 || !OperatingSystem.IsWindows()) return 2;
+        if (!OperatingSystem.IsWindows()) return 2;
+        if (args is ["--english-model-setup"]) return await EnglishSetupMode.Run(Console.OpenStandardInput());
+        if (args.Length != 0) return 2;
         var input = new Protocol.BoundedReader(Console.OpenStandardInput());
         var exit = 0;
         try
@@ -209,17 +234,19 @@ static class Program
                         case "start":
                             if (cmd.Session <= lastId) break;
                             if (Active is not null || Checking is not null) { Error(cmd.Session, "busy"); break; }
+                            if (!AcquirePackage(cmd.Session)) break;
                             lastId = cmd.Session;
                             lastWasCheck = false;
-                            Active = new Session(cmd.Session, cmd.Source!, cmd.Device, cmd.Translate);
+                            Active = new Session(cmd.Session, cmd.Source!, cmd.Device, cmd.Translate, packageLease!.Root);
                             Active.Work = Task.Run(Active.Run);
                             break;
                         case "check_start":
                             if (cmd.Session <= lastId) break;
                             if (Active is not null || Checking is not null) { Error(cmd.Session, "busy"); break; }
+                            if (!AcquirePackage(cmd.Session)) break;
                             lastId = cmd.Session;
                             lastWasCheck = true;
-                            var check = new CheckSession(cmd.Session, cmd.Source!, cmd.Device);
+                            var check = new CheckSession(cmd.Session, cmd.Source!, cmd.Device, packageLease!.Root);
                             Checking = check;
                             check.Work = check.Run();
                             break;

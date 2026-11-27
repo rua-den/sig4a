@@ -6,6 +6,13 @@ param(
  [ValidateSet('point','focus','state','list')][string]$Mode='point'
 )
 $ErrorActionPreference='Stop'
+# Windows PowerShell's console code page may not represent the UI's Vietnamese
+# accessible names. Escape every response (list, point, state, focus), so the
+# extracted dashboard's scripted install can assert the real Ready label.
+function Write-AsciiJson($value) {
+ $json=$value|ConvertTo-Json -Depth 5 -Compress
+ [regex]::Replace($json,'[^\x00-\x7f]',{param($m) '\u{0:x4}' -f [int][char]$m.Value[0]})
+}
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,WindowsBase
 Add-Type @'
 using System;
@@ -92,16 +99,13 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
       $item.x=[int][Math]::Round($p.X);$item.y=[int][Math]::Round($p.Y)
     }
     if($Mode -ne 'point' -or ($item.enabled -and !$item.offscreen -and $item.ContainsKey('x'))){
-      $item|ConvertTo-Json -Compress
+      Write-AsciiJson $item
       exit 0
     }
   }
  }catch{if($Mode -eq 'list'){$scanErrors++}}
 }
 if($Mode -eq 'list'){
- # Windows PowerShell's console code page may not represent the UI's Vietnamese
- # accessible names. JSON Unicode escapes keep the pipe entirely ASCII.
- $json=@{root=$rootBounds;root_state=$rootState;roots_read=$rootsRead;scan_errors=$scanErrors;items=@($names.ToArray())}|ConvertTo-Json -Depth 5 -Compress
- [regex]::Replace($json,'[^\x00-\x7f]',{param($m) '\u{0:x4}' -f [int][char]$m.Value[0]})
+ Write-AsciiJson @{root=$rootBounds;root_state=$rootState;roots_read=$rootsRead;scan_errors=$scanErrors;items=@($names.ToArray())}
 }
 else{'{"found":false}'}

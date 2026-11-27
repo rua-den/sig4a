@@ -12,7 +12,8 @@ $base = [IO.Path]::GetFullPath($Published)
 $dir = [IO.Path]::GetFullPath($Scratch)
 $exe = Join-Path $base 'Sig4a.LiveTranslate.exe'
 if ((Test-Path -LiteralPath $dir) -or $dir -eq $base) { throw 'Smoke scratch must be new and isolated.' }
-if ((Test-Path -LiteralPath "$base/models/zipformer") -ne $ExpectSample.IsPresent) {
+$hasModel = (Test-Path -LiteralPath "$base/models/zipformer") -or (Test-Path -LiteralPath "$base/models/zipformer.current")
+if ($hasModel -ne $ExpectSample.IsPresent) {
     throw 'Use an unprovisioned preview for meter-only test or -ExpectSample after EN provisioning.'
 }
 

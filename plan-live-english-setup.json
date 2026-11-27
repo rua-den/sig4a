@@ -1,0 +1,223 @@
+{
+  "title": "Cài model phụ đề tiếng Anh ngay trong Live Translate",
+  "status": "passed",
+  "delivery": "Explicit opt-in English model setup verified in the ordinary extracted Windows package. No automatic capture or installation.",
+  "base": "59e12b6815d57c8051597b0c47613986d4159a5d",
+  "integration_evidence": {
+    "source": "Verified origin/main after merged PR #36 (Safe Diagnostics export).",
+    "revision": "59e12b6815d57c8051597b0c47613986d4159a5d",
+    "preserved": "Safe Diagnostics and hardened visible-dashboard smoke remain integrated with explicit English model setup, actual extracted-dashboard installer and isolated offline engine gates.",
+    "result": "Exact integrated candidate passed standard, full workspace, native-engine and ordinary package Windows gates."
+  },
+  "scope": {
+    "included": [
+      "Explicit in-app install, real progress, cancel/retry, ready/missing/corrupt/failed state for the already supported English offline Sherpa model.",
+      "Same pinned model/path and setup core for packaged UI and manual/script entry.",
+      "Existing Live Translate Audio Check remains usable without the model."
+    ],
+    "excluded": [
+      "Vietnamese HY-MT setup or change to its license/territories/consent",
+      "Auto-start capture, automatic install or update, account/cloud providers, sending audio/transcripts, choosing other paths/URLs/models, model accuracy or physical-capture certification",
+      "Silent replacement of a corrupt or user-owned install",
+      "Release tag or public release"
+    ]
+  },
+  "immutable_input": {
+    "model_id": "sherpa-onnx-streaming-zipformer-en-2023-06-26",
+    "license": "Apache-2.0",
+    "origin": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2",
+    "release_metadata_source": "https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/tags/asr-models",
+    "publisher_model_documentation": "https://k2-fsa.github.io/sherpa/onnx/pretrained_models/online-transducer/zipformer-transducer-models.html",
+    "archive_bytes": 310414022,
+    "archive_sha256": "639e25b578e9e997131402199419c13a941f8e4e198e2da1ce57dbf5cf401282",
+    "member_sha256": {
+      "README.md": "c914dd28e23310a6dd345ea10495003d3e4820d2ed987181e4c2d67e501b6b76",
+      "tokens.txt": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb",
+      "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx": "5022b2eca5b19d1bc104fcf33e26bc32604b7df553cd2e1f62e31dc7b05e9c87",
+      "decoder-epoch-99-avg-1-chunk-16-left-128.onnx": "85914f840b71110487ece7a30ebd0bd4b8fb5c2623215bba3aa5ab4c138fc591",
+      "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx": "abd5e30f3f16fc510605c6029dba33f10e4386bd75c5bdc30cf94076864db10d"
+    },
+    "member_bytes": {
+      "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx": 259416,
+      "tokens.txt": 5048,
+      "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx": 70108816,
+      "decoder-epoch-99-avg-1-chunk-16-left-128.onnx": 2093080,
+      "README.md": 216
+    },
+    "installed_relative_path": "live-translate/models/zipformer",
+    "installed_bytes": 72466576,
+    "expanded_archive_bytes": 335769600,
+    "tar_entries": 16,
+    "free_space_headroom_bytes": 67108864,
+    "minimum_free_bytes": 449989462,
+    "verification": "Independently streamed official archive: published compressed length, SHA-256 matched, counted full decoded tar bytes and selected regular member sizes. Origins/digests unchanged from existing verified English provisioning.",
+    "confirmed_https_handoff": {
+      "scheme": "https",
+      "host": "release-assets.githubusercontent.com",
+      "port": 443,
+      "observed_redirect_hops": 1,
+      "from_exact_publisher_resource": true
+    }
+  },
+  "operator_flow": [
+    "Tool Box > Live Translate passive status uses only bounded non-mutating path/file metadata checks: full package needed, not installed, verify existing, appears damaged, or current active operation. Shape/presence alone never yields Ready; click Kiểm tra model đã cài to hash and verify offline with no download, audio, or inference. Ready requires completed verification in the current installation/check generation and is cleared when that evidence is stale.",
+    "Click Cài model tiếng Anh; native confirmation shows official publisher and exact pinned origin, download ~310 MB (310,414,022 bytes), retained ~72.5 MB (72,466,576 bytes), at least ~450 MB (449,989,462 bytes including safety headroom) free for staging. Explain files are local to this extracted app, no audio/telemetry/upload and no model use until the next explicit Start. Declining makes no network or file writes.",
+    "While installing, mutually disable regular Start, Audio Check, and competing install/upgrade. Download progress uses bytes received / pinned byte total; hash and extraction show named stages, not fabricated percentages. Clear user-actionable status after cancel or error. Never show model path values or restricted global code in diagnostics logs.",
+    "Final success says English model ready; do not auto-start, auto-resume, open audio or enable Vietnamese. Healthy manual install matching all pins is reused idempotently without network. A damaged or foreign existing target stays untouched; show safe, confirmed 'Mở thư mục model' using the fixed canonical directory so the user can move it aside through Explorer without PowerShell. Do not opportunistically replace it.",
+    "Full package missing, unwritable extracted path, remaining software incompatibility, insufficient disk, offline/network timeout, download mismatch and existing damaged assets are distinguishable. README/UI explain installed-only behavior and the helper requirement."
+  ],
+  "runtime_design": {
+    "authority": [
+      "Require a current trusted, visible Live Translate renderer nonce plus explicit native confirmation. Recheck after the dialog and again immediately before enabling any network request: same caller/window/nonce, no navigation, current lease/heartbeat (require a new matching heartbeat after the modal returns before spawning the installer), current source state idle, unused one-shot grant. Revoke on hidden/detached renderer, close/owner loss, Cancel, refusal, or timeout. The installer starts without a network capability until a valid start grant from the supervisor; never replay a grant on new page or auto-resume.",
+      "Give provisioning and actual capture a shared helper-side exclusive lock keyed to the canonical local package, held across modes; it must not rely on the Rust dashboard companion mutex or on the wrapper. Explicit standalone wrapper, GUI installer, normal capture and Audio Check all take/check the same exclusive ownership with fail-closed semantics. Use a kill-safe interprocess primitive (e.g. per-package named mutex owned by a dedicated keeper thread), avoid creating capture locks through passive status, and test manual-vs-GUI/capture races. When locked by installer, no source opens or reopens. User starts capture manually only after release."
+    ],
+    "entry": [
+      "Use an exact colocated self-contained .NET helper with a dedicated fixed English-model provision/status mode; launch under Windows Job with captured private, versioned NDJSON. The provisioning mode must not initialize WASAPI, Sherpa or any meeting state. Install/normal commands reject cross-mode or arbitrary argv.",
+      "Move English provisioning into one managed audited core shared by new app UI and existing Provision-Model.ps1 (a documented manual wrapper calls the same fixed mode with its explicit operator intent; code does not spawn PowerShell, shell, arbitrary executable, or interpolate untrusted arguments). Session.LoadModel uses the same immutable model identity, filenames and hashes to avoid manifest drift. Package compiled pins, preserve model README/attribution, do not ship weights or request a network connection while packaging. Existing paths can be inspected passively with no child spawn; only explicit Validate existing invokes the same offline digest verification. Do not infer Ready from an installing temp, marker alone, old receipt, or file existence."
+    ],
+    "wire": [
+      "Bound UTF-8 NDJSON frames (current 16 KiB cap), exact allowlisted types/fields and safe finite nonnegative byte counts, staged events and fixed error codes. No URL/path/command/model/account/audio/text options in installer mode. Poll only during active view; coalesce at <=4 progress events per second and discard stale results by matching installer generation, never by text alone.",
+      "Use monotonic generation and state; cancel is idempotent, user/renderer/owner loss terminates. Report 'cancelled' only after handles closed and owned temp cleared (or next manual retry cleanup status after confirmed process death). Model-installed event only after actual same-volume atomic commit, not after bytes/download paths."
+    ],
+    "transport": [
+      "Network only after confirmation, fresh matching post-modal heartbeat, and an unrevoked current-view start grant. Exact pinned https://github.com:443 upstream route with normal certificate validation; HttpClient automatic redirects and proxy off; no default credentials, auth, cookies, referrer, request body or user telemetry. Manually allow at most one hand-off to the confirmed exact https://release-assets.githubusercontent.com:443 host for this signed release transfer; no suffix lookalikes, unusual port, embedded credentials, HTTP downgrade, second redirect, user URL or alternate CDN. Never log the signed URL or query. If publisher host changes, fail closed for a reviewed app update.",
+      "Use streaming bounded response reads with both monotonic whole-operation and inactivity deadlines; known Content-Length must exactly match pinned bytes and response body must too, even if missing Content-Length. Reject unsolicited partials; no silent retry across close/cancel and no resumable/broad background fetch. Download to unique same-volume stage, verify SHA before any decompression."
+    ],
+    "filesystem": [
+      "Accept only extracted canonical local fixed package roots; refuse UNC/network volumes and reparse points/junctions/symlinks in roots, parents, target and owned staging. Stage in a fresh owner-only job-local sibling on the same volume. Recheck canonical local volume, no UNC/reparse, parent/stage identity/ownership and absent target under exclusive helper lock immediately before atomic no-overwrite directory rename. Never change ACLs/elevate or traverse/delete unrelated directories. Use stable local non-delete-share handles across canonical ancestry; record object identities/volume, check reparse via open-reparse-point handle queries, no UNC/device remapping between validation and commit. Open the stage once with DELETE authorization but no FILE_SHARE_DELETE, then rename that exact handle via SetFileInformationByHandle(FileRenameInfo) with ReplaceIfExists=false and a destination rooted at the stable parent and fixed leaf. Do not release the guard then use path-based Directory.Move or attempt overwrite/follow-reparse fallback. Keep parent/ancestry guards through commit and validate post-commit identity. If unsupported on the actual filesystem, stop this installer with an actionable safe failure.",
+      "Use only the vetted exact managed SharpZipLib BZip2InputStream + .NET 8 TarReader bounds described in managed_bzip2_dependency. Do not invoke PATH-resolved tar/curl or execute downloaded content. Budget exact audited stream (335,769,600 bytes/16 entries) and reject inconsistent type, names, count or sizes. Materialize only the five exact allowlisted regular members using fixed output basenames; reject relevant duplicates, unexpected links/special file types, insecure paths, and per-member mismatches. Verify true BZip2 CRC/EOF and exact permitted tar tail rather than trusting a parser-level early EOF.",
+      "Before writing, stat free space against exact archive+installed (310,414,022+72,466,576 bytes) plus fixed 64 MiB headroom (449,989,462 bytes total). Verify exact selected member sizes/hashes and store only known model data and attribution. No overwrite. Cancellation checkpoint under lock before commit; if cancel races atomic commit only the fully validated model may win, reported truthfully by next explicit Verify.",
+      "Owned stage cleanup must be exact/verified and bounded, never a recursive delete of an arbitrary/supplied path. Escalate to Job termination if a stalled installer cannot finish within the prescribed stop budget; subsequent explicit retry may reclaim only recognizably owned orphan stages after exclusive ownership/no live process checks. Normal app startup has no network, asset scan, stage cleanup or deployment side effect. Quarantine/final user-owned folders are never cleanup targets."
+    ]
+  },
+  "diagnostics_codes": {
+    "ui_only": [
+      "missing_helper/full_package_needed",
+      "not_installed",
+      "install_busy",
+      "checking_files",
+      "downloading",
+      "checking_archive",
+      "extracting",
+      "committing",
+      "ready",
+      "needs_repair"
+    ],
+    "terminal_fixed": [
+      "cancelled",
+      "access_denied",
+      "insufficient_space",
+      "network_unavailable",
+      "timeout",
+      "digest_mismatch",
+      "archive_invalid",
+      "invalid_path_or_existing_assets",
+      "installer_internal"
+    ]
+  },
+  "phases": [
+    {
+      "id": "design",
+      "status": "passed",
+      "acceptance": [
+        "Pin actual Audio Check merge SHA; independent Advisor records verified archive/member byte counts and transport/extraction caps. Review exact vetted SharpZipLib [1.4.2] pins/notice and current advisories, and lock actual restored dependency graph. Freeze strict post-dialog/just-before-egress view checks, shared helper package lock, and under-lock atomic path revalidation before implementation."
+      ]
+    },
+    {
+      "id": "native_and_ui",
+      "status": "passed",
+      "acceptance": [
+        "One verified installer core drives both entry points. Live Translate UI has accessible keyboard/focus, deliberate confirmation and truthful progress/terminal statuses. No network/materialization prior to confirmation, no implicit launch/capture/install on view/status/startup, no audio/translation/scan concurrency, and status/repair UX works with both archive styles.",
+        "Requests bounded by exact model/URL, all digests verified, installation atomically publishable and idempotent without network for matching preexisting assets. Handles early cancel, no renderer/owner, partial/corrupt archives, low disk, unwritable path, invalid existing target and controlled retries. Reject reparse/paths/subprocess cross-mode and ignore stale generations. Existing source, Audio Check, settings, shortcut, Local AI and optional VI behavior unchanged. Under package lock, validate stable non-delete-share handles and commit with no-overwrite native stage-handle rename; unsupported handle semantics fail closed. Installer publishes neither an unreviewed dependency nor an extraction API that follows paths."
+      ]
+    },
+    {
+      "id": "verification",
+      "status": "passed",
+      "acceptance": [
+        "Managed tests with a small generated synthetic archive and controlled fake transport (test assembly only, no production URL/asset injection): HTTPS allowlist/redirect/replay, oversize and short reads, hash mismatch, delayed abort, archive links/path/duplicates/overflow, atomic race/recovery, valid existing model, staged cleanup, no untrusted deletion and no audio. Include stale view after blocking native dialog; package lock contention with wrapper, actual capture and a second installer; UNC/reparse and replaced-parent/stage races rejected before commit. A real isolated Windows NTFS fixture pauses inside the live pre-rename window and attempts benign concurrent parent and stage replace/rename; replacements must not succeed while the exact object handles are pinned, and after the guarded rename verify expected target identity. Include same-window target creation to prove no overwrite and unchanged foreign data.",
+        "Actual Windows WebView2 dashboard exercise: explicit button/dialog, declining does nothing, progress, Cancel, retry, existing/missing/unwritable/malformed UX, renderer/job teardown and source guards. Test-only stub is unshipped; include an ordinary extracted preview/full ZIP end-to-end install at least once from the actual page using the pinned official source (or clearly hold that gate if globally offline), verify manifest and no capture/network after installation. Locally instrument pre-egress counters proving zero requests on decline, stale post-modal heartbeat, or view loss before grant. Do not attach signed URLs, transcripts, or raw diagnostic payload.",
+        "Existing Windows packaged smoke and locked repo regression pass; after valid true hosted Windows install, the exact local engine recognizes the known SAPI synthetic fixture and before/after network observations show only allowed model-download hosts, no microphone/meeting/audio. Audio Check fixture tests still work with/without the model; hosted virtual playback only if available and clearly label. No fake model acceptance, physical mic/headphone or 60-minute soak claim is made. Independently validate extracted archive dependency hashes and license provenance from this exact Win-x64 package; dependency restore signature/provenance and current audit checked separately.",
+        "Advisor checks exact tree and logs; record exact checkout/revision, scopes, capability skips and missing tests. Merge only exact independently reviewed and passed branch; no release publication."
+      ]
+    }
+  ],
+  "gate": {
+    "status": "passed",
+    "rule": "This draft is proposal-only. Start coding only after audio dependency merges and strong Advisor reviews exact plan. An ordinary app, explicit consent, a digest-verified full Windows install driven through UI, and actual local hosted inference are separate evidence. Lack of real-user hardware never becomes fabricated physical proof.",
+    "verification": {
+      "tested_remote_revision": "83f1839df5f5bf849364f6c36d8b9016221dcb81",
+      "tested_tree": "dfe0a1043ceaa5f8188e6dd7602dc024fbc0b426",
+      "advisor_review": {
+        "product_local_revision": "84fc406143b50c916eba99c1ecf2a2e5d037ad94",
+        "exact_packaged_proof_local_revision": "7838baa18c670a60510674583f2a7bab7a5db6e5",
+        "result": "Independent stronger-model source review approved the product and exact test-only final tree; native and ordinary gates then passed at the equivalent hosted tree."
+      },
+      "standard_windows": "https://github.com/rua-den/sig4a/actions/runs/46064563579",
+      "full_windows": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650603",
+      "native_engine": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650977",
+      "ordinary_package": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650879",
+      "exact_artifact": "https://github.com/rua-den/sig4a/actions/runs/46064563653/artifacts/15229383867",
+      "full_regression": {
+        "passed": 249,
+        "failed": 0,
+        "ignored": 1
+      },
+      "ordinary": "Normal extracted dashboard; native decline and stale accept did not spawn the helper or stage files. Fresh native affirmation launched exactly one helper, fetched the pinned publisher archive, atomically committed Ready, verified all member lengths and SHA-256 digests, and ran true offline synthetic English recognition against these same assets. Exact bundled dependency and license hashes checked by the package smoke.",
+      "native": "Real Windows NTFS rooted reparse refusal, legacy compatibility, no-overwrite and replacement races, owned rollback, lease, cancellation and forced-kill recovery. Controlled transport asserts only the pinned publisher/single HTTPS CDN handoff; this is not host-wide packet capture.",
+      "implementation_addenda": [
+        "plan-live-english-setup-pointer-addendum.json",
+        "plan-live-english-setup-native-rename-correction.json"
+      ],
+      "limits": "Hosted Windows did not expose an active playback endpoint. No physical mic/system audio, real meeting, prolonged soak, cloud inference or host-wide egress telemetry was exercised. WMI observed setup process starts, not packets."
+    }
+  },
+  "advisor_revision": "Applied mandatory preliminary Advisor refinements plus verified archive byte lengths, exact dependency/notice, and handle-based no-overwrite proof requirements. Exact draft still uses base placeholder pending approved Audio Check merge; final strong-model re-approval before code.",
+  "managed_bzip2_dependency": {
+    "nuget_id": "SharpZipLib",
+    "exact_version_range": "[1.4.2]",
+    "source_revision": "33f64eb0f28cdd2b084cb822fcc224c7c5aba553",
+    "official_release": "https://github.com/icsharpcode/SharpZipLib/releases/tag/v1.4.2",
+    "official_package": "https://api.nuget.org/v3-flatcontainer/sharpziplib/1.4.2/sharpziplib.1.4.2.nupkg",
+    "package_size_bytes": 741182,
+    "package_sha256": "fe0895aa2930a2b1b65caa9f37db8bca35125ebdf9cc1b99d855f6afc5ff5946",
+    "package_sha512_base64_raw": "TggBlumyBCfRtaviOUPWR8NlYRJHz1cdPPJXWAi+cpS5lXBQrtV/o0Mm74llu7MU4DlEaTIWUC0OuZAlPfyU9A==",
+    "package_provenance": "Official annotated v1.4.2 tag and package nuspec point to the same source revision; upstream tag verification field false. Official nupkg passed dotnet nuget verify --all, repository signed by NuGet.org by Microsoft. Lock NuGet's generated contentHash on the actual product restore (not the raw archive SHA-512 copied into lock field) and verify raw cached archive hash during package build.",
+    "dll": {
+      "resolved_tfm": "net6.0 under net8.0-windows",
+      "member": "lib/net6.0/ICSharpCode.SharpZipLib.dll",
+      "bytes": 258048,
+      "archive_deflate_bytes": 108044,
+      "sha256": "32ea2d0ce3512e74f1c7ad82591fe67e6b8939d76a8a4ff9c93ead030131e71c",
+      "transitive_dependencies": []
+    },
+    "distribution_notice": {
+      "license": "MIT",
+      "source": "https://raw.githubusercontent.com/icsharpcode/SharpZipLib/33f64eb0f28cdd2b084cb822fcc224c7c5aba553/LICENSE.txt",
+      "source_bytes": 1072,
+      "sha256": "d7fbbc16f871bf24fa5624c7eaf945054b778985f32676dcacba41fddca61133",
+      "required_destination": "live-translate/notices/SharpZipLib-v1.4.2-LICENSE.txt",
+      "checks": "Use exact upstream notice bytes and record provenance. Extracted ZIP smoke verifies DLL+notice digests; do not bundle the nupkg, PDB, docs XML, installer source/test fixtures, or model weights."
+    },
+    "advisory_review": {
+      "sources": [
+        "https://api.github.com/advisories?ecosystem=nuget&affects=SharpZipLib%401.4.2",
+        "https://api.nuget.org/v3/vulnerabilities/index.json",
+        "https://www.nuget.org/packages/SharpZipLib/1.4.2"
+      ],
+      "result": "No GitHub or official NuGet advisory range affected 1.4.2 when checked. Four historical pathname traversal advisories had fixed versions 1.3.3 or earlier; avoid SharpZipLib extraction APIs entirely. Re-run live audit and inspect package changes at code/release review. This is not a proof of no unknown flaws.",
+      "historical": [
+        "GHSA-cqj4-m2pc-v9m5",
+        "GHSA-m22m-h4rf-pwq3",
+        "GHSA-2x7h-96h5-rq84",
+        "GHSA-mm6g-mmq6-53ff"
+      ]
+    },
+    "only_api": "ICSharpCode.SharpZipLib.BZip2.BZip2InputStream(Stream), no extraction APIs. Upstream v1.4.2 implementation is synchronous; no promise of abort inside an individual CPU block. After exact archive bytes+SHA, enforce BZh[1-9], bounded cancellation-aware counted reads, net8 System.Formats.Tar.TarReader.GetNextEntry(copyData:false); no unbounded CopyTo or entry materialization. Drain to real bzip2 CRC/EOF after tar EOA and enforce exact pinned full decompressed length/allowed padding; native supervised Job terminates pathological hangs."
+  },
+  "pre_code_review": {
+    "draft_sha256": "4663d719bf7ca82e9fe8ff73967772b06d8b235b72c08bf3df0ade3c5fcf66f2",
+    "result": "Independent Advisor approved the dependency-frozen exact draft with real Windows install and race gates.",
+    "merged_main_sha": "a20328f66046eb71c8708107330b62e21da2f336"
+  }
+}
