@@ -1,0 +1,41 @@
+name: 'Live Translate Phase 1 - HY-MT offline diagnostic'
+'on':
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/live-translate-hymt.yml'
+      - 'tools/live_translate_bench/hymt/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hymt:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.9'
+      - name: Check frozen input and run pinned offline translators
+        run: .\tools\live_translate_bench\hymt\run-hosted.ps1 -Evidence "$env:RUNNER_TEMP\sig4a-hymt-diagnostic"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: mt-blind-grading-only
+          path: ${{ runner.temp }}/sig4a-hymt-diagnostic/blind-grading.jsonl
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: mt-provenance-and-unblinding
+          path: |
+            ${{ runner.temp }}/sig4a-hymt-diagnostic/
+            !${{ runner.temp }}/sig4a-hymt-diagnostic/blind-grading.jsonl
+          if-no-files-found: warn

@@ -1,0 +1,641 @@
+{
+  "schema_version": 1,
+  "title": "SIG4A Live Translate held-out English benchmark",
+  "frozen_at": "2026-11-27",
+  "language": "en-US",
+  "target_language": "vi",
+  "utterance_count": 48,
+  "silence_control_count": 2,
+  "entries": [
+    {
+      "id": "U001",
+      "kind": "utterance",
+      "voice": "v01_neutral",
+      "text": "Move the release to Friday at 3 p.m.",
+      "facts": [
+        "release",
+        "Friday",
+        "3 p.m."
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U002",
+      "kind": "utterance",
+      "voice": "v02_fast",
+      "text": "The invoice total is four thousand two hundred dollars.",
+      "facts": [
+        "invoice",
+        "4200",
+        "dollars"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U003",
+      "kind": "utterance",
+      "voice": "v03_accent",
+      "text": "Please do not restart the production server.",
+      "facts": [
+        "do not",
+        "restart",
+        "production"
+      ],
+      "critical_negation": true,
+      "source": "synthetic"
+    },
+    {
+      "id": "U004",
+      "kind": "utterance",
+      "voice": "v04_calm",
+      "text": "Mira will review the API contract after lunch.",
+      "facts": [
+        "Mira",
+        "API contract",
+        "after lunch"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U005",
+      "kind": "utterance",
+      "voice": "v05_female",
+      "text": "The deadline changed from Tuesday to Thursday.",
+      "facts": [
+        "deadline",
+        "Tuesday",
+        "Thursday"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U006",
+      "kind": "utterance",
+      "voice": "v06_male",
+      "text": "Keep ticket seven hundred and fourteen open.",
+      "facts": [
+        "ticket",
+        "714",
+        "open"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U007",
+      "kind": "utterance",
+      "voice": "v07_clear",
+      "text": "We need twelve seats for the workshop.",
+      "facts": [
+        "12",
+        "seats",
+        "workshop"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U008",
+      "kind": "utterance",
+      "voice": "v08_noisy",
+      "text": "The checksum ends with nine eight zero two.",
+      "facts": [
+        "checksum",
+        "9802"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U009",
+      "kind": "utterance",
+      "voice": "v01_neutral",
+      "text": "No customer data belongs in this test fixture.",
+      "facts": [
+        "No",
+        "customer data",
+        "test fixture"
+      ],
+      "critical_negation": true,
+      "source": "synthetic"
+    },
+    {
+      "id": "U010",
+      "kind": "utterance",
+      "voice": "v02_fast",
+      "text": "The blue button opens the settings panel.",
+      "facts": [
+        "blue button",
+        "settings panel"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U011",
+      "kind": "utterance",
+      "voice": "v03_accent",
+      "text": "I can hear a slight echo in the room.",
+      "facts": [
+        "echo",
+        "room"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U012",
+      "kind": "utterance",
+      "voice": "v04_calm",
+      "text": "Send the signed agreement before noon tomorrow.",
+      "facts": [
+        "signed agreement",
+        "noon",
+        "tomorrow"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U013",
+      "kind": "utterance",
+      "voice": "v05_female",
+      "text": "The retry limit is five attempts per minute.",
+      "facts": [
+        "retry limit",
+        "5",
+        "per minute"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U014",
+      "kind": "utterance",
+      "voice": "v06_male",
+      "text": "Our meeting starts at ten thirty in the morning.",
+      "facts": [
+        "meeting",
+        "10:30",
+        "morning"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U015",
+      "kind": "utterance",
+      "voice": "v07_clear",
+      "text": "The database backup completed without errors.",
+      "facts": [
+        "database backup",
+        "without errors"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U016",
+      "kind": "utterance",
+      "voice": "v08_noisy",
+      "text": "Do not merge this branch until the tests finish.",
+      "facts": [
+        "do not",
+        "merge",
+        "tests finish"
+      ],
+      "critical_negation": true,
+      "source": "synthetic"
+    },
+    {
+      "id": "U017",
+      "kind": "utterance",
+      "voice": "v01_neutral",
+      "text": "Jonas owns the mobile dashboard migration.",
+      "facts": [
+        "Jonas",
+        "mobile dashboard",
+        "migration"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U018",
+      "kind": "utterance",
+      "voice": "v02_fast",
+      "text": "The package weighs one point eight kilograms.",
+      "facts": [
+        "package",
+        "1.8",
+        "kilograms"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U019",
+      "kind": "utterance",
+      "voice": "v03_accent",
+      "text": "We will ship version two point three next week.",
+      "facts": [
+        "version 2.3",
+        "next week"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U020",
+      "kind": "utterance",
+      "voice": "v04_calm",
+      "text": "The room code is alpha seven four bravo.",
+      "facts": [
+        "room code",
+        "alpha 74 bravo"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U021",
+      "kind": "utterance",
+      "voice": "v05_female",
+      "text": "Turn captions off during the recording.",
+      "facts": [
+        "captions",
+        "off",
+        "recording"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U022",
+      "kind": "utterance",
+      "voice": "v06_male",
+      "text": "The warning is informational, not a failure.",
+      "facts": [
+        "warning",
+        "informational",
+        "not failure"
+      ],
+      "critical_negation": true,
+      "source": "synthetic"
+    },
+    {
+      "id": "U023",
+      "kind": "utterance",
+      "voice": "v07_clear",
+      "text": "Use the east entrance on Pine Street.",
+      "facts": [
+        "east entrance",
+        "Pine Street"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U024",
+      "kind": "utterance",
+      "voice": "v08_noisy",
+      "text": "The experiment ran for forty eight minutes.",
+      "facts": [
+        "experiment",
+        "48 minutes"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U025",
+      "kind": "utterance",
+      "voice": "v01_neutral",
+      "text": "We have a hard limit of sixty four megabytes.",
+      "facts": [
+        "hard limit",
+        "64 MB"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U026",
+      "kind": "utterance",
+      "voice": "v02_fast",
+      "text": "The green status means the endpoint is healthy.",
+      "facts": [
+        "green status",
+        "endpoint",
+        "healthy"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U027",
+      "kind": "utterance",
+      "voice": "v03_accent",
+      "text": "Please compare the old and new latency numbers.",
+      "facts": [
+        "old",
+        "new",
+        "latency"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U028",
+      "kind": "utterance",
+      "voice": "v04_calm",
+      "text": "The test microphone is on channel two.",
+      "facts": [
+        "test microphone",
+        "channel 2"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U029",
+      "kind": "utterance",
+      "voice": "v05_female",
+      "text": "Do not translate names inside code blocks.",
+      "facts": [
+        "do not",
+        "translate",
+        "names",
+        "code blocks"
+      ],
+      "critical_negation": true,
+      "source": "synthetic"
+    },
+    {
+      "id": "U030",
+      "kind": "utterance",
+      "voice": "v06_male",
+      "text": "The handoff is scheduled for Wednesday morning.",
+      "facts": [
+        "handoff",
+        "Wednesday",
+        "morning"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U031",
+      "kind": "utterance",
+      "voice": "v07_clear",
+      "text": "Set the timeout to one hundred milliseconds.",
+      "facts": [
+        "timeout",
+        "100 ms"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U032",
+      "kind": "utterance",
+      "voice": "v08_noisy",
+      "text": "A quiet pause should produce no caption.",
+      "facts": [
+        "quiet pause",
+        "no caption"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U033",
+      "kind": "utterance",
+      "voice": "v01_neutral",
+      "text": "The technical term is cache, spelled C A C H E, not cash as in money.",
+      "facts": [
+        "cache",
+        "not cash"
+      ],
+      "critical_negation": true,
+      "source": "synthetic"
+    },
+    {
+      "id": "U034",
+      "kind": "utterance",
+      "voice": "v02_fast",
+      "text": "We need a second review from Priya.",
+      "facts": [
+        "second review",
+        "Priya"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U035",
+      "kind": "utterance",
+      "voice": "v03_accent",
+      "text": "The build artifact is in folder delta five.",
+      "facts": [
+        "build artifact",
+        "folder delta 5"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U036",
+      "kind": "utterance",
+      "voice": "v04_calm",
+      "text": "The blue team owns incident forty two.",
+      "facts": [
+        "blue team",
+        "incident 42"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U037",
+      "kind": "utterance",
+      "voice": "v05_female",
+      "text": "Keep the microphone muted while idle.",
+      "facts": [
+        "microphone",
+        "muted",
+        "idle"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U038",
+      "kind": "utterance",
+      "voice": "v06_male",
+      "text": "The service recovered after a three second pause.",
+      "facts": [
+        "service recovered",
+        "3 second pause"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U039",
+      "kind": "utterance",
+      "voice": "v07_clear",
+      "text": "The target language is Vietnamese.",
+      "facts": [
+        "target language",
+        "Vietnamese"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U040",
+      "kind": "utterance",
+      "voice": "v08_noisy",
+      "text": "This is a dry run with invented meeting content.",
+      "facts": [
+        "dry run",
+        "invented content"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U041",
+      "kind": "utterance",
+      "voice": "v01_neutral",
+      "text": "The window should remain above the meeting app.",
+      "facts": [
+        "window",
+        "above",
+        "meeting app"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U042",
+      "kind": "utterance",
+      "voice": "v02_fast",
+      "text": "Press start only after choosing one source.",
+      "facts": [
+        "start",
+        "choosing one source"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U043",
+      "kind": "utterance",
+      "voice": "v03_accent",
+      "text": "The old stream must not publish a late result.",
+      "facts": [
+        "old stream",
+        "must not",
+        "late result"
+      ],
+      "critical_negation": true,
+      "source": "synthetic"
+    },
+    {
+      "id": "U044",
+      "kind": "utterance",
+      "voice": "v04_calm",
+      "text": "We will measure memory before and after an hour.",
+      "facts": [
+        "memory",
+        "before",
+        "after",
+        "hour"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U045",
+      "kind": "utterance",
+      "voice": "v05_female",
+      "text": "The input device changed to the USB headset.",
+      "facts": [
+        "input device",
+        "USB headset"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U046",
+      "kind": "utterance",
+      "voice": "v06_male",
+      "text": "The output device is the wired headphones.",
+      "facts": [
+        "output device",
+        "wired headphones"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U047",
+      "kind": "utterance",
+      "voice": "v07_clear",
+      "text": "The model loaded in under six seconds.",
+      "facts": [
+        "model",
+        "under 6 seconds"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "U048",
+      "kind": "utterance",
+      "voice": "v08_noisy",
+      "text": "End the session when the stop button is pressed.",
+      "facts": [
+        "end session",
+        "stop button"
+      ],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "S001",
+      "kind": "silence",
+      "voice": "silence_a",
+      "text": "",
+      "duration_ms": 2500,
+      "facts": [],
+      "critical_negation": false,
+      "source": "synthetic"
+    },
+    {
+      "id": "S002",
+      "kind": "silence",
+      "voice": "silence_b",
+      "text": "",
+      "duration_ms": 5000,
+      "facts": [],
+      "critical_negation": false,
+      "source": "synthetic"
+    }
+  ],
+  "scoring": {
+    "latency_start": "speech_end_ms produced from actual PCM timing in the frozen fixture sidecar and emitted per replay",
+    "latency_end": "visible_final_caption_ms",
+    "missing_latency_ms": null,
+    "missing_counts_as_infinity": true,
+    "fact_match": "manual Vietnamese-language review against predeclared reference facts; exact source vocabulary not required",
+    "silence_max_final_captions": 0
+  }
+}

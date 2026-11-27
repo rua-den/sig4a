@@ -1,0 +1,100 @@
+{
+  "title": "Windows Live Translate v1",
+  "baseline": "84926dcaab809543611f43e82b5886bb1eca4445",
+  "status": "in_progress",
+  "scope": {
+    "audio": "One explicitly selected source at a time: system playback by default (all apps on the selected render endpoint) or microphone. Never mix or automatically switch to the mic.",
+    "ui": "Tool Box page, movable optionally pinned overlay without focus stealing on updates, prominent Vietnamese final captions, optional English, Start/Pause/Resume/Stop and configurable shortcut that only opens the UI.",
+    "privacy": "Local-only processing; no audio/transcript persistence, telemetry, or transmitting meeting content to a remote service. Audio starts only on explicit Start/Resume. Pause/Stop/close releases the capture endpoint. Switching releases old endpoint and invalidates queued results first.",
+    "excluded": [
+      "TTS",
+      "summaries",
+      "speaker attribution",
+      "per-app playback isolation",
+      "cloud providers"
+    ]
+  },
+  "plan_review": {
+    "status": "approved",
+    "reviewer": "GPT-6.2 Astra",
+    "reviewed_draft_sha256": "ecf3171dfe4a8c2fe093721431eb86bedad4123cfea5860afc74a9e694b5bc60",
+    "scope": "Approved to start Phase 1, not an acceptance pass; review refinements incorporated below."
+  },
+  "phases": [
+    {
+      "id": 1,
+      "title": "Capture and recognition benchmark",
+      "status": "in_progress",
+      "tasks": [
+        "Run Windows capture proof for real endpoint playback through headphones and a real mic, including selecting devices and release on Stop. Clearly separate fixture/virtual from physical evidence.",
+        "Compare whisper.cpp base.en and sherpa-onnx streaming English Zipformer 20M using the same pinned, synthetic or consented meeting fixtures. Freeze a held-out manifest (at least 40 utterances, varied voices, annotated speech-end times, pre-scored facts, critical negations and silence controls), model hashes/config and scoring denominators before collecting results. Use identical wall-clock-paced input on the same build/hardware and timestamp publication of a visible final caption. Benchmark current local LFM 450M as text translator separately before testing end to end. Do not change OCR defaults.",
+        "Log software and machine configuration, comparable workload, model/download size separately from deployed size, cold load, steady CPU/RAM, queue/drop counts, raw latencies and annotated accuracy; retain no real meeting content."
+      ],
+      "acceptance": [
+        {
+          "id": "LT1-a",
+          "status": "pending",
+          "case": "Physical mic and headphone playback verified separately; no silent fallback, endpoint closes on Stop, no fixture substituted for physical verification. Operator confirms physical selected headphone playback and distinct identifiable physical mic input without cross-source leakage. Hosted/virtual checks may be collected first but cannot pass this case."
+        },
+        {
+          "id": "LT1-b",
+          "status": "pending",
+          "case": "Speaker-diverse annotated fixtures cover accents, names, numbers, silence and negation; score end-to-end stable Vietnamese captions from end of speech using warmed models. Provisional goals median <=2.5 s, p95 <=5 s, >=90% pre-scored details preserved with zero critical negation reversals. Missing/dropped captions count against coverage and as +infinity for latency percentiles, and no final captions may appear in silence controls."
+        },
+        {
+          "id": "LT1-c",
+          "status": "pending",
+          "case": "Benchmark artifacts justify selected local engines and explicitly list limitations. Independent Advisor approval."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Tool Box and overlay integration",
+      "status": "pending",
+      "acceptance": [
+        {
+          "id": "LT2-a",
+          "status": "pending",
+          "case": "Tool Box and remappable unbound-by-default shortcut open one UI without starting capture; known existing shortcuts still work; rebinding and restart tested on Windows."
+        },
+        {
+          "id": "LT2-b",
+          "status": "pending",
+          "case": "Bilingual overlay shows stable accessible captions without stealing focus; manual Pause/Resume/Stop/close and device loss reflect state. A bounded worker pipeline rejects obsolete events after Pause, Stop, source/device changes or shutdown; verify real overlay latency against Phase 1 target."
+        },
+        {
+          "id": "LT2-c",
+          "status": "pending",
+          "case": "Use loopback-only inference endpoints without cloud fallback; use content-free logs/errors. No cloud or disk sink for audio or captions; no output from old sessions. Show actionable errors for missing models, unsupported device, or disabled microphone permission. Independent Advisor approval."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Windows release acceptance",
+      "status": "pending",
+      "acceptance": [
+        {
+          "id": "LT3-a",
+          "status": "pending",
+          "case": "Ordinary non-e2e Windows build runs a representative 60-minute soak with no growing lag/memory/queue; record evidence and observed device/runtime limitations."
+        },
+        {
+          "id": "LT3-b",
+          "status": "pending",
+          "case": "Real Windows mic and headphones, device removal/reconnect, locked full suite, existing tool UI regression, and release archive smoke. Do not claim physical evidence based only on virtual endpoints."
+        },
+        {
+          "id": "LT3-c",
+          "status": "pending",
+          "case": "Independent Advisor reviews the exact release tree; attach run evidence before marking passed or merging. No tag or release publication implied."
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "status": "pending",
+    "rule": "Advisor reviews plan before Luna codes; each later phase waits on prior phase evidence and review. Main stays unchanged until exact integrated product is reviewed and acceptance passes."
+  }
+}
