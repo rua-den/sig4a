@@ -1,11 +1,56 @@
 {
   "title": "Local AI controls and translation reliability",
   "baseline": "95139d455eda6ba04521534b0dcf7c2f4ba42b19",
-  "status": "in_progress",
+  "status": "passed",
   "privacy": "Only existing local loopback backends. No cloud fallback, downloads, or Live Translate changes.",
   "phases": [
-    {"id": "configuration", "status": "in_progress", "acceptance": ["Expose which backend/model will actually run and distinguish managed fixed model from external model", "Switch models explicitly and verify requests before and after save/reopen on the OCR popup/dashboard paths", "Allow saving optional per-task prompts with default/reset behavior and validate size"]},
-    {"id": "translation-output", "status": "pending", "acceptance": ["Reproduce repeated output from a single backend response; remove only provable repeated full translations of single-line input", "Preserve intentional repeated lines and formatting on multiline input; test both translation entry points", "Keep old settings compatible and reject stale configuration responses"]},
-    {"id": "verification", "status": "pending", "acceptance": ["Independent Advisor review of the final diff", "Run Windows WebView2 and native loopback-provider regressions, including save/reopen and explicit model change", "Only mark checks passed after verified evidence; no merge until review and tests pass"]}
-  ]
+    {
+      "id": "configuration",
+      "status": "passed",
+      "acceptance": [
+        "Expose which backend/model will actually run and distinguish managed fixed model from external model",
+        "Switch models explicitly and verify requests before and after save/reopen on the OCR popup/dashboard paths",
+        "Allow saving optional per-task prompts with default/reset behavior and validate size"
+      ],
+      "evidence": [
+        "Windows WebView2 verified saved model/prompt applies to an already open quick-tool popup and OCR inline; native request used the selected local model. Unit tests cover prompt expansion and ordering."
+      ]
+    },
+    {
+      "id": "translation-output",
+      "status": "passed",
+      "acceptance": [
+        "Reproduce repeated output from a single backend response; remove only provable repeated full translations of single-line input",
+        "Preserve intentional repeated lines and formatting on multiline input; test both translation entry points",
+        "Keep old settings compatible and reject stale configuration responses"
+      ],
+      "evidence": [
+        "Windows WebView2 verified one translated result when the default prompt returned the same translation twice. Browser regressions cover intentionally repeated multiline output and custom prompts."
+      ]
+    },
+    {
+      "id": "verification",
+      "status": "passed",
+      "acceptance": [
+        "Independent Advisor review of the final diff",
+        "Run Windows WebView2 and native loopback-provider regressions, including save/reopen and explicit model change",
+        "Only mark checks passed after verified evidence; no merge until review and tests pass"
+      ],
+      "evidence": [
+        "Independent GPT-6.2 Astra approved the same implementation tree and separately reviewed the Windows test-only socket fix. Hosted Windows checks: dashboard API + WebView2, full native regression, actual extracted ZIP smoke, and local English runtime. Optional Vietnamese runtime and physical hardware were not tested."
+      ]
+    }
+  ],
+  "verification": {
+    "tested_commit": "a517feb51edc52fa08c2b84c4eee31d076b4ce77",
+    "reviewed_tree": "9da677c49e52134bc7183ef9ebd2a3dec7fc06d6",
+    "windows_dashboard": "https://github.com/rua-den/sig4a/actions/runs/46030051926",
+    "windows_full": "https://github.com/rua-den/sig4a/actions/runs/46030051989/attempts/2",
+    "windows_full_tests": {
+      "passed": 215,
+      "failed": 0,
+      "ignored": 1
+    },
+    "notes": "The full Windows rerun used the identical candidate SHA. Package window detection timed out in attempt 1; actual extracted ZIP UIA smoke and artifact upload passed on attempt 2. This status-only update does not change shipped files."
+  }
 }
