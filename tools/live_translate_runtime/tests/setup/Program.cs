@@ -99,14 +99,59 @@ static WindowsModelPaths.Identity IdentityAt(string parent, string leaf, bool di
     return WindowsModelPaths.Inspect(item, Path.Combine(parent,leaf), directory: false);
 }
 
-static void Junction(string link, string target)
+static bool CheckFixtureJunction(string link, string target, bool allowMissing)
 {
-    var p = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true };
+    FileAttributes attributes;
+    try { attributes = File.GetAttributes(link); }
+    catch (FileNotFoundException) when (allowMissing) { return false; }
+    catch (DirectoryNotFoundException) when (allowMissing) { return false; }
+    const FileAttributes junction = FileAttributes.Directory | FileAttributes.ReparsePoint;
+    var destination = (attributes & junction) == junction
+        ? Directory.ResolveLinkTarget(link, returnFinalTarget: false)?.FullName : null;
+    if (destination is not null && destination.StartsWith(@"\\?\", StringComparison.Ordinal))
+        destination = destination[4..];
+    if (destination is null ||
+        !Path.TrimEndingDirectorySeparator(destination).Equals(
+            Path.TrimEndingDirectorySeparator(target), StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("An exact registered fixture junction was not observed.");
+    return true;
+}
+
+static void Junction(string component, string link, string target, ref bool childQuiesced)
+{
+    var inboxPowerShell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+    var p = new ProcessStartInfo(inboxPowerShell) { UseShellExecute = false, CreateNoWindow = true };
     foreach (var arg in new[] { "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; " +
         "New-Item -ItemType Junction -Path '" + link.Replace("'", "''") +
         "' -Target '" + target.Replace("'", "''") + "' | Out-Null" }) p.ArgumentList.Add(arg);
-    using var child = Process.Start(p) ?? throw new InvalidOperationException();
-    Check(child.WaitForExit(5000) && child.ExitCode == 0);
+    using var child = Process.Start(p) ?? throw new InvalidOperationException("Fixture junction child did not start.");
+    childQuiesced = false;
+    Exception? primary = null;
+    try
+    {
+        // Give a cold hosted PowerShell process longer than the former 5 s cap.
+        // This bounds fixture preparation, not any native product operation.
+        if (!child.WaitForExit(20_000))
+            throw new TimeoutException($"Fixture {component} junction creation exceeded 20 seconds.");
+        if (child.ExitCode != 0)
+            throw new InvalidOperationException($"Fixture {component} junction process exited with code {child.ExitCode}.");
+        CheckFixtureJunction(link, target, allowMissing: false);
+    }
+    catch (Exception error) { primary = error; throw; }
+    finally
+    {
+        try
+        {
+            if (!child.HasExited) child.Kill(entireProcessTree: true);
+            if (!child.WaitForExit(5_000))
+                throw new TimeoutException($"Fixture {component} junction process did not exit after termination.");
+            childQuiesced = true;
+        }
+        catch (Exception error) when (primary is not null)
+        {
+            throw new AggregateException("Fixture junction setup and process cleanup both failed.", primary, error);
+        }
+    }
 }
 
 if (args is ["--race", var parent, var payload])
@@ -224,6 +269,9 @@ if (OperatingSystem.IsWindows())
 {
     string root = Path.Combine(Path.GetTempPath(), "sig4a-install-native-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(root);
+    var registeredJunctions = new List<(string Link, string Target)>();
+    bool junctionChildQuiesced = true;
+    Exception? nativeFailure = null;
     try
     {
         string Make(string leaf) { var path = Path.Combine(root,leaf); Directory.CreateDirectory(path); return path; }
@@ -334,13 +382,10 @@ if (OperatingSystem.IsWindows())
                     pathToLink = Path.Combine(slot,"payload");
                 }
             }
-            Junction(pathToLink,trap);
-            try
-            {
-                await Fails(() => Task.Run(() => Resolve(pointed,pinned)), "invalid_path");
-                Check(File.ReadAllText(trapFile) == "unrelated sentinel" && Directory.GetFileSystemEntries(trap).Length == 1);
-            }
-            finally { Directory.Delete(pathToLink); }
+            registeredJunctions.Add((pathToLink, trap));
+            Junction(component, pathToLink, trap, ref junctionChildQuiesced);
+            await Fails(() => Task.Run(() => Resolve(pointed,pinned)), "invalid_path");
+            Check(File.ReadAllText(trapFile) == "unrelated sentinel" && Directory.GetFileSystemEntries(trap).Length == 1);
         }
 
         var manual = Make("legacy-with-unused-variants");
@@ -395,9 +440,31 @@ if (OperatingSystem.IsWindows())
                 Resolve(crash,pinned);
             }
         }
-        Console.WriteLine("PASS: Windows native rooted reparse rejection, legacy compatibility, actual no-overwrite races, exact owned rollback, anchored lease, cancellation and forced-kill recovery.");
     }
-    finally { Directory.Delete(root, recursive:true); } // Only test-owned temp, no production cleanup API.
+    catch (Exception error) { nativeFailure = error; throw; }
+    finally
+    {
+        try
+        {
+            if (!junctionChildQuiesced)
+                throw new InvalidOperationException("Fixture junction process has not exited; refusing to delete beneath it.");
+            foreach (var (link,target) in registeredJunctions)
+            {
+                // Remove only the exact expected directory junction, without
+                // following its target or invoking recursive mount-point cleanup.
+                if (!CheckFixtureJunction(link,target,allowMissing:true)) continue;
+                Directory.Delete(link, recursive:false);
+                if (CheckFixtureJunction(link,target,allowMissing:true))
+                    throw new IOException("Fixture junction is still visible after explicit detachment.");
+            }
+            Directory.Delete(root, recursive:true); // Only test-owned temp with fixture junctions detached.
+        }
+        catch (Exception cleanupFailure) when (nativeFailure is not null)
+        {
+            throw new AggregateException("Windows native fixture and its cleanup both failed.", nativeFailure, cleanupFailure);
+        }
+    }
+    Console.WriteLine("PASS: Windows native rooted reparse rejection, legacy compatibility, actual no-overwrite races, exact owned rollback, anchored lease, cancellation and forced-kill recovery.");
 }
 else Console.WriteLine("SKIP: Windows/NTFS race fixtures cannot run on this OS.");
 
