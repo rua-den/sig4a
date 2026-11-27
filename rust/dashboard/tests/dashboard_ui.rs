@@ -104,7 +104,7 @@ fn local_ai_fixture() -> (String, mpsc::Receiver<Value>, std::thread::JoinHandle
     let worker = std::thread::spawn(move || {
         let deadline = Instant::now() + Duration::from_secs(85);
         let mut served = 0;
-        while served < 3 {
+        loop {
             let mut stream = match listener.accept() {
                 Ok((stream, _)) => stream,
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
@@ -129,8 +129,14 @@ fn local_ai_fixture() -> (String, mpsc::Receiver<Value>, std::thread::JoinHandle
             assert!(len < 16 * 1024);
             let mut bytes = vec![0; len];
             reader.read_exact(&mut bytes).unwrap();
+            let mut remote_inventory = false;
             let response = match request.as_str() {
                 "GET /v1/models HTTP/1.1" => json!({"data":[{"id":"fixture-old"},{"id":"fixture-new"}]}),
+                "GET /api/tags HTTP/1.1" => {
+                    assert_eq!(served, 3, "all local requests precede the remote alias check");
+                    remote_inventory = true;
+                    json!({"models":[{"name":"remote-alias","remote_model":"remote-fixture","remote_host":"https://example.invalid"}]})
+                }
                 "POST /v1/chat/completions HTTP/1.1" => {
                     let body: Value = serde_json::from_slice(&bytes).unwrap();
                     tx.send(body).unwrap();
@@ -141,6 +147,17 @@ fn local_ai_fixture() -> (String, mpsc::Receiver<Value>, std::thread::JoinHandle
                 _ => panic!("unexpected local AI fixture route: {request}"),
             }.to_string();
             write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).unwrap();
+            if remote_inventory {
+                drop(stream);
+                let grace = Instant::now() + Duration::from_millis(400);
+                while Instant::now() < grace {
+                    match listener.accept() {
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(10)),
+                        _ => panic!("remote Ollama alias must not receive a chat request"),
+                    }
+                }
+                break;
+            }
         }
     });
     (endpoint, rx, worker)
@@ -277,7 +294,12 @@ $('ocr-out').textContent = 'Sample OCR text.';
 ocrResultValid = true;
 await translateOcr();
 const inline = $('ocr-translation-out').textContent;
-return { first, second, inline, quick: window.__QUICK_MODE__ };
+if (!(await api.save({local_ai_backend:'ollama', local_ai_model:'remote-alias'}))) throw new Error('could not stage remote alias');
+toolTab('translation');
+setTextDraft('translation', 'Do not upload this synthetic fixture.');
+await runTextTool('translation');
+const remoteBlocked = $('translation-status').dataset.state === 'error' && $('translation-status').textContent.includes('Server không tìm thấy model');
+return { first, second, inline, remoteBlocked, quick: window.__QUICK_MODE__ };
 "#;
 
 const SAVE_LOCAL_AI: &str = r#"
@@ -511,7 +533,7 @@ fn dashboard_process_end_to_end() {
     }
     wait_for("reused quick model test result", 15, || reused_out.exists());
     let result: Value = serde_json::from_slice(&fs::read(&reused_out).unwrap()).unwrap();
-    assert_eq!(result, json!({"first":"Bản dịch mẫu.","second":"Bản dịch mới.","inline":"Bản dịch mới.","quick":true}), "{result}");
+    assert_eq!(result, json!({"first":"Bản dịch mẫu.","second":"Bản dịch mới.","inline":"Bản dịch mới.","remoteBlocked":true,"quick":true}), "{result}");
     drop(reused_quick);
     fixture.join().unwrap();
 

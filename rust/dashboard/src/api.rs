@@ -1187,6 +1187,18 @@ mod tests {
     }
 
     #[test]
+    fn ollama_inventory_omits_aliases_with_remote_metadata() {
+        let (address, worker) = fixture_request(json!({"models": [
+            {"name": "local:latest"},
+            {"name": "hosted-elsewhere:latest", "remote_host": "https://cloud.invalid"},
+            {"name": "remote-target:latest", "remote_model": "cloud-generated-name"},
+            {"name": "named:cloud"},
+        ]}));
+        assert_eq!(local_models(&address, "ollama"), json!({"models":["local:latest"]}));
+        assert_eq!(worker.join().unwrap().0, "GET /api/tags HTTP/1.1");
+    }
+
+    #[test]
     fn loopback_provider_contracts_text_and_image() {
         let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XfuoAAAAASUVORK5CYII=";
         for (provider, path, response) in [
