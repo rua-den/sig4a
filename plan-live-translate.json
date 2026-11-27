@@ -98,6 +98,12 @@
           "evidence": "https://github.com/rua-den/sig4a/actions/runs/45984800139/job/140457535771",
           "artifact": "https://github.com/rua-den/sig4a/actions/runs/45984800139/artifacts/15191641656",
           "tested_revision": "f8da26ef822e83a549b281be4c4843b99aa18b4d"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Optional self-contained operator-only Windows x64 diagnostic built; exact extracted ZIP smoke confirms no device opens on self-check and rejection of unattended modes. ZIP revision, inner digest, dependency notices verified. Physical mic/headphone or SIG4A app proof not supplied. Operator decides whether to run and manually share aggregate measurements only.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45985809619/job/140461010889",
+          "tested_revision": "69c5379c1b82c5b234368e72b95d482058475453"
         }
       ]
     },
