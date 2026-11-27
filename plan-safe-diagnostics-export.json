@@ -1,0 +1,131 @@
+{
+  "title": "Xuất báo cáo chẩn đoán đã lọc dữ liệu riêng",
+  "status": "in_progress",
+  "baseline": {
+    "ref": "origin/main",
+    "sha": "a20328f66046eb71c8708107330b62e21da2f336",
+    "reviewed_checkout": "fcd82b1de383ab74fbed0bca990a3828193ca616",
+    "note": "origin/main includes merged Local AI diagnostics and setup (#34). The checkout branch was inspected without changing it. Recheck origin/main before creating a separate diagnostics PR."
+  },
+  "goal": "Produce a small local-only, versioned JSON report a user can inspect and explicitly copy to support a developer, without including private configuration, logs or content.",
+  "scope": {
+    "navigation": "Full Windows dashboard > Cài đặt > Chung > Báo cáo chẩn đoán; never exposed by the OCR/grammar/translation quick window.",
+    "v1_delivery": "Explicit preview, explicit Copy JSON, explicit Clear preview. No save-file dependency for v1. If Save JSON is wanted later, use a user-initiated platform save dialog with a fixed suggested filename and exactly the same preview bytes; do not accept an arbitrary filesystem path from renderer IPC.",
+    "excluded": "Automatic collection/upload; files/bundles; existing logs/config/cache; saved provider/model/address; live or last check results; filesystem presence inspection; clipboard reads; attachment sending; repro capture; fingerprinting; changes to settings or external state.",
+    "performance": "No page-load work, polling/timers, runtime probes, filesystem/registry access, subprocesses, model loading, audio/microphone/capture, HTTP calls or downloads. Preview reads only fixed build metadata and one bounded in-process status."
+  },
+  "implementation": {
+    "native": [
+      "Use a dedicated module (e.g. diagnostics_export.rs) with typed structs and finite enums, a small versioned schema and stable field order. Explicitly construct each field. Never stringify, spread, recursively redact or forward whole Value objects, including Core::state(), setup::status(), local_ai_settings(), live_state or tool results.",
+      "Add dedicated native diagnostics_export_preview for the bundled full dashboard only. In .with_ipc_handler, require raw envelope property a to actually be a JSON array of length zero before the shared existing conversion that defaults malformed/missing arguments to []; reject missing, null, scalar/object, nonempty or other malformed args and quick windows without any work. Method accepts no paths/commands and returns only the typed allowlist; decoding/serialization errors use a fixed safe code without echoing inputs.",
+      "Read only compile-time build data: the exact numeric version core X.Y.Z (each field 1-5 ASCII decimal digits, no leading zeros except 0), otherwise fixed unknown. Never echo invalid values or prerelease/build metadata. Use compile-time OS-family, architecture and release/debug enums. No hostname, OS build, edition or registry/system inspection.",
+      "Expose a narrow read-only accessor returning the full dashboard native process’s most recently recorded Local AI setup event as typed coarse setup history. Do not call setup::status(), create/test its cross-process mutex, or inspect processes, paths, filesystem or environment. Map finite native stages and fixed failure kinds; omit raw exit codes, command lines and error strings. not_observed means no setup event recorded in this process, not that another process is idle. ready describes a prior setup event reporting tag/metadata readiness, not current availability, inference, or proof of weights.",
+      "Do not read or load any config, even for a seemingly harmless provider enum: no Core::cfg(), local_ai_settings(), config::load_config(), or profile enumeration. Do not enrich report from general Local AI Check/List/Test or quick bridge state. Omit model capabilities and last-check data in v1; any future phase must use an explicit full-dashboard-only snapshot and invalidate it mechanically against exact saved config revision before being considered. Preview never resolves redirected APPDATA/LOCALAPPDATA paths.",
+      "Omit all component-file presence checks in v1. No Path::exists(), metadata, directory traversal, reparse points/junctions, UNC/mapped filesystems or installed-package/process inspections. Do not report install detection from guesses.",
+      "Hold a conservative UTF-8 cap (max 4 KiB) on serialized JSON; fixed error if violated. No writes (config, logs, persistent preview, temp files or telemetry)."
+    ],
+    "renderer": [
+      "Place a compact Settings > Chung card: notice that text, prompt, accounts, paths and logs are not included, nothing is sent, and the user should read the preview before sharing it. Buttons: Xem báo cáo, Sao chép JSON, Xóa xem trước.",
+      "Only Xem báo cáo calls native generation. An input object is untrusted until every nested record is a plain object with only the exact required own data keys; reject unexpected prototypes, arrays, inherited properties, symbols, accessors and malformed/oversized values. Verify primitive types, finite enum values and exact bounded numeric version grammar. Reconstruct a fresh literal record in approved key order; never stringify raw native input. Serialize capped UTF-8, render the approved string in a read-only textarea or textContent (never HTML), and copy those exact reviewed bytes rather than regenerating or copying DOM selections.",
+      "Copy disabled until a valid preview exists. Clear removes in-memory and DOM preview and immediately disables copy; it does not read/erase the OS clipboard or undo a Copy already requested. Reset on leaving Settings/Chung and use a UI request revision to prevent late preview after clear/route change. Operation and errors have keyboard-accessible status text; no sensitive exception strings or auto-copy.",
+      "Use accessible keyboard focus, visible action statuses, and localized Vietnamese labels; treat Clipboard errors as local failures with manual select/copy still available. Changing view, refreshing usage, or launching a quick popup never generates the report."
+    ]
+  },
+  "positive_allowlist": {
+    "schema_version": 1,
+    "app": {
+      "version": "exact numeric X.Y.Z, each 1-5 ASCII decimal digits, no leading zeros except 0; otherwise literal unknown. No echo, prerelease/build metadata, SHA, host/URL or path.",
+      "platform": [
+        "windows",
+        "unknown"
+      ],
+      "arch": [
+        "x86_64",
+        "aarch64",
+        "x86",
+        "unknown"
+      ],
+      "build": [
+        "release",
+        "debug",
+        "unknown"
+      ]
+    },
+    "local_ai_setup": {
+      "scope": [
+        "last_recorded_in_this_dashboard_process"
+      ],
+      "stage": [
+        "not_observed",
+        "working",
+        "ready",
+        "cancelled",
+        "failed",
+        "unknown"
+      ],
+      "issue": [
+        "none",
+        "unavailable",
+        "provider_conflict",
+        "blocked_preflight",
+        "timeout",
+        "operation_failed",
+        "unknown"
+      ]
+    }
+  },
+  "never_emit": [
+    "User/host/account/profile/device/installation/session identifiers, window handles/PIDs, paths, filenames from disk, directories and environment values",
+    "Tokens, credentials, account data, email, usage metrics, hooks per profile, existing clipboard, raw config/cache/state/logs, exact timestamps, GUIDs and raw OS/process/network error or exit strings",
+    "Local endpoint, URL, IP, port, model ID/tag/weight hash, custom prompt, input/output/result text, screenshot/OCR data, audio/caption/transcript, device selections or meeting activity",
+    "Any unknown bridge keys/values or additional schema fields without independent privacy review",
+    "Saved provider configuration, last Local AI check or capabilities, filesystem/component presence and path-derived data. Do not add these to v1."
+  ],
+  "phases": [
+    {
+      "id": "plan-review",
+      "status": "passed",
+      "acceptance": [
+        "Advisor confirms preview uses compile-time metadata and only a typed in-process setup projection, rejects whole config/state reads, probes and general check hooks, and stays in a separate PR."
+      ]
+    },
+    {
+      "id": "native-allowlist",
+      "status": "in_progress",
+      "acceptance": [
+        "Rust unit tests assert exact serialized key set, deterministic order, strict version grammar and limit, and coarse enums for all or unknown setup stages. not_observed is scoped to this dashboard process.",
+        "Adversarial synthetic fixtures inject private sentinels, fake/large settings/cache/log paths, hostile strings/types and malicious API results; no sentinels or unapproved keys are emitted/logged. Prove those sources are not called, rather than relying on removing dangerous fields after collection.",
+        "Native source-boundary review and tests verify the bridge touches no cfg/local_ai_settings/config::load_config/usage cache, no filesystem/registry or presence probes, no general Local AI Check/List/Test hook or quick worker, no network, no cross-process setup mutex, no start/capture/clipboard or writes.",
+        "Direct IPC fixture covers raw missing a, null, nonarray, nonempty array, and quick mode; no denied request collects data or causes any operation. Expected shim [] works. Stage/reason derive only from the fixed native projection; unknown values map safely or fail closed."
+      ]
+    },
+    {
+      "id": "dashboard-preview-copy",
+      "status": "pending",
+      "acceptance": [
+        "Real native Windows WebView2 test opens Settings > Chung and exercises actual native preview. No generation occurs on navigation. Report is inert, contains exact keys and known values, and copy matches displayed bytes only after a click.",
+        "JS fixture mocks clipboard and checks no automatic write/read, render/copy/clear, regeneration after clear, no promise that Clear undoes an already requested Copy, graceful clipboard denial, route changes, stale async reply, and malicious bridge payloads (HTML, unknown enums, extra/inherited/accessor keys, malformed/oversized values): no execution or copy.",
+        "Confirm existing Settings saves, Local AI Check/List/Test/setup, Cleaner shared Settings layout and quick popup behavior are unchanged. Generating/copying creates no extra probes in existing views and never starts a helper."
+      ]
+    },
+    {
+      "id": "review-release",
+      "status": "pending",
+      "acceptance": [
+        "Independent Advisor privacy review on exact candidate, including native and renderer allowlist checks with hostile fixture evidence.",
+        "Pass Rust tests, hosted/native Windows WebView2 and full Windows regression plus extracted-package smoke when available. Record exact tested SHA, assertions and limits before expected-head merge.",
+        "Separate PR from other work. README explains the precise packet, historical per-process setup scope, copy-only/local behavior and that recorded readiness is not a statement about current availability or inference."
+      ]
+    }
+  ],
+  "advisor_revision": {
+    "stage": "pre-code; pending Advisor re-review",
+    "scope_change": "Use compile-time app metadata and a typed in-process setup snapshot only. Omit saved provider, last Local AI check and all filesystem presence probes in v1.",
+    "privacy_boundary": "No Core::cfg(), local_ai_settings(), config::load_config(), file/registry scan, general Local AI worker/Check/List/Test hooks, or share/upload route anywhere in export generation."
+  },
+  "pre_code_review": {
+    "draft_sha256": "518f858a26e7ab6a2902397d72ebdb68f0bd804246df0d620e4c1906542ea6c7",
+    "result": "Independent Advisor approved the exact draft without config, filesystem, registry or cross-process data.",
+    "merged_main_sha": "a20328f66046eb71c8708107330b62e21da2f336"
+  }
+}
