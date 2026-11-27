@@ -56,7 +56,8 @@ try {
 using System;
 using System.Runtime.InteropServices;
 public static class Sig4aPackageSmokeWin {
-    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr FindWindow(string cls, string title);
+    public static IntPtr FindDashboard() { return FindWindow("ClaudeUsageDashboard", null); }
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr wnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr wnd);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr wnd);
@@ -71,12 +72,12 @@ public static class Sig4aPackageSmokeWin {
         Start-Sleep -Milliseconds 250
         $app.Refresh()
         if ($app.HasExited) { throw "Extracted dashboard exited early ($($app.ExitCode))." }
-        $h = [Sig4aPackageSmokeWin]::FindWindow('ClaudeUsageDashboard',$null)
+        $h = [Sig4aPackageSmokeWin]::FindDashboard()
         [uint32]$ownerPid = 0
         if ($h -ne [IntPtr]::Zero) { [void][Sig4aPackageSmokeWin]::GetWindowThreadProcessId($h,[ref]$ownerPid) }
         if ($ownerPid -eq $app.Id -and [Sig4aPackageSmokeWin]::IsWindowVisible($h)) { $hwnd = $h }
     } until ($hwnd -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 20)
-    if ($hwnd -eq [IntPtr]::Zero) { throw 'Extracted ordinary dashboard did not show its owned native window.' }
+    if ($hwnd -eq [IntPtr]::Zero) { throw ("Extracted ordinary dashboard did not show its owned native window (launch PID={0}, class HWND={1}, class PID={2}, process main HWND={3})." -f $app.Id,$h,$ownerPid,$app.MainWindowHandle) }
     [void][Sig4aPackageSmokeWin]::SetWindowPos($hwnd, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014)
     [void][Sig4aPackageSmokeWin]::SetForegroundWindow($hwnd)
     # A native HWND alone can be blank. Confirm the actual ordinary WebView2
