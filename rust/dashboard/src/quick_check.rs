@@ -322,6 +322,7 @@ fn matches_fixture(operation: Operation, preview: &str) -> bool {
                 | "con rô-bốt có 2 cái hộp màu xanh lam"
                 | "con robot có hai chiếc hộp màu xanh dương"
                 | "con robot có hai cái hộp màu xanh dương"
+                | "robot có hai hộp màu xanh dương"
         ),
         Operation::Grammar => matches!(
             candidate.as_str(),
@@ -475,6 +476,35 @@ mod tests {
                 safe_config_open(Path::new(path)),
                 Err("config_unavailable")
             ));
+        }
+    }
+
+    #[test]
+    fn translation_accepts_the_attested_sentence_without_a_classifier_only() {
+        assert!(matches_fixture(
+            Operation::Translation,
+            "Robot có hai hộp màu xanh dương."
+        ));
+        for rejected in [
+            "Robot có hai hộp màu xanh.",
+            "Robot có hai hộp màu xanh lá.",
+            "Robot có hai hộp.",
+            "Robot có ba hộp màu xanh dương.",
+            "Robot có mười hai hộp màu xanh dương.",
+            "Mèo có hai hộp màu xanh dương.",
+            "Robot nhìn hai hộp màu xanh dương.",
+            "Robot không có hai hộp màu xanh dương.",
+            "Robot có hai chai màu xanh dương.",
+            "Robot có hai hộp màu xanh lam.",
+            "Robot có hai hộp màu xanh dương. Robot có hai hộp màu xanh dương.",
+            "Robot có hai hộp màu xanh dương. Đây là bản dịch.",
+            "Robot có hai hộp màu xanh dương.\nGiải thích.",
+            "<b>Robot có hai hộp màu xanh dương.</b>",
+        ] {
+            assert!(
+                !matches_fixture(Operation::Translation, rejected),
+                "{rejected}"
+            );
         }
     }
 

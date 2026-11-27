@@ -33,7 +33,7 @@ const CHAT_LIMIT: usize = 8192;
 const SAMPLE_UTF16_LIMIT: usize = 512;
 const MAX_OUTPUT_TOKENS: u64 = 96;
 
-const TRANSLATION: &str = "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Return only the Vietnamese translation.\n\nThe robot has two blue boxes.";
+const TRANSLATION: &str = "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Translate the color blue as \"xanh dương\" or \"xanh lam\", not just \"xanh\". Return only the Vietnamese translation.\n\nThe robot has two blue boxes.";
 const GRAMMAR: &str = "Correct the English grammar in this one sentence without changing its meaning. Return only the corrected sentence.\n\nEvery morning the robot carry two blue boxes.";
 
 type Result<T> = std::result::Result<T, &'static str>;
@@ -662,20 +662,29 @@ mod tests {
 
     #[test]
     fn transport_requests_are_exact_and_do_not_allow_dynamic_model_or_message() {
-        for (op, prompt) in [
-            (Request::ChatGrammar, GRAMMAR),
-            (Request::ChatTranslation, TRANSLATION),
+        // Freeze the complete UTF-8 requests independently of the prompt
+        // constants and serializer used to construct the production bytes.
+        for (op, expected) in [
+            (
+                Request::ChatTranslation,
+                concat!(
+                    "POST /api/chat HTTP/1.1\r\nHost: 127.0.0.1:11434\r\n",
+                    "Accept: application/json\r\nConnection: close\r\n",
+                    "Content-Type: application/json\r\nContent-Length: 390\r\n\r\n",
+                    r#"{"model":"gemma4:e2b:local","stream":false,"think":false,"options":{"temperature":0,"num_predict":96},"messages":[{"role":"user","content":"Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Translate the color blue as \"xanh dương\" or \"xanh lam\", not just \"xanh\". Return only the Vietnamese translation.\n\nThe robot has two blue boxes."}]}"#,
+                ),
+            ),
+            (
+                Request::ChatGrammar,
+                concat!(
+                    "POST /api/chat HTTP/1.1\r\nHost: 127.0.0.1:11434\r\n",
+                    "Accept: application/json\r\nConnection: close\r\n",
+                    "Content-Type: application/json\r\nContent-Length: 307\r\n\r\n",
+                    r#"{"model":"gemma4:e2b:local","stream":false,"think":false,"options":{"temperature":0,"num_predict":96},"messages":[{"role":"user","content":"Correct the English grammar in this one sentence without changing its meaning. Return only the corrected sentence.\n\nEvery morning the robot carry two blue boxes."}]}"#,
+                ),
+            ),
         ] {
-            let bytes = String::from_utf8(op.wire()).unwrap();
-            let (header, body) = bytes.split_once("\r\n\r\n").unwrap();
-            assert!(header.starts_with("POST /api/chat HTTP/1.1\r\nHost: 127.0.0.1:11434\r\n"));
-            assert!(header.ends_with(&format!("Content-Length: {}", body.len())));
-            assert_eq!(
-                serde_json::from_str::<Value>(body).unwrap(),
-                json!({
-                "model":"gemma4:e2b:local","stream":false,"think":false,
-                "options":{"temperature":0,"num_predict":96},"messages":[{"role":"user","content":prompt}]})
-            );
+            assert_eq!(op.wire(), expected.as_bytes());
         }
         assert!(Request::Status
             .wire()

@@ -49,7 +49,7 @@
         "id": "translation_sample_v1",
         "button": "Thử Translation",
         "text": "The robot has two blue boxes.",
-        "fixed_prompt": "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Return only the Vietnamese translation.\n\nThe robot has two blue boxes.",
+        "fixed_prompt": "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Translate the color blue as \"xanh dương\" or \"xanh lam\", not just \"xanh\". Return only the Vietnamese translation.\n\nThe robot has two blue boxes.",
         "example_acceptable": [
           "Robot có hai chiếc hộp màu xanh dương.",
           "Con rô-bốt có 2 cái hộp màu xanh lam."
@@ -120,6 +120,36 @@
       ]
     }
   ],
+  "translation_fixture_clarification": {
+    "status": "proposed_pending_independent_advisor_before_code",
+    "scope": "Translation fixture v1 instruction and, only if supported by exact attestation, one reviewed explicit native response variant. No product edit before approval.",
+    "prior_evidence": {
+      "windows_signed_candidate": "a4635e8f",
+      "windows_signed_job": "140754221217",
+      "windows_observed": "Real ordinary packaged Settings UI, official signed Ollama v0.31.1, exact pinned local Gemma and env-forced Cloud disabled; both samples had completed local status/tags/chat HTTP 200 in their own phase. Translation returned mismatch (10.79 s); Grammar matched (2.58 s). This establishes real trusted dispatch, not successful Translation.",
+      "old_exact_prompt": "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Return only the Vietnamese translation.\n\nThe robot has two blue boxes.",
+      "linux_cross_check": "Separate isolated direct reproduction of the exact old fixed request and pinned model yielded ‘Robot có hai hộp màu xanh.’ in 3/3 reported retries. Bare xanh does not establish blue unambiguously. The direct observed string is not a capture of the Windows preview or proof of Windows equivalence.",
+      "pinned_manifest_sha256": "b37049369adfe3d2b653af0ab301a062ca5cbe96ace6aa0d3f2559ee9b563fc2"
+    },
+    "proposed_exact_prompt": "Translate this one sentence to Vietnamese, preserving the robot, ownership, count and color. Translate the color blue as \"xanh dương\" or \"xanh lam\", not just \"xanh\". Return only the Vietnamese translation.\n\nThe robot has two blue boxes.",
+    "exact_candidate_direct_benchmark": {
+      "environment": "Isolated Linux Ollama v0.31.1 with pinned local Gemma manifest above, native-shaped fixed local request. Supporting observation only, not Windows package proof.",
+      "observed_reply": "Robot có hai hộp màu xanh dương.",
+      "result": "3/3 exact replies, HTTP 200 with done_reason=stop, 62 prompt tokens and 9 generated tokens on each completion.",
+      "elapsed_seconds": [24.992, 1.368, 1.325]
+    },
+    "only_proposed_new_normalized_variant": "robot có hai hộp màu xanh dương",
+    "freeze_before_product_edit": [
+      "Leave the displayed English fixture ‘The robot has two blue boxes.’ unchanged. The fixed prompt must clarify only the requested color wording; it does not supply a full target answer.",
+      "Independently review the exact addendum, prompt and only proposed new variant before implementation. The direct benchmark above establishes what the fixed local model emitted, not production Windows coverage.",
+      "The exact output is valid but the old matcher omitted the no-classifier wording. Add only the attested normalized sentence above, preserving all existing variants and normalization. The classifier ‘chiếc’/‘cái’ is not required semantically. Do not add hypothetical variants, broad slot/prefix/substring rules, or any acceptance for bare xanh. If Windows output is ambiguous, wrong, inconsistent or unattested, keep Translation pending; return to Advisor rather than loosening."
+    ],
+    "acceptance": [
+      "Freeze the complete expected Translation request bytes in a native test literal independent of the implementation constant or request serializer; also pin unchanged Grammar bytes; check unchanged model :local, stream, think, temperature, num_predict, deadlines and request ordering. No renderer data/custom text, onboarding, network, signer, owner, config, env-forced Cloud, alias, schema or no-fallback changes.",
+      "Test any newly attested exact candidate positively and keep rejection for bare xanh, green/missing color, wrong actor, ownership/count/object, negation, English echo, repeated/extra sentence or line, commentary and invalid/truncated model response. Preserve existing deterministic normalization and ambiguity wording.",
+      "Retain ordinary extracted ZIP passive entry/unauthorized endpoint refusal, native dashboard/protocol and full Windows regression; rerun both exact production signed samples via the real UI on the exact candidate after independent code review. Both must match under the existing proof and isolated pinned setup. No historical or direct Linux result satisfies that gate and no pass is set here."
+    ]
+  },
   "non_goals": [
     "No general quality benchmark, custom prompts or user text, audio/notifications/CLI/key actions on this page, model install/pull/preset, cloud/telemetry, persistent result history, update checker or unrelated feature redesign."
   ],
