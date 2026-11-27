@@ -113,10 +113,16 @@ fn local_ai_fixture() -> (String, mpsc::Receiver<Value>, std::thread::JoinHandle
                 }
                 Err(e) => panic!("local AI fixture accept: {e}"),
             };
+            // Winsock accepts sockets in the listener's mode. Keep the accept loop
+            // nonblocking, but let request reads wait for data (up to the timeout).
+            stream.set_nonblocking(false).unwrap();
             stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
             let mut reader = BufReader::new(&mut stream);
             let mut line = String::new();
-            reader.read_line(&mut line).unwrap();
+            if reader.read_line(&mut line).expect("local AI fixture request line") == 0 {
+                assert!(Instant::now() < deadline, "local AI fixture received no request");
+                continue; // The client closed without sending a request.
+            }
             let request = line.trim_end().to_owned();
             let mut len = 0;
             loop {
