@@ -1,0 +1,35 @@
+{
+  "title": "Live Translate audio check before a meeting",
+  "baseline": "a07f8737e1f0c5ee6239a937d84775f71b40da10",
+  "status": "in_progress",
+  "scope": "A dedicated, opt-in five-second microphone or system-audio check in Tool Box > Live Translate. No model installer, Vietnamese inference or new providers in this feature.",
+  "phases": [
+    {
+      "id": "design",
+      "status": "in_progress",
+      "acceptance": [
+        "One independent plan review before code.",
+        "Distinguish source unavailable, no audio, audio present but no English caption, missing/offline English model, and working transcription.",
+        "The test captures only the explicitly selected source, displays a live level and the latest English sample if available, and never starts, replaces or extends a regular Live Translate session."
+      ]
+    },
+    {
+      "id": "runtime-and-ui",
+      "status": "pending",
+      "acceptance": [
+        "No capture until explicit Test Audio click. Test-only bounded native helper command/events; both native helper and dashboard/watchdog enforce bounded stop, including hung startup/inference. Shape, session identity, and measurement limits are validated.",
+        "Five-second window once capture starts; user Stop, source change, page exit, and process exit stop capture earlier. No fallback source, passive capture, persistent recording or transcript, cloud use or automatic model download. No Vietnamese inference.",
+        "Peak/audio-level updates are throttled and bounded. Meter-only still works when there is no English model. Missing device, silence, audible but unrecognized sound, and a local English sample are not conflated. Test state/sample is cleared on leaving, changing source, or new test."
+      ]
+    },
+    {
+      "id": "verification",
+      "status": "pending",
+      "acceptance": [
+        "Reviewer independently checks privacy, timeout/lease behavior, IPC validation, source exclusivity, state/sampling, and UI.",
+        "Synthetic tests check audio level/silence, sample and missing-model states, no startup capture, one-click single active run, stop/exit/source change, stale events, and hard timeout. Windows CI tests native WebView2, actual offline English on generated audio, and extracted ZIP.",
+        "Record the exact tested head and any absence of physical-device evidence in this JSON; merge only reviewed passing code."
+      ]
+    }
+  ]
+}
