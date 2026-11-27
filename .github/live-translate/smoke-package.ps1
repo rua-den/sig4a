@@ -109,7 +109,7 @@ public static class Sig4aPackageSmokeWin {
         return wnd != IntPtr.Zero && expectedPid != 0 && OwnerPid(wnd) == expectedPid &&
             IsWindowVisible(wnd) && GetAncestor(wnd, 2) == wnd; // GA_ROOT
     }
-    public static IntPtr[] DashboardCandidates(uint expectedPid, IntPtr mainWindow) {
+    public static IntPtr[] DashboardCandidates(uint expectedPid) {
         var candidates = new List<IntPtr>();
         EnumWindows(delegate(IntPtr wnd, IntPtr unused) {
             if (IsVisibleOwnedRoot(wnd, expectedPid) &&
@@ -118,11 +118,8 @@ public static class Sig4aPackageSmokeWin {
             }
             return true;
         }, IntPtr.Zero);
-        // A framework can expose the app through a different top-level class. The
-        // launched process's actual main HWND is only a candidate; UIA must prove it.
-        if (IsVisibleOwnedRoot(mainWindow, expectedPid) && !candidates.Contains(mainWindow)) {
-            candidates.Add(mainWindow);
-        }
+        // MainWindowHandle can be Tao's event target (or another auxiliary
+        // window). Keep it diagnostic only; never lay out or probe those roots.
         return candidates.ToArray();
     }
     public static string Describe(IntPtr wnd) {
@@ -157,19 +154,20 @@ public static class Sig4aPackageSmokeWin {
             $startup = Read-IsolatedStartupSummary $profile
             throw "Extracted dashboard exited early ($($app.ExitCode)). Startup: $startup"
         }
-        $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid, $app.MainWindowHandle))
+        $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
     } until ($candidates.Count -gt 0 -or $timer.Elapsed.TotalSeconds -gt 20)
     if ($candidates.Count -eq 0) {
         $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
         $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
         $startup = Read-IsolatedStartupSummary $profile
-        throw "Extracted dashboard has no visible owned root (launch PID=$launchPid; process main: $main; owned windows: $owned). Startup: $startup"
+        throw "Extracted dashboard has no visible owned ClaudeUsageDashboard root (launch PID=$launchPid; process main: $main; owned windows: $owned). Startup: $startup"
     }
     # A native HWND alone can be a dialog or a blank/framework window. Only pass
     # when the same visible owned root exposes canonical dashboard navigation.
     $uia = Join-Path $PSScriptRoot 'desktop-uia.ps1'
     $hwnd = [IntPtr]::Zero
-    $sample = $null
+    $observations = [ordered]@{}
+    $expectedButtons = @('Live Translate','Claude Usage','Cài đặt')
     $examined = $null
     $placed = [Collections.Generic.HashSet[IntPtr]]::new()
     $timer.Restart()
@@ -179,7 +177,7 @@ public static class Sig4aPackageSmokeWin {
             $startup = Read-IsolatedStartupSummary $profile
             throw "Extracted dashboard exited before navigation was shown ($($app.ExitCode)). Startup: $startup"
         }
-        $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid, $app.MainWindowHandle))
+        $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
         foreach ($h in $candidates) {
             if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) { continue }
             $examined = [Sig4aPackageSmokeWin]::Describe($h)
@@ -193,8 +191,31 @@ public static class Sig4aPackageSmokeWin {
             $sample = ($raw -join "`n") | ConvertFrom-Json
             $buttons = @($sample.items | Where-Object {Test-UiaButtonInRoot $_ $sample.root})
             $names = @($buttons | ForEach-Object name)
-            if ('Live Translate' -cin $names -and 'Claude Usage' -cin $names -and 'Cài đặt' -cin $names -and
-                [Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) {
+            $matched = @($expectedButtons | Where-Object {$_ -cin $names})
+            $allNamed = @($sample.items | Where-Object {$_.name -cin $expectedButtons})
+            $key = [string]($h.ToInt64())
+            if ($observations.Contains($key) -or $observations.Count -lt 6) {
+                $entry = $observations[$key]
+                if ($null -eq $entry) {
+                    $entry = @{window=$examined;attempts=0;bestScore=-1;best=$null;latest=$null}
+                    $observations[$key] = $entry
+                }
+                $entry.attempts++
+                $snapshot = @{
+                    root=$sample.root; rootState=$sample.root_state; rootsRead=$sample.roots_read
+                    scanErrors=$sample.scan_errors; itemCount=@($sample.items).Count
+                    metRoleAndBounds=$matched
+                    namedCandidates=@($allNamed | Select-Object -First 9 name,id,kind,enabled,offscreen,left,top,right,bottom)
+                    sample=@($sample.items | Select-Object -First 8 @{Name='name';Expression={$_.name.Substring(0,[Math]::Min(96,$_.name.Length))}},kind,offscreen,left,top,right,bottom)
+                }
+                $score = 100000 * $matched.Count + 1000 * $allNamed.Count + @($sample.items).Count
+                $entry.latest = $snapshot
+                if ($score -gt $entry.bestScore) {
+                    $entry.bestScore = $score
+                    $entry.best = $snapshot
+                }
+            }
+            if ($matched.Count -eq $expectedButtons.Count -and [Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) {
                 $hwnd = $h
                 break
             }
@@ -205,10 +226,10 @@ public static class Sig4aPackageSmokeWin {
     if ($hwnd -eq [IntPtr]::Zero) {
         $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
         $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
-        $summary = @{uiaRoot=$sample.root; nodes=@($sample.items | Select-Object -First 14 name,kind,offscreen,left,top,right,bottom)} | ConvertTo-Json -Depth 4 -Compress
+        $summary = @($observations.Values) | ConvertTo-Json -Depth 7 -Compress
         $startup = Read-IsolatedStartupSummary $profile
         $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow()
-        throw "Extracted native dashboard navigation missing (launch PID=$launchPid; foreground=$foreground; process main: $main; owned: $owned; last examined: $examined): $summary. Startup: $startup"
+        throw "Extracted native dashboard navigation missing (launch PID=$launchPid; foreground=$foreground; process main: $main; owned: $owned; last examined: $examined). Per-dashboard UIA observations: $summary. Startup: $startup"
     }
     $verifiedWindow = [Sig4aPackageSmokeWin]::Describe($hwnd)
     "Native UIA found visible Live Translate, Claude Usage and Settings buttons within the extracted app root ($verifiedWindow)."
