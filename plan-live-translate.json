@@ -91,6 +91,13 @@
           "case": "Blind clean-input review of HY-MT Q4_K_M: 109/122 annotated facts and 5/7 critical negations on original references; 37/61 and 10/15 on 24 freshly held-out technical inputs. Same-run LFM 25/122 and 1/7 on original, 5/61 and 1/15 fresh. Faster ASR cannot resolve these translation errors. Use HY-MT only for exploration, do not select or change Phase 1 acceptance.",
           "evidence": "https://github.com/rua-den/sig4a/actions/runs/45983335033",
           "tested_revision": "3f599f178ac32346e74b1bc4c7adae6ed923dce7"
+        },
+        {
+          "status": "failed_exploratory_targets",
+          "case": "Continuous synthetic PCM with real RNNT endpoint detection and local HY-MT, corrected offline scorer 91bf027: 45/48 original utterances produced one eligible caption, 2 premature endpoints; 3 unavailable/invalid are counted as infinite, p50 2883 ms and p95 nonfinite. No nonempty ASR events in the selected noise/silence windows. Attribution is time-window based and publication timing is a Tk proxy, not SIG4A UI. Candidate does not reach Phase 1 latency or held-out accuracy gates.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45984800139/job/140457535771",
+          "artifact": "https://github.com/rua-den/sig4a/actions/runs/45984800139/artifacts/15191641656",
+          "tested_revision": "f8da26ef822e83a549b281be4c4843b99aa18b4d"
         }
       ]
     },
