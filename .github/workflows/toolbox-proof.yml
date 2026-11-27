@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 env:
-  PRODUCT_SHA: b4c4b59cfa448718892613b6572eacb9465c5f11
+  PRODUCT_SHA: 75c05b811eb68335e2a2b5aa48ee911f414fc86a
 jobs:
   native-toolbox:
     runs-on: windows-2025
@@ -49,7 +49,7 @@ jobs:
           $old=(Get-TimeZone).Id
           try {
             Set-TimeZone -Id 'SE Asia Standard Time'
-            cargo test --locked --workspace -- --test-threads=1 --show-output
+            cargo test --locked --workspace --no-fail-fast -- --test-threads=1 --show-output
             $code=$LASTEXITCODE
           } finally { Set-TimeZone -Id $old }
           exit $code
