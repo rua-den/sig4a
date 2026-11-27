@@ -586,7 +586,7 @@ fn main() {
                     .header("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'");
                 response.body(std::borrow::Cow::Owned(page.clone())).unwrap()
             } else {
-                response.status(404).body(std::borrow::Cow::Borrowed(&[])).unwrap()
+                response.status(404).body(std::borrow::Cow::<'static, [u8]>::Borrowed(&[])).unwrap()
             }
         })
         .with_url(DASHBOARD_BUNDLE_URL)
