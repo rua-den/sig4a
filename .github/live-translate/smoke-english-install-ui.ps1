@@ -8,7 +8,7 @@ $models = Join-Path $helper 'models'
 $pointer = Join-Path $models 'zipformer.current'
 $trace = 'sig4a-english-model-start-' + [guid]::NewGuid().ToString('N')
 
-function Wait-Until([scriptblock]$Check,[int]$Seconds,[string]$Failure) {
+function Wait-Until([scriptblock]$Check,[int]$Seconds,[string]$Failure,[scriptblock]$Describe) {
     $time = [Diagnostics.Stopwatch]::StartNew()
     do {
         if ($Dashboard.HasExited) { throw 'Ordinary extracted dashboard exited during installer smoke.' }
@@ -16,28 +16,87 @@ function Wait-Until([scriptblock]$Check,[int]$Seconds,[string]$Failure) {
         if ($value) { return $value }
         Start-Sleep -Milliseconds 180
     } while ($time.Elapsed.TotalSeconds -lt $Seconds)
+    if ($Describe) {
+        try { $detail = [string](& $Describe) } catch { $detail = '<diagnostic unavailable>' }
+        $Failure += ' Context: ' + $detail.Substring(0, [Math]::Min($detail.Length, 1200))
+    }
     throw $Failure
 }
 function Node([long]$Parent,[string]$Id,[string]$Name='', [string]$Kind='',[string]$Mode='point') {
-    $raw = & powershell.exe -NoProfile -STA -File $Uia -Hwnd "$Parent" -Id $Id -Name $Name -Kind $Kind -Mode $Mode
-    if ($LASTEXITCODE -ne 0) { throw 'Real WebView/UIA query failed.' }
-    return ($raw -join "`n") | ConvertFrom-Json
+    # Bound each child query as well as the aggregate wait. UIA can block if a
+    # window closes while the provider is walking the accessibility tree.
+    $start = [Diagnostics.ProcessStartInfo]::new('powershell.exe')
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($arg in @('-NoProfile','-STA','-File',$Uia,'-Hwnd',"$Parent",'-Mode',$Mode)) {
+        [void]$start.ArgumentList.Add($arg)
+    }
+    foreach ($entry in @(@('-Id',$Id),@('-Name',$Name),@('-Kind',$Kind))) {
+        if ($entry[1]) { [void]$start.ArgumentList.Add($entry[0]); [void]$start.ArgumentList.Add($entry[1]) }
+    }
+    $proc = [Diagnostics.Process]::Start($start)
+    try {
+        $output = $proc.StandardOutput.ReadToEndAsync()
+        $stderr = $proc.StandardError.ReadToEndAsync()
+        if (!$proc.WaitForExit(4500)) {
+            try { $proc.Kill() } catch { if (!$proc.HasExited) { throw } }
+            return @{found=$false;timed_out=$true}
+        }
+        if ($proc.ExitCode -ne 0) { throw "Real WebView/UIA query failed (exit=$($proc.ExitCode))." }
+        return $output.GetAwaiter().GetResult() | ConvertFrom-Json
+    } finally { $proc.Dispose() }
 }
-function Click([IntPtr]$Parent,[string]$Id,[string]$Name='') {
+function Click-WebViewButton([string]$Id,[string]$Name='') {
+    [void][Sig4aPackageSmokeWin]::SetForegroundWindow($Window)
     $control = Wait-Until {
-        $typed = Node ($Parent.ToInt64()) $Id $Name 'Button'
+        if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($Window,[uint32]$Dashboard.Id)) { return }
+        $typed = Node ($Window.ToInt64()) $Id $Name 'Button'
         if ($typed.found -and $typed.enabled -and !$typed.offscreen) { $typed }
-    } 18 "Control is unavailable: $Id"
-    [void][Sig4aPackageSmokeWin]::SetForegroundWindow($Parent)
-    [void][Sig4aPackageSmokeWin]::SetCursorPos($control.x,$control.y)
+    } 18 "WebView button is unavailable: $Id $Name" {
+        $state = Node ($Window.ToInt64()) $Id $Name 'Button' 'state'
+        $windowSummary = [Sig4aPackageSmokeWin]::Describe($Window)
+        "root=[$windowSummary]; foreground=$([Sig4aPackageSmokeWin]::GetForegroundWindow()); found=$($state.found); enabled=$($state.enabled); offscreen=$($state.offscreen); timedOut=$($state.timed_out); point=$($state.x),$($state.y)"
+    }
+    [void][Sig4aPackageSmokeWin]::SetForegroundWindow($Window)
+    if (![Sig4aPackageSmokeWin]::SetCursorPos($control.x,$control.y)) { throw 'Could not place the cursor on the real WebView button.' }
     [Sig4aPackageSmokeWin]::mouse_event(0x0002,0,0,0,[UIntPtr]::Zero)
     [Sig4aPackageSmokeWin]::mouse_event(0x0004,0,0,0,[UIntPtr]::Zero)
 }
-function Dialog() {
+function Dialog {
     Wait-Until {
-        $test = [Sig4aPackageSmokeWin]::ModelDialog([uint32]$Dashboard.Id)
+        $test = [Sig4aPackageSmokeWin]::ModelDialog([uint32]$Dashboard.Id,$Window)
         if ($test -ne [IntPtr]::Zero) { $test }
-    } 18 'Native pinned English model consent dialog missing.'
+    } 18 'Native pinned English model consent dialog missing.' {
+        "foreground=$([Sig4aPackageSmokeWin]::GetForegroundWindow()); owned=$([Sig4aPackageSmokeWin]::DescribeOwned([uint32]$Dashboard.Id))"
+    }
+}
+function Answer-NativeConsent([IntPtr]$Dialog,[int]$ControlId,[switch]$StaleOwner) {
+    # HWND and child IDs are Win32 MessageBox semantics, not UIA AutomationId
+    # or localized accessible labels. The latter may be absent or localized.
+    if (!$StaleOwner) { [void][Sig4aPackageSmokeWin]::SetForegroundWindow($Dialog) }
+    $button = Wait-Until {
+        $child = [Sig4aPackageSmokeWin]::ConsentButton($Dialog,$Window,[uint32]$Dashboard.Id,$ControlId,(!$StaleOwner))
+        if ($child -ne [IntPtr]::Zero -and ($StaleOwner -or [Sig4aPackageSmokeWin]::GetForegroundWindow() -eq $Dialog)) { $child }
+    } 8 "Verified native consent button $ControlId is unavailable." {
+        [Sig4aPackageSmokeWin]::DescribeConsent($Dialog)
+    }
+    if ($StaleOwner) {
+        # Deliberately inject the real BN_CLICKED notification after hiding the
+        # renderer; do not re-activate it merely to exercise the stale case.
+        $sent = [Sig4aPackageSmokeWin]::PostMessageW($Dialog,0x0111,[IntPtr]$ControlId,$button)
+    } else {
+        # BM_CLICK activates the actual native button and notifies MessageBox.
+        # The app still receives IDNO or IDYES through its production modal.
+        $sent = [Sig4aPackageSmokeWin]::PostMessageW($button,0x00f5,[IntPtr]::Zero,[IntPtr]::Zero)
+    }
+    if (!$sent) { throw "Could not activate verified native consent button $ControlId. $([Sig4aPackageSmokeWin]::DescribeConsent($Dialog))" }
+    [void](Wait-Until {
+        [Sig4aPackageSmokeWin]::ModelDialog([uint32]$Dashboard.Id,$Window) -eq [IntPtr]::Zero
+    } 8 "Native consent button $ControlId did not close the modal." {
+        [Sig4aPackageSmokeWin]::DescribeConsent($Dialog)
+    })
 }
 function Ensure-NoSetup() {
     # A mode process is prerequisite for any English setup egress. WMI collects
@@ -50,32 +109,30 @@ function Ensure-NoSetup() {
 # Use actual process observation with no logs containing raw URLs or audio.
 $subscription = Register-CimIndicationEvent -Namespace 'root/cimv2' -SourceIdentifier $trace -Query "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName = 'Sig4a.LiveTranslate.exe'"
 try {
-    Click $Window '' '^Live Translate$'
+    Click-WebViewButton '' '^Live Translate$'
     # Merely opening the page performs no launch, model access, or install.
     Ensure-NoSetup
-    Click $Window 'live-model-install' '^Cài model tiếng Anh$'
+    Click-WebViewButton 'live-model-install' '^Cài model tiếng Anh$'
     $declined = Dialog
-    Click $declined '7' '^No$'
-    [void](Wait-Until { [Sig4aPackageSmokeWin]::ModelDialog([uint32]$Dashboard.Id) -eq [IntPtr]::Zero } 8 'Decline did not close modal.')
+    Answer-NativeConsent $declined 7
     Ensure-NoSetup
     'PASS: opening Live Translate and declining native consent did not launch an installer or stage assets.'
 
     # Stale ownership regression: invalidate the actual owned renderer while
     # the dialog is open. Reply YES only to the verified same-PID native dialog.
-    Click $Window 'live-model-install' '^Cài model tiếng Anh$'
+    Click-WebViewButton 'live-model-install' '^Cài model tiếng Anh$'
     $stale = Dialog
     [void][Sig4aPackageSmokeWin]::ShowWindow($Window,0)
     if ([Sig4aPackageSmokeWin]::IsWindowVisible($Window)) { throw 'Fixture could not hide the ordinary owned renderer.' }
-    if (![Sig4aPackageSmokeWin]::PostMessageW($stale,0x0111,[IntPtr]6,[IntPtr]::Zero)) { throw 'Fixture could not accept invalidated native modal.' }
-    [void](Wait-Until { [Sig4aPackageSmokeWin]::ModelDialog([uint32]$Dashboard.Id) -eq [IntPtr]::Zero } 8 'Stale dialog did not close.')
+    Answer-NativeConsent $stale 6 -StaleOwner
     Ensure-NoSetup
     [void][Sig4aPackageSmokeWin]::ShowWindow($Window,9)
     [void][Sig4aPackageSmokeWin]::SetForegroundWindow($Window)
     'PASS: accepting after ordinary renderer disappearance did not start the setup process.'
 
-    Click $Window 'live-model-install' '^Cài model tiếng Anh$'
+    Click-WebViewButton 'live-model-install' '^Cài model tiếng Anh$'
     $accepted = Dialog
-    Click $accepted '6' '^Yes$'
+    Answer-NativeConsent $accepted 6
     [void](Wait-Until {
         $report = Node ($Window.ToInt64()) '' 'Model tiếng Anh đã được xác minh và sẵn sàng' '' 'state'
         if ($report.found -and $report.name -match '(?i)sẵn sàng|đã xác minh' -and (Test-Path -LiteralPath $pointer -PathType Leaf)) { $true }
