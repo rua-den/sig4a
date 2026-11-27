@@ -1,0 +1,59 @@
+name: SIG4A exact native usage layout and remapped tool verification
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/usage-layout-proof.yml', '.github/usage-layout-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: 7f154f4580d238ebe805a0b281f343a4d3683f78
+jobs:
+  release-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [remap, usage]
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - working-directory: product/rust
+        name: Ordinary locked release, no test-only feature
+        run: cargo build --locked --release --workspace
+      - name: Real desktop native ${{ matrix.scenario }} scenario
+        shell: pwsh
+        run: ./proof/.github/usage-layout-proof/native.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA -Scenario ${{ matrix.scenario }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: usage-layout-native-${{ matrix.scenario }}-screenshots
+          path: evidence/*.png
+          if-no-files-found: ignore
+  locked-workspace:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          persist-credentials: false
+      - working-directory: rust
+        name: All locked tests including native dashboard integrations
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne $env:PRODUCT_SHA) { throw 'wrong product revision' }
+          $old=(Get-TimeZone).Id
+          try {
+            Set-TimeZone -Id 'SE Asia Standard Time'
+            cargo test --locked --workspace --no-fail-fast -- --test-threads=1 --show-output
+            $code=$LASTEXITCODE
+          } finally { Set-TimeZone -Id $old }
+          exit $code
