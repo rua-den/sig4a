@@ -70,6 +70,15 @@ toolTab('overview');
 const summary=[...$('overview-quota').querySelectorAll('.quota-row')];
 check('overview renders the same ranked cards with both meters',summary.map(x=>x.dataset.n).join() === [...$('accs').children].map(x=>x.dataset.n).join()&&
  summary.every(x=>meters(x).length===2&&meters(x).every(m=>within(m,x))));
+const mixed={...sample,cache:{...sample.cache,busy:['urgent','waiting'],profiles:{...profiles,urgent:{
+  ...profiles.urgent,err:'token hết hạn',status:401
+}}}};
+apply(mixed);
+const urgentSummary=$('overview-quota').querySelector('[data-n="urgent"]');
+const flags=urgentSummary.querySelector('.usage-extra');
+check('overview keeps concurrent login, stale and refresh reasons with blocking precedence',
+ urgentSummary.querySelector('.usage-state').dataset.kind==='blocking'&&flags.getBoundingClientRect().height>0&&
+ ['Cần đăng nhập','Dữ liệu cũ','Đang cập nhật'].every(reason=>flags.textContent.includes(reason)&&flags.title.includes(reason)));
 apply({...sample,cache:{...sample.cache,profiles:{}}});
 check('empty account state renders in both grids',$('accs').textContent.includes('Chưa có tài khoản')&&$('overview-quota').textContent.includes('Chưa có tài khoản'));
 apply({...sample,cache:null});

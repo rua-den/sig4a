@@ -80,16 +80,22 @@ if (PHASE === '1') {
   toolTab('settings'); tab('gen');
   const bp = [
     ['640', 641, 640, () => cnt($('gen')), 6, 2, 'settings grid columns (6 -> 2)'],
-    ['560', 561, 560, () => cnt(document.querySelector('.acc')), 3, 2, 'account row columns (3 -> 2)'],
+    ['560', 561, 560, () => cnt(document.querySelector('.acc')), 6, 2, 'account grid tracks (6 -> 2)'],
     ['460', 461, 460, () => parseFloat(getComputedStyle(document.querySelector('.wb')).width), 34, 30, 'window-button width px (34 -> 30)'],
   ];
+  const quotaPairAligned = () => {
+    const card = document.querySelector('.acc');
+    const [five, seven] = ['5h', '7d'].map(k => card.querySelector('[data-window="' + k + '"]').getBoundingClientRect());
+    return five.width > 0 && seven.width > 0 && Math.abs(five.width-seven.width) <= 1 &&
+      Math.abs(five.top-seven.top) <= 1 && seven.left >= five.right;
+  };
   for (const [name, above, at, read, vAbove, vAt, what] of bp) {
     if (name === '560') toolTab('usage');
-    const w1 = await atWidth(above), a = read();
-    const w2 = await atWidth(at), b = read();
-    const breakpointOk = name === '640' ? (a >= 2 && b >= 2 && b <= a) : name === '560' ? (a >= 3 && b === 2) : (a === vAbove && b === vAt);
+    const w1 = await atWidth(above), a = read(), abovePair = name !== '560' || quotaPairAligned();
+    const w2 = await atWidth(at), b = read(), atPair = name !== '560' || quotaPairAligned();
+    const breakpointOk = name === '640' ? (a >= 2 && b >= 2 && b <= a) : name === '560' ? (a === vAbove && b === vAt && abovePair && atPair) : (a === vAbove && b === vAt);
     check(`breakpoint ${name}px: ${what}: ${above}px wide -> ${vAbove}, ${at}px wide -> ${vAt}`,
-      Math.abs(w1 - above) <= 1 && Math.abs(w2 - at) <= 1 && breakpointOk, `innerWidth ${w1}/${w2}, got ${a}/${b}`);
+      Math.abs(w1 - above) <= 1 && Math.abs(w2 - at) <= 1 && breakpointOk, `innerWidth ${w1}/${w2}, got ${a}/${b}; aligned quota pair ${abovePair}/${atPair}`);
   }
   toolTab('usage');
   const w3 = await atWidth(430);
