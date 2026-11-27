@@ -59,6 +59,11 @@
           "evidence": "https://github.com/rua-den/sig4a/actions/runs/45978546306/job/140436315074",
           "artifact": "https://github.com/rua-den/sig4a/actions/runs/45978546306/artifacts/15188646838",
           "tested_revision": "a6fba24529a8af9923306a57346d0a34996d226e"
+        },
+        {
+          "status": "failed_exploratory_targets",
+          "case": "Independent model-blinded bilingual review and matched source/freeze/result SHA-256: Whisper/LFM retained 40/122 annotated facts and clearly preserved 1/7 critical negations; Sherpa/LFM retained 1/122 and clearly preserved 0/7. These are exact exploratory fixture results, not human or accent-diverse certification. Reject both tested pipelines as configured; isolate MT using clean and ASR-transcribed text and diagnose systematic Sherpa prefix loss before retest.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45978546306/artifacts/15188646838"
         }
       ]
     },
