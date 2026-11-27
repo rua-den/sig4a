@@ -309,6 +309,7 @@ impl App {
             }
             "open_toolbox" => Value::Bool(win::open_toolbox()),
             "state" => c.state(),
+            "local_ai_settings" => c.local_ai_settings(),
             "test_notify" => c.flag(&c.paths.testflag),
             "refresh" => c.flag(&c.paths.flag),
             "hook_status" => c.hook_status(),
@@ -798,7 +799,7 @@ fn main() {
                                 "local_models" => Ok(api::local_models(a.first().and_then(Value::as_str).unwrap_or("http://127.0.0.1:11434"), a.get(1).and_then(Value::as_str).unwrap_or("ollama"))),
                                 _ => {
                                     let o = a.first().and_then(Value::as_object);
-                                    Ok(api::local_chat(o.and_then(|x| x.get("endpoint")).and_then(Value::as_str).unwrap_or("http://127.0.0.1:11434"), o.and_then(|x| x.get("backend")).and_then(Value::as_str).unwrap_or("ollama"), o.and_then(|x| x.get("model")).and_then(Value::as_str).unwrap_or("hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0"), o.and_then(|x| x.get("task")).and_then(Value::as_str).unwrap_or("grammar"), o.and_then(|x| x.get("text")).and_then(Value::as_str).unwrap_or(""), o.and_then(|x| x.get("target")).and_then(Value::as_str), o.and_then(|x| x.get("image")).and_then(Value::as_str)))
+                                    Ok(api::local_chat(o.and_then(|x| x.get("endpoint")).and_then(Value::as_str).unwrap_or("http://127.0.0.1:11434"), o.and_then(|x| x.get("backend")).and_then(Value::as_str).unwrap_or("ollama"), o.and_then(|x| x.get("model")).and_then(Value::as_str).unwrap_or(""), o.and_then(|x| x.get("task")).and_then(Value::as_str).unwrap_or("grammar"), o.and_then(|x| x.get("text")).and_then(Value::as_str).unwrap_or(""), o.and_then(|x| x.get("target")).and_then(Value::as_str), o.and_then(|x| x.get("image")).and_then(Value::as_str), o.and_then(|x| x.get("prompt")).and_then(Value::as_str)))
                                 }
                             };
                             let _ = p.send_event(Ev::Done(id, r));

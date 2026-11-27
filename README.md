@@ -84,7 +84,11 @@ Mở **Local AI** từ Tổng quan hoặc nút **Local AI readiness** trong **C�
 
 Bấm **Kiểm tra kết nối** hoặc **Lấy model**, chọn ID đã nạp, rồi bấm **Thử model với ảnh mẫu** và **Lưu Local AI**. Kết nối được chưa có nghĩa là model đọc được ảnh. Nếu gặp lỗi, kiểm tra server, cổng và model theo trạng thái hiển thị rồi thử lại.
 
-Nếu muốn tray tự chạy preset LFM, đặt `llama-server.exe` cạnh file tray hoặc trong `PATH`, bật **Chạy model LFM cùng tray** rồi bấm **Lưu Local AI**. Tray dùng `127.0.0.1:18080`, model `lfm25-vl-q8`; lần đầu có thể tải model. Kiểm tra lại khi server đã sẵn sàng. Nếu tray báo không kết nối được, kiểm tra binary rồi tắt/bật tùy chọn (lưu sau mỗi lần đổi) để thử lại. Thoát tray sẽ dừng server do tray mở, không dừng server khởi chạy bên ngoài.
+Nếu muốn tray tự chạy preset LFM, đặt `llama-server.exe` cạnh file tray hoặc trong `PATH`, bật **Dùng model LFM đi kèm (cố định)** rồi bấm **Lưu Local AI**. Tray dùng `127.0.0.1:18080`, model `lfm25-vl-q8`; lần đầu có thể tải model. Kiểm tra lại khi server đã sẵn sàng. Nếu tray báo không kết nối được, kiểm tra binary rồi tắt/bật tùy chọn (lưu sau mỗi lần đổi) để thử lại. Thoát tray sẽ dừng server do tray mở, không dừng server khởi chạy bên ngoài.
+
+**Đổi model**: tắt tùy chọn model LFM cố định, chọn backend và model ngoài, rồi bấm **Lưu Local AI**. Ví dụ với Gemma 4 E2B: cập nhật Ollama nếu cần, chạy `ollama pull gemma4:e2b`, chọn **Ollama** và nhập `gemma4:e2b`. Bản Ollama Windows khoảng 4,6 GB; không tự tải trong SIG4A. SIG4A dùng model đã chọn cho các công cụ Local AI (không thay đổi model của Live Translate). Dùng server do chính bạn quản lý cho tài liệu nhạy cảm; loopback không đảm bảo một server bên ngoài không tự chuyển tiếp nội dung.
+
+Có thể sửa riêng prompt **Grammar**, **Dịch** và **OCR** trong **Local AI**, rồi bấm **Lưu Local AI**. Dùng `{text}` để chèn văn bản và `{target}` để chèn ngôn ngữ đích trong prompt dịch. Dùng nút khôi phục prompt mặc định nếu muốn quay lại cấu hình ban đầu. Không có fallback sang dịch vụ ngoài.
 
 ## Claude Usage, widget và hook
 

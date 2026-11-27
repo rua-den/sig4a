@@ -14,14 +14,16 @@ window.__cu_send = (method, args) => {
 };
 const requests = [];
 const readiness = [];
-let capture;
+let capture, delayedInventory;
 window.pywebview.api = new Proxy(originalApi, {
   get(target, key) {
     if (key === 'local_chat') {
       return data => new Promise(resolve => requests.push({ data, resolve }));
     }
     if (key === 'ocr_capture') return () => new Promise(resolve => { capture = resolve; });
-    if (key === 'local_models') return (...data) => new Promise(resolve => readiness.push({ data, resolve }));
+    if (key === 'local_models') return (...data) => aiCheckBusy
+      ? new Promise(resolve => readiness.push({ data, resolve }))
+      : delayedInventory || Promise.resolve({models: ['new-model']});
     return target[key];
   },
 });
@@ -189,7 +191,7 @@ try {
   await tick();
   translate.click();
   await tick();
-  requests[10].resolve({text:'Đóng cửa.'});
+  requests[10].resolve({text:'Đóng cửa.\nĐóng cửa.'});
   await tick();
   check(node('tool-ocr').classList.contains('on') && !node('tool-translation').classList.contains('on') &&
     node('ocr-out').textContent === 'Close the door.' && node('ocr-translation-out').textContent === 'Đóng cửa.' &&
@@ -227,6 +229,18 @@ try {
   await checkBeforeCapture; await tick();
   check(requests.length === 14 && requests[13].data.image === first, 'capture did not follow Local AI readiness');
   requests[13].resolve({text:'first'});
+  await tick();
+  let resolveInventory;
+  delayedInventory = new Promise(resolve => { resolveInventory = resolve; });
+  showQuickCapture(first, null);
+  await tick();
+  check(requests.length === 14, 'OCR did not wait for inventory');
+  showQuickCapture(second, null);
+  delayedInventory = null;
+  resolveInventory({models: ['new-model']});
+  await tick();
+  check(requests.length === 15 && requests[14].data.image === second, 'old preflight submitted a stale or newer image rather than discarding the request');
+  requests[14].resolve({text:'second'});
   await tick();
   return { ocr_result_lifecycle: true };
 } finally {

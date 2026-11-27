@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_INPUT_BYTES: usize = 256 * 1024;
+pub const MAX_CUSTOM_PROMPT_BYTES: usize = 8 * 1024;
 const MAX_IMAGE_BYTES: usize = 6 * 1024 * 1024;
 const MAX_IMAGE_BASE64_BYTES: usize = MAX_IMAGE_BYTES.div_ceil(3) * 4;
 pub const MAX_IMAGE_DATA_URL_BYTES: usize = MAX_IMAGE_BASE64_BYTES + "data:image/jpeg;base64,".len();
@@ -179,6 +180,35 @@ pub fn local_models(endpoint: &str, backend: &str) -> Value {
     json!({"models":models})
 }
 
+fn expand_custom_prompt(template: &str, text: &str, target: &str) -> Result<String, ()> {
+    let max_rendered = MAX_CUSTOM_PROMPT_BYTES + MAX_INPUT_BYTES;
+    let mut rendered = String::with_capacity(template.len().min(max_rendered));
+    let mut rest = template;
+    loop {
+        let text_pos = rest.find("{text}").map(|pos| (pos, true));
+        let target_pos = rest.find("{target}").map(|pos| (pos, false));
+        let next = match (text_pos, target_pos) {
+            (Some(a), Some(b)) => Some(if a.0 <= b.0 { a } else { b }),
+            (Some(a), None) | (None, Some(a)) => Some(a),
+            (None, None) => None,
+        };
+        let Some((pos, is_text)) = next else { break };
+        let (prefix, marker) = rest.split_at(pos);
+        rendered.push_str(prefix);
+        let marker_len = if is_text { "{text}".len() } else { "{target}".len() };
+        rendered.push_str(if is_text { text } else { target });
+        if rendered.len() > max_rendered {
+            return Err(());
+        }
+        rest = &marker[marker_len..];
+    }
+    rendered.push_str(rest);
+    if rendered.len() > max_rendered {
+        return Err(());
+    }
+    Ok(rendered)
+}
+
 pub fn local_chat(
     endpoint: &str,
     backend: &str,
@@ -187,6 +217,7 @@ pub fn local_chat(
     text: &str,
     target: Option<&str>,
     image: Option<&str>,
+    custom_prompt: Option<&str>,
 ) -> Value {
     if !matches!(backend, "ollama" | "llama_cpp") {
         return ai_error("invalid_backend", "backend không được hỗ trợ");
@@ -211,7 +242,7 @@ pub fn local_chat(
     let Ok(base) = local_endpoint(endpoint) else {
         return ai_error("invalid_endpoint", "endpoint không hợp lệ");
     };
-    let prompt = match task {
+    let default_prompt = match task {
         "grammar" => format!(
             "Correct the English grammar. Return only the corrected English text; preserve the exact meaning, names, dates, numbers, and line breaks. Do not add notes or explanations.\n\n{text}"
         ),
@@ -221,6 +252,30 @@ pub fn local_chat(
         ),
         "ocr" => format!("Transcribe the image exactly. Return only the text; preserve line breaks and do not invent or explain anything."),
         _ => text.to_string(),
+    };
+    let prompt = if let Some(template) = custom_prompt {
+        if template.len() > MAX_CUSTOM_PROMPT_BYTES {
+            return ai_error("invalid_prompt", "Prompt tùy chỉnh quá dài (tối đa 8 KB)");
+        }
+        if template.trim().is_empty() {
+            return ai_error("invalid_prompt", "Prompt tùy chỉnh không được để trống");
+        }
+        if task != "ocr" && !template.contains("{text}") {
+            return ai_error("invalid_prompt", "Prompt phải có placeholder {text}");
+        }
+        if task == "translation" && !template.contains("{target}") {
+            return ai_error("invalid_prompt", "Prompt dịch phải có placeholder {target}");
+        }
+        match expand_custom_prompt(
+            template,
+            text,
+            if target == Some("en") { "English" } else { "Vietnamese" },
+        ) {
+            Ok(prompt) => prompt,
+            Err(()) => return ai_error("invalid_prompt", "Prompt sau khi chèn nội dung quá dài"),
+        }
+    } else {
+        default_prompt
     };
     let image_data = match image {
         Some(data) => match image_base64(data) {
@@ -475,6 +530,23 @@ impl Core {
 
     pub fn cfg(&self) -> Config {
         config::load_config(&self.paths, &self.home)
+    }
+
+    /// Read only the persisted Local AI settings. A reused quick/OCR window can outlive
+    /// the dashboard that saved a new model, so callers refresh this immediately before use.
+    pub fn local_ai_settings(&self) -> Value {
+        let cfg = self.cfg();
+        let keys = [
+            "local_ai_endpoint", "local_ai_backend", "local_ai_model", "local_ai_managed",
+            "local_ai_prompt_grammar", "local_ai_prompt_translation", "local_ai_prompt_ocr",
+        ];
+        let mut out = serde_json::Map::new();
+        for key in keys {
+            if let Some(value) = cfg.get(key) {
+                out.insert(key.to_owned(), value.clone());
+            }
+        }
+        Value::Object(out)
     }
 
     fn save_cfg(&self, cfg: &Config) -> bool {
@@ -1115,6 +1187,18 @@ mod tests {
     }
 
     #[test]
+    fn ollama_inventory_omits_aliases_with_remote_metadata() {
+        let (address, worker) = fixture_request(json!({"models": [
+            {"name": "local:latest"},
+            {"name": "hosted-elsewhere:latest", "remote_host": "https://cloud.invalid"},
+            {"name": "remote-target:latest", "remote_model": "cloud-generated-name"},
+            {"name": "named:cloud"},
+        ]}));
+        assert_eq!(local_models(&address, "ollama"), json!({"models":["local:latest"]}));
+        assert_eq!(worker.join().unwrap().0, "GET /api/tags HTTP/1.1");
+    }
+
+    #[test]
     fn loopback_provider_contracts_text_and_image() {
         let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XfuoAAAAASUVORK5CYII=";
         for (provider, path, response) in [
@@ -1123,7 +1207,7 @@ mod tests {
         ] {
             for (task, image) in [("translation", None), ("ocr", Some(png))] {
                 let (address, worker) = fixture_request(response.clone());
-                let result = local_chat(&address, provider, "vision-fixture", task, "hello", Some("vi"), image);
+                let result = local_chat(&address, provider, "vision-fixture", task, "hello", Some("vi"), image, None);
                 let (line, body) = worker.join().unwrap();
                 assert_eq!(line, format!("POST {path} HTTP/1.1"));
                 assert_eq!(body["model"], "vision-fixture");
@@ -1151,6 +1235,20 @@ mod tests {
     }
 
     #[test]
+    fn custom_prompt_expands_once_without_interpreting_inserted_source() {
+        let template = "Translate to {target}: {text} / repeat {text}";
+        let prompt = expand_custom_prompt(template, "literal {target} and {text}", "Vietnamese").unwrap();
+        assert_eq!(prompt, "Translate to Vietnamese: literal {target} and {text} / repeat literal {target} and {text}");
+    }
+
+    #[test]
+    fn custom_prompt_bounds_expansion_from_repeated_placeholders() {
+        let large_text = "x".repeat(MAX_INPUT_BYTES);
+        assert!(expand_custom_prompt("{text}{text}", &large_text, "Vietnamese").is_err());
+        assert_eq!(expand_custom_prompt("{text}{target}", "small", "Vietnamese").unwrap(), "smallVietnamese");
+    }
+
+    #[test]
     fn local_chat_rejects_cloud_models_before_network() {
         assert_eq!(
             local_chat(
@@ -1159,6 +1257,7 @@ mod tests {
                 "foo:120b-cloud",
                 "grammar",
                 "x",
+                None,
                 None,
                 None
             )["error"],
@@ -1176,6 +1275,7 @@ mod tests {
                 "grammar",
                 "x",
                 None,
+                None,
                 None
             )["error"],
             "backend không được hỗ trợ"
@@ -1188,12 +1288,13 @@ mod tests {
                 "other",
                 "x",
                 None,
+                None,
                 None
             )["error"],
             "task không được hỗ trợ"
         );
         assert_eq!(
-            local_chat("http://127.0.0.1:1", "ollama", "m", "ocr", "", None, None)["error"],
+            local_chat("http://127.0.0.1:1", "ollama", "m", "ocr", "", None, None, None)["error"],
             "OCR cần có ảnh"
         );
     }
