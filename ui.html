@@ -881,6 +881,9 @@ function leaveLiveView(){
  const past=liveNonce;liveNonce=null;
  liveEpoch++;liveRequest=false;clearInterval(liveLoop);liveLoop=null;
  clearInterval(liveHeartbeatLoop);liveHeartbeatLoop=null;
+ const releasing=['starting','listening','stopping'].includes(liveState.phase);
+ const lamp=$('live-lamp');lamp.dataset.listening='false';
+ lamp.textContent=releasing?liveLabels.stopping:liveLabels.idle;
  clearLiveCaption();renderAudioCheck(null);$('live-pin').checked=false;$('live-translate').checked=false;$('live-consent').checked=false;
  if(api&&past)void api.live_view(false,past).catch(()=>{});
 }

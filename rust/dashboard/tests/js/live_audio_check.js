@@ -57,6 +57,22 @@ $('live-check-stop').click();
 check('Dừng thử clears sample immediately and after ACK', await waitFor(() => $('live-check-result').hidden && $('live-check-start').disabled===false,2500));
 choose('mic');await begin();
 check('retest can explicitly acquire the microphone', await waitFor(() => $('live-check-sample').textContent==='<b>English sample</b>',2500));
-toolTab('overview');await sleep(350);toolTab('live');
-check('page exit clears test and never restarts', $('live-check-result').hidden && $('live-lamp').dataset.listening==='false');
+const priorNonce=liveNonce;
+const checkUi=()=>({phase:liveState.phase,checking:liveState.checking,hidden:$('live-check-result').hidden,
+ sampleEmpty:$('live-check-sample').textContent==='',listening:$('live-lamp').dataset.listening,
+ lamp:$('live-lamp').textContent});
+const cleared=()=>{const s=checkUi();return s.hidden&&s.sampleEmpty&&s.listening==='false'};
+toolTab('overview');
+check('leaving clears the sample and active indicator synchronously',cleared(),JSON.stringify(checkUi()));
+toolTab('live');
+check('returning does not flash the previous sample or listening indicator',cleared(),JSON.stringify(checkUi()));
+const settled=await waitFor(()=>liveState.phase==='idle'&&!liveState.checking&&cleared(),2500);
+check('new live page settles idle after cancel, without restart',settled,JSON.stringify(checkUi()));
+const prior=await api.live_state(null,priorNonce).catch(()=>null);
+check('native bridge rejects the discarded view nonce',prior==null);
+await sleep(450);
+const reopened=await api.live_state(null,liveNonce).catch(()=>null);
+check('late helper events cannot restore the check on the new view',cleared()&&reopened?.phase==='idle'&&
+ reopened?.checking===false&&reopened?.check===null,JSON.stringify({ui:checkUi(),native:reopened?.phase,
+ checkPresent:!!reopened?.check}));
 return {R};
