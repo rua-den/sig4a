@@ -33,6 +33,24 @@ function Read-IsolatedStartupSummary([string]$IsolatedProfile) {
         return '<isolated startup log unavailable>'
     }
 }
+function Test-PositiveUiaRect($Rect) {
+    if ($null -eq $Rect) { return $false }
+    foreach ($edge in @('left','top','right','bottom')) {
+        $coordinate = $Rect.$edge
+        if ($null -eq $coordinate -or !($coordinate -is [ValueType])) { return $false }
+        $number = [double]$coordinate
+        if ([double]::IsNaN($number) -or [Math]::Abs($number) -gt 1000000) { return $false }
+    }
+    return ($Rect.right -gt $Rect.left -and $Rect.bottom -gt $Rect.top)
+}
+function Test-UiaButtonInRoot($Button,$Root) {
+    if ($Button.kind -ne 'ControlType.Button' -or $Button.offscreen -ne $false -or
+        !(Test-PositiveUiaRect $Button) -or !(Test-PositiveUiaRect $Root)) { return $false }
+    $centerX = ([double]$Button.left + [double]$Button.right) / 2
+    $centerY = ([double]$Button.top + [double]$Button.bottom) / 2
+    return ($centerX -ge $Root.left -and $centerX -lt $Root.right -and
+        $centerY -ge $Root.top -and $centerY -lt $Root.bottom)
+}
 $psi = [Diagnostics.ProcessStartInfo]::new($runtime)
 $psi.WorkingDirectory = Split-Path -Parent $runtime
 $psi.UseShellExecute = $false
@@ -173,7 +191,7 @@ public static class Sig4aPackageSmokeWin {
                 throw "Native dashboard UI automation failed ($examined). Startup: $startup"
             }
             $sample = ($raw -join "`n") | ConvertFrom-Json
-            $buttons = @($sample.items | Where-Object {$_.kind -eq 'ControlType.Button' -and !$_.offscreen -and $_.right -gt $_.left -and $_.bottom -gt $_.top})
+            $buttons = @($sample.items | Where-Object {Test-UiaButtonInRoot $_ $sample.root})
             $names = @($buttons | ForEach-Object name)
             if ('Live Translate' -cin $names -and 'Claude Usage' -cin $names -and 'Cài đặt' -cin $names -and
                 [Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) {
@@ -187,13 +205,13 @@ public static class Sig4aPackageSmokeWin {
     if ($hwnd -eq [IntPtr]::Zero) {
         $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
         $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
-        $summary = @($sample.items | Select-Object -First 14 name,kind,offscreen) | ConvertTo-Json -Compress
+        $summary = @{uiaRoot=$sample.root; nodes=@($sample.items | Select-Object -First 14 name,kind,offscreen,left,top,right,bottom)} | ConvertTo-Json -Depth 4 -Compress
         $startup = Read-IsolatedStartupSummary $profile
         $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow()
         throw "Extracted native dashboard navigation missing (launch PID=$launchPid; foreground=$foreground; process main: $main; owned: $owned; last examined: $examined): $summary. Startup: $startup"
     }
     $verifiedWindow = [Sig4aPackageSmokeWin]::Describe($hwnd)
-    "Native UIA found visible Live Translate, Claude Usage and Settings buttons in the extracted app ($verifiedWindow)."
+    "Native UIA found visible Live Translate, Claude Usage and Settings buttons within the extracted app root ($verifiedWindow)."
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
     'SIG4A archive verified: actual released dashboard, explicit inventory, invalid source no fallback, no passive helper/capture. No physical endpoints accessed.'
 } finally {

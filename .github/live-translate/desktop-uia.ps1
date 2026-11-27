@@ -25,10 +25,20 @@ public static class DesktopUiaWin {
 [void][DesktopUiaWin]::SetProcessDPIAware()
 $main=[IntPtr]$Hwnd
 $names=[Collections.Generic.List[object]]::new()
+$rootBounds=$null
 foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
  try {
   $root=[Windows.Automation.AutomationElement]::FromHandle($h)
   if(!$root){continue}
+  if($Mode -eq 'list' -and $h -eq $main){
+    # Same UIA screen coordinate space as the descendants, not Win32's DPI
+    # virtualized GetWindowRect as observed by the invoking process.
+    $rootInfo=$root.Current
+    $rect=$rootInfo.BoundingRectangle
+    if(!$rect.IsEmpty){
+      $rootBounds=@{left=$rect.Left;top=$rect.Top;right=$rect.Right;bottom=$rect.Bottom;process_id=$rootInfo.ProcessId}
+    }
+  }
   $cond=[Windows.Automation.Condition]::TrueCondition
   foreach($e in $root.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)){
     $c=$e.Current
@@ -69,5 +79,5 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
   }
  }catch{}
 }
-if($Mode -eq 'list'){@{items=@($names.ToArray())}|ConvertTo-Json -Depth 5 -Compress}
+if($Mode -eq 'list'){@{root=$rootBounds;items=@($names.ToArray())}|ConvertTo-Json -Depth 5 -Compress}
 else{'{"found":false}'}
