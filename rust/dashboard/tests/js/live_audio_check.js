@@ -1,0 +1,78 @@
+toolTab('live');
+check('opening never starts an audio check', $('live-check-result').hidden && $('live-check-stop').disabled);
+await stage('open');
+$('live-refresh').click();
+check('fixture inventory is visible', await waitFor(() => $('live-device').options.length===8, 2500));
+const choose = id => setv('live-device',id,'change');
+const begin = async () => {
+ if(!await waitFor(() => !$('live-check-start').disabled,2500))throw new Error('Test audio button stayed disabled');
+ $('live-check-start').click();
+};
+const status = () => $('live-check-status').textContent;
+const notice = (text) => waitFor(() => status().includes(text), 3500);
+async function waitIdle(){
+ return waitFor(() => !$('live-check-start').disabled && $('live-check-stop').disabled,2500);
+}
+choose('silent');await begin();
+check('selected silent audio check is active', await notice('Đang thử nguồn'));
+check('test makes room for no duplicate or regular start', $('live-check-start').disabled && $('live-start').disabled && $('live-pause').disabled);
+const duplicate = await api.live_check_start({source:'playback',device_id:'audible'},liveNonce);
+const regular = await api.live_start({source:'playback',device_id:null,translate:false,consent:false},liveNonce);
+check('Rust prevents duplicate and regular starts while checking', duplicate.checking && regular.checking);
+check('silence has a routing hint, not an unavailable error', await notice('Không thấy tín hiệu'));
+await waitIdle();choose('audible');await begin();
+check('live audio meter is visible and bounded', await waitFor(() => !$('live-check-meter').hidden && $('live-check-meter').value===42, 2300));
+check('audible with model but no text is distinct', await notice('chưa nhận được mẫu tiếng Anh'));
+await waitIdle();choose('no-model');await begin();
+check('missing model keeps audio meter useful', await notice('không mở được model tiếng Anh'));
+await waitIdle();choose('pending-model');await begin();
+check('audible with pending model is distinct from unavailable and ready', await notice('chưa khởi động xong trong thời gian thử'));
+await waitIdle();setv('live-source','mic','change');await sleep(300);
+check('source change clears result and needs specific mic', $('live-check-result').hidden && $('live-check-start').disabled);
+choose('mic');await begin();
+check('sample is English-only literal text', await waitFor(() => !$('live-check-sample').hidden && $('live-check-sample').textContent==='<b>English sample</b>',2500) && !$('live-check-sample').firstElementChild && $('live-vi').hidden);
+setv('live-source','playback','change');
+check('changing the selected source stops and clears sample', await waitFor(() => $('live-check-result').hidden && $('live-check-start').disabled===false,2500));
+await sleep(500);
+check('late results do not survive source change', $('live-check-result').hidden && $('live-check-sample').textContent==='');
+choose('locked');await begin();
+check('device unavailable is distinct from silence', await notice('Không mở được nguồn đã chọn'));
+await waitIdle();choose('abort-hang');await begin();
+check('fixture can simulate a source-change stop with no ACK', await notice('Đang thử nguồn'));
+setv('live-source','mic','change');
+check('native watchdog reaps a silent cancelled helper without displaying its old timeout', await waitFor(() =>
+ liveState.phase==='idle' && $('live-check-result').hidden && !liveState.code,4000));
+check('new source does not show a dedicated or shared error panel after silent abort',
+ $('live-check-result').hidden && !$('live-status').textContent.includes('Helper'));
+setv('live-source','playback','change');choose('hang');await begin();
+check('hung fixture started before testing the native deadline', await notice('Đang thử nguồn'));
+await stage('before-check-timeout');
+check('fixed check deadline survives renderer heartbeats', await waitFor(() => status().includes('không phản hồi') && $('live-lamp').dataset.listening==='false', 7500));
+await stage('after-check-timeout');
+await sleep(350);
+check('no delayed result or automatic start after hard timeout', $('live-check-sample').textContent==='' && $('live-lamp').dataset.listening==='false');
+setv('live-source','mic','change');await sleep(300);choose('mic');await begin();
+check('explicit retry runs a new generation after timeout', await waitFor(() => $('live-check-sample').textContent==='<b>English sample</b>',2500));
+$('live-check-stop').click();
+check('Dừng thử clears sample immediately and after ACK', await waitFor(() => $('live-check-result').hidden && $('live-check-start').disabled===false,2500));
+choose('mic');await begin();
+check('retest can explicitly acquire the microphone', await waitFor(() => $('live-check-sample').textContent==='<b>English sample</b>',2500));
+const priorNonce=liveNonce;
+const checkUi=()=>({phase:liveState.phase,checking:liveState.checking,hidden:$('live-check-result').hidden,
+ sampleEmpty:$('live-check-sample').textContent==='',listening:$('live-lamp').dataset.listening,
+ lamp:$('live-lamp').textContent});
+const cleared=()=>{const s=checkUi();return s.hidden&&s.sampleEmpty&&s.listening==='false'};
+toolTab('overview');
+check('leaving clears the sample and active indicator synchronously',cleared(),JSON.stringify(checkUi()));
+toolTab('live');
+check('returning does not flash the previous sample or listening indicator',cleared(),JSON.stringify(checkUi()));
+const settled=await waitFor(()=>liveState.phase==='idle'&&!liveState.checking&&cleared(),2500);
+check('new live page settles idle after cancel, without restart',settled,JSON.stringify(checkUi()));
+const prior=await api.live_state(null,priorNonce).catch(()=>null);
+check('native bridge rejects the discarded view nonce',prior==null);
+await sleep(450);
+const reopened=await api.live_state(null,liveNonce).catch(()=>null);
+check('late helper events cannot restore the check on the new view',cleared()&&reopened?.phase==='idle'&&
+ reopened?.checking===false&&reopened?.check===null,JSON.stringify({ui:checkUi(),native:reopened?.phase,
+ checkPresent:!!reopened?.check}));
+return {R};

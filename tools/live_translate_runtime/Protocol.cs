@@ -20,22 +20,27 @@ static class Protocol
             kind.ValueKind != JsonValueKind.String) throw new FormatException();
         var type = kind.GetString();
         if (type is "list" or "quit" && fields.Count == 2) return new(type);
-        if (type is not ("start" or "stop") || !fields.TryGetValue("session", out var id) ||
+        if (type is not ("start" or "stop" or "check_start" or "check_stop") || !fields.TryGetValue("session", out var id) ||
             id.ValueKind != JsonValueKind.Number || !id.TryGetInt64(out var session) ||
             session is < 1 or > SessionLimit) throw new FormatException();
-        if (type == "stop" && fields.Count == 3) return new(type, session);
-        if (type != "start" || fields.Count != 6 ||
-            !fields.TryGetValue("source", out var src) || src.ValueKind != JsonValueKind.String ||
-            !fields.TryGetValue("device_id", out var selected) ||
-            !fields.TryGetValue("translate", out var trans) ||
-            trans.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new FormatException();
+        if ((type is "stop" or "check_stop") && fields.Count == 3) return new(type, session);
+        bool translate = false;
+        if (type == "start")
+        {
+            if (fields.Count != 6 || !fields.TryGetValue("translate", out var trans) ||
+                trans.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new FormatException();
+            translate = trans.GetBoolean();
+        }
+        else if (type != "check_start" || fields.Count != 5) throw new FormatException();
+        if (!fields.TryGetValue("source", out var src) || src.ValueKind != JsonValueKind.String ||
+            !fields.TryGetValue("device_id", out var selected)) throw new FormatException();
         var source = src.GetString();
         if (source is not ("playback" or "mic")) throw new FormatException();
         string? device = selected.ValueKind == JsonValueKind.String ? selected.GetString() : null;
         if (device is null && (selected.ValueKind != JsonValueKind.Null || source == "mic") ||
             device is not null && (device.Length is < 1 or > 512 || device.Any(char.IsControl)))
             throw new FormatException();
-        return new(type, session, source, device, trans.GetBoolean());
+        return new(type, session, source, device, translate);
     }
 
     internal sealed class BoundedReader(Stream input)

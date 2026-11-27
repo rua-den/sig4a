@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="inference/**/*.cs" />
+    <Compile Include="../CheckTiming.cs" Link="CheckTiming.cs" />
     <Compile Include="../Protocol.cs" Link="Protocol.cs" />
   </ItemGroup>
 </Project>

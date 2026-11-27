@@ -1,5 +1,16 @@
 using System.Text;
+using System.Diagnostics;
 using System.Text.Json;
+
+if (args is ["--stuck-sampler"])
+{
+    // Test executable only: the real guard exit is called with a stuck decoder,
+    // after a synthetic owner release marker. No WASAPI or model is loaded.
+    Console.WriteLine("capture-owner-release-simulated");
+    CheckTiming.RetireSampleOrExit(new TaskCompletionSource().Task);
+    Console.WriteLine("unexpected-ack");
+    return;
+}
 
 static void Check(bool condition) { if (!condition) throw new Exception("Unexpected protocol result."); }
 static Protocol.Command Read(string input) => Protocol.Parse(Encoding.UTF8.GetBytes(input));
@@ -35,3 +46,56 @@ foreach (var invalid in new[] { new string('x', Protocol.LineLimit + 1), "unterm
     catch (FormatException) { }
 }
 Console.WriteLine("Compiler-level protocol checks passed; no endpoints or inference exercised.");
+
+
+Check(Read("""{"v":1,"type":"check_start","source":"mic","session":5,"device_id":"selected"}""") ==
+    new Protocol.Command("check_start", 5, "mic", "selected"));
+Check(Read("""{"v":1,"type":"check_stop","session":5}""").Type == "check_stop");
+Invalid(() => Read("""{"v":1,"type":"check_start","source":"playback","session":5,"device_id":null,"translate":true}"""));
+Invalid(() => Read("""{"v":1,"type":"check_start","source":"mic","session":5,"device_id":null}"""));
+Invalid(() => Read("""{"v":1,"type":"check_stop","session":5,"source":"mic"}"""));
+Invalid(() => Read("""{"v":1,"type":"check_stop","session":0}"""));
+Check(CheckTiming.Meter(0, 1, 1) == 0);
+Check(CheckTiming.Meter(double.PositiveInfinity, 1, 1) == 0);
+Check(CheckTiming.Meter(double.NaN, 1, 1) == 0);
+Check(CheckTiming.Meter(1, 1, 1) == 100);
+Check(CheckTiming.Meter(.01, 1, 1) is > 60 and < 70);
+using var cancelled = new ManualResetEvent(false);
+using var driver = new ManualResetEvent(false);
+// The callback intentionally never finishes until after the exact native five-second
+// capture window has elapsed. Capture timing and release do not depend on it.
+var delayedDecoder = new TaskCompletionSource();
+var elapsed = System.Diagnostics.Stopwatch.StartNew();
+Check(CheckTiming.WaitWindow(cancelled, driver) == WaitHandle.WaitTimeout);
+Check(elapsed.Elapsed.TotalSeconds >= 4.8 && elapsed.Elapsed.TotalSeconds < 8);
+Check(!delayedDecoder.Task.IsCompleted);
+Check(!CheckTiming.CanReuseAfterSample(delayedDecoder.Task)); // must exit, not ACK/reuse
+delayedDecoder.SetResult();
+Check(CheckTiming.CanReuseAfterSample(delayedDecoder.Task));
+long delayedStart = System.Diagnostics.Stopwatch.GetTimestamp() -
+    (long)(System.Diagnostics.Stopwatch.Frequency * 2.0);
+Check(CheckTiming.RemainingWindow(delayedStart) is >= 2850 and <= 3050);
+long alreadyExpired = delayedStart - 4 * System.Diagnostics.Stopwatch.Frequency;
+Check(CheckTiming.RemainingWindow(alreadyExpired) == 0);
+cancelled.Set();
+Check(CheckTiming.WaitWindow(cancelled, driver) == 0);
+cancelled.Reset();
+driver.Set();
+Check(CheckTiming.WaitWindow(cancelled, driver) == 1);
+Console.WriteLine("Audio check protocol, meter, independent window and early-stop primitives passed.");
+
+var host = Environment.ProcessPath ?? throw new InvalidOperationException();
+var childInfo = new ProcessStartInfo(host) { UseShellExecute = false, RedirectStandardOutput = true };
+if (string.Equals(Path.GetFileNameWithoutExtension(host), "dotnet", StringComparison.OrdinalIgnoreCase))
+    childInfo.ArgumentList.Add(typeof(Protocol).Assembly.Location);
+childInfo.ArgumentList.Add("--stuck-sampler");
+using var guardChild = Process.Start(childInfo) ?? throw new InvalidOperationException();
+try
+{
+    var guardOutput = guardChild.StandardOutput.ReadToEndAsync();
+    Check(guardChild.WaitForExit(5000));
+    Check(guardChild.ExitCode == 3);
+    Check((await guardOutput).Trim() == "capture-owner-release-simulated");
+}
+finally { if (!guardChild.HasExited) guardChild.Kill(entireProcessTree: true); }
+Console.WriteLine("Stuck sampler subprocess used the production retirement decision: exited without ACK; no capture opened.");

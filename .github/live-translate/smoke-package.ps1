@@ -55,9 +55,30 @@ try {
     Add-Type @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 public static class Sig4aPackageSmokeWin {
-    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr FindWindow(string cls, string title);
-    public static IntPtr FindDashboard() { return FindWindow("ClaudeUsageDashboard", null); }
+    private delegate bool EnumWindowsCallback(IntPtr wnd, IntPtr param);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr param);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
+    private static extern int GetClassNameW(IntPtr wnd, StringBuilder name, int capacity);
+    private static bool IsVisibleDashboard(IntPtr wnd, uint expectedPid) {
+        if (wnd == IntPtr.Zero || !IsWindowVisible(wnd)) return false;
+        uint ownerPid;
+        if (GetWindowThreadProcessId(wnd, out ownerPid) == 0 || ownerPid != expectedPid) return false;
+        var name = new StringBuilder(256);
+        return GetClassNameW(wnd, name, name.Capacity) > 0 &&
+            String.Equals(name.ToString(), "ClaudeUsageDashboard", StringComparison.Ordinal);
+    }
+    public static IntPtr FindDashboard(uint expectedPid, IntPtr mainWindow) {
+        if (IsVisibleDashboard(mainWindow, expectedPid)) return mainWindow;
+        IntPtr result = IntPtr.Zero;
+        EnumWindows(delegate(IntPtr wnd, IntPtr unused) {
+            if (!IsVisibleDashboard(wnd, expectedPid)) return true;
+            result = wnd;
+            return false;
+        }, IntPtr.Zero);
+        return result;
+    }
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr wnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr wnd);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr wnd);
@@ -72,12 +93,9 @@ public static class Sig4aPackageSmokeWin {
         Start-Sleep -Milliseconds 250
         $app.Refresh()
         if ($app.HasExited) { throw "Extracted dashboard exited early ($($app.ExitCode))." }
-        $h = [Sig4aPackageSmokeWin]::FindDashboard()
-        [uint32]$ownerPid = 0
-        if ($h -ne [IntPtr]::Zero) { [void][Sig4aPackageSmokeWin]::GetWindowThreadProcessId($h,[ref]$ownerPid) }
-        if ($ownerPid -eq $app.Id -and [Sig4aPackageSmokeWin]::IsWindowVisible($h)) { $hwnd = $h }
+        $hwnd = [Sig4aPackageSmokeWin]::FindDashboard([uint32]$app.Id, $app.MainWindowHandle)
     } until ($hwnd -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 20)
-    if ($hwnd -eq [IntPtr]::Zero) { throw ("Extracted ordinary dashboard did not show its owned native window (launch PID={0}, class HWND={1}, class PID={2}, process main HWND={3})." -f $app.Id,$h,$ownerPid,$app.MainWindowHandle) }
+    if ($hwnd -eq [IntPtr]::Zero) { throw ("Extracted ordinary dashboard did not show a visible owned ClaudeUsageDashboard window (launch PID={0}, process main HWND={1})." -f $app.Id,$app.MainWindowHandle) }
     [void][Sig4aPackageSmokeWin]::SetWindowPos($hwnd, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014)
     [void][Sig4aPackageSmokeWin]::SetForegroundWindow($hwnd)
     # A native HWND alone can be blank. Confirm the actual ordinary WebView2

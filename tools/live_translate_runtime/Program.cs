@@ -7,6 +7,8 @@ static class Program
     static readonly object Gate = new();
     static readonly byte[] Newline = [10];
     static Session? Active;
+    static CheckSession? Checking;
+    static bool lastWasCheck;
     static long lastId;
     static bool closing;
 
@@ -132,6 +134,59 @@ static class Program
         }
     }
 
+    internal static bool CheckStarted(CheckSession source)
+    {
+        lock (Gate)
+        {
+            if (closing || Checking != source || !source.CanReport) return false;
+            Send(new { v = 1, type = "check_status", session = source.Id, state = "started" });
+            return true;
+        }
+    }
+
+    internal static void CheckMeter(CheckSession source, int level, bool signal)
+    {
+        lock (Gate)
+        {
+            if (!closing && Checking == source && source.CanReport)
+                Send(new { v = 1, type = "check_meter", session = source.Id, level, signal });
+        }
+    }
+
+    internal static void CheckSample(CheckSession source, string candidate)
+    {
+        string en = TextCap(candidate.Trim(), 512);
+        lock (Gate)
+        {
+            if (!closing && Checking == source && source.CanReport && en.Length > 0)
+                Send(new { v = 1, type = "check_sample", session = source.Id, en });
+        }
+    }
+
+    internal static void CheckModel(CheckSession source, bool ready)
+    {
+        lock (Gate)
+        {
+            if (!closing && Checking == source && source.CanReport)
+                Send(new { v = 1, type = "check_model", session = source.Id,
+                    state = ready ? "ready" : "unavailable" });
+        }
+    }
+
+    internal static void CheckFinished(CheckSession source, bool released, bool completed, string? error, bool signal)
+    {
+        lock (Gate)
+        {
+            if (Checking != source) return;
+            if (!released) Environment.Exit(3);
+            Checking = null;
+            if (closing) return;
+            if (error is not null) Error(source.Id, error);
+            if (completed) Send(new { v = 1, type = "check_meter", session = source.Id, level = 0, signal });
+            Send(new { v = 1, type = "check_status", session = source.Id, state = "stopped", completed });
+        }
+    }
+
     [MTAThread]
     static async Task<int> Main(string[] args)
     {
@@ -153,13 +208,30 @@ static class Program
                             break;
                         case "start":
                             if (cmd.Session <= lastId) break;
-                            if (Active is not null) { Error(cmd.Session, "busy"); break; }
+                            if (Active is not null || Checking is not null) { Error(cmd.Session, "busy"); break; }
                             lastId = cmd.Session;
+                            lastWasCheck = false;
                             Active = new Session(cmd.Session, cmd.Source!, cmd.Device, cmd.Translate);
                             Active.Work = Task.Run(Active.Run);
                             break;
+                        case "check_start":
+                            if (cmd.Session <= lastId) break;
+                            if (Active is not null || Checking is not null) { Error(cmd.Session, "busy"); break; }
+                            lastId = cmd.Session;
+                            lastWasCheck = true;
+                            var check = new CheckSession(cmd.Session, cmd.Source!, cmd.Device);
+                            Checking = check;
+                            check.Work = check.Run();
+                            break;
+                        case "check_stop":
+                            if (cmd.Session == lastId && lastWasCheck)
+                            {
+                                if (Checking is not null) Checking.Stop();
+                                else Send(new { v = 1, type = "check_status", session = cmd.Session, state = "stopped", completed = false });
+                            }
+                            break;
                         case "stop":
-                            if (cmd.Session == lastId)
+                            if (cmd.Session == lastId && !lastWasCheck)
                             {
                                 if (Active is not null) Active.Stop();
                                 else Status(cmd.Session, "stopped");
@@ -176,16 +248,18 @@ static class Program
             {
                 closing = true;
                 Active?.Stop();
+                Checking?.Stop();
             }
         }
-        Session? pending;
+        Task? pending;
         lock (Gate)
         {
             closing = true;
-            pending = Active;
-            pending?.Stop();
+            pending = Active?.Work ?? Checking?.Work;
+            Active?.Stop();
+            Checking?.Stop();
         }
-        if (pending is not null && await Task.WhenAny(pending.Work, Task.Delay(4_000)) != pending.Work)
+        if (pending is not null && await Task.WhenAny(pending, Task.Delay(4_000)) != pending)
             return 3; // Parent watchdog also reaps this process on deadline.
         if (exit != 0)
         {

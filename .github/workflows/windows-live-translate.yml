@@ -64,16 +64,27 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Verify consent refusal and actual local English engine
+      - name: Verify native Audio Check protocol and five-second deadline
+        run: dotnet run -c Release --project tools/live_translate_runtime/tests/ProtocolSmoke.csproj
+      - name: Publish helper and verify Audio Check without the English model
         run: |
           $stage = Join-Path $env:RUNNER_TEMP 'sig4a-native-engine/live-translate'
           .\tools\live_translate_runtime\Publish.ps1 -Output $stage
+          .\tools\live_translate_runtime\Smoke.ps1 -Published $stage
+          .\tools\live_translate_runtime\AudioCheck-Smoke.ps1 -Published $stage -Scratch (Join-Path $env:RUNNER_TEMP 'sig4a-check-meter')
+      - name: Verify consent refusal and actual local English engine
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'sig4a-native-engine/live-translate'
           & (Join-Path $stage 'Provision-Model.ps1')
           $refused = $false
           try { & (Join-Path $stage 'Provision-Translation.ps1') }
           catch { $refused = $_.Exception.Message -match 'AcceptPublisherTerms' }
           if (!$refused -or (Test-Path (Join-Path $stage 'models/hymt'))) { throw 'Expected consent refusal before downloading optional assets.' }
           .\tools\live_translate_runtime\Inference-Smoke.ps1 -Published $stage -Scratch (Join-Path $env:RUNNER_TEMP 'sig4a-synthetic-product-engine')
+      - name: Verify optional English sample from isolated hosted playback
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'sig4a-native-engine/live-translate'
+          .\tools\live_translate_runtime\AudioCheck-Smoke.ps1 -Published $stage -Scratch (Join-Path $env:RUNNER_TEMP 'sig4a-check-en') -ExpectSample
       - name: Verify optional real Vietnamese engine on a confirmed eligible runner
         if: github.event_name == 'workflow_dispatch' && inputs.publisher_terms_confirmed == true
         run: |
