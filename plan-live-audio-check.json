@@ -1,7 +1,7 @@
 {
   "title": "Live Translate audio check before a meeting",
   "baseline": "a07f8737e1f0c5ee6239a937d84775f71b40da10",
-  "status": "in_progress",
+  "status": "passed",
   "scope": "A dedicated, opt-in five-second microphone or system-audio check in Tool Box > Live Translate. No model installer, Vietnamese inference or new providers in this feature.",
   "phases": [
     {
@@ -19,21 +19,36 @@
     },
     {
       "id": "runtime-and-ui",
-      "status": "in_progress",
+      "status": "passed",
       "acceptance": [
         "No capture until explicit Test Audio click. Test-only bounded native helper command/events; both native helper and dashboard/watchdog enforce bounded stop, including hung startup/inference. Shape, session identity, and measurement limits are validated.",
         "Five-second window once capture starts; user Stop, source change, page exit, and process exit stop capture earlier. No fallback source, passive capture, persistent recording or transcript, cloud use or automatic model download. No Vietnamese inference.",
         "Peak/audio-level updates are throttled and bounded. Meter-only still works when there is no English model. Missing device, silence, audible but unrecognized sound, and a local English sample are not conflated. Test state/sample is cleared on leaving, changing source, or new test."
-      ]
+      ],
+      "evidence": "Exact hosted WebView2 dedicated suite covered explicit start, source exclusivity, silent/model/English outcomes, missing companion, no automatic activation, hard Job deadline, immediate route exit, native release/idle, stale token and stale content. Wire fixtures require only explicit checks/stops. Native helper uses a conservative capture anchor and isolated deadline; stuck synthetic sampler using the production retirement decision exited without ACK."
     },
     {
       "id": "verification",
-      "status": "pending",
+      "status": "passed",
       "acceptance": [
         "Reviewer independently checks privacy, timeout/lease behavior, IPC validation, source exclusivity, state/sampling, and UI.",
         "Synthetic tests check audio level/silence, sample and missing-model states, no startup capture, one-click single active run, stop/exit/source change, stale events, and hard timeout. Windows CI tests native WebView2, actual offline English on generated audio, and extracted ZIP.",
         "Record the exact tested head and any absence of physical-device evidence in this JSON; merge only reviewed passing code."
-      ]
+      ],
+      "evidence": {
+        "tested_commit": "14e7b165469a3affa94a20f49d3d634522647df8",
+        "reviewed_tree": "91943535af1f500b9db4251bfc8267c511a687c3",
+        "reviewed_local_commit": "c74538aea444ef9d161b2c0dca61cf3c077fa1a6",
+        "windows_dashboard": "https://github.com/rua-den/sig4a/actions/runs/46055194368",
+        "windows_full": "https://github.com/rua-den/sig4a/actions/runs/46055194295",
+        "tests": {
+          "passed": 235,
+          "failed": 0,
+          "ignored": 1
+        },
+        "windows_zip": "https://github.com/rua-den/sig4a/actions/runs/46055194295/artifacts/15226286793",
+        "limitations": "Native English inference ran on generated offline audio. The hosted runner had no active playback endpoint, so actual WASAPI loopback and physical microphone/system audio were not verified. Playback SKIP is not a device pass."
+      }
     }
   ]
 }
