@@ -14,6 +14,16 @@ cargo build --locked --release --workspace
 .\target\release\claude-usage.exe
 ```
 
+Có thể build và đóng gói bản phát hành bằng script ở thư mục gốc repo:
+
+```powershell
+.\build.ps1
+```
+
+Nếu đang ở thư mục khác, gọi script bằng đường dẫn đầy đủ.
+
+Script đọc version từ `rust/Cargo.toml`, build workspace release và tạo `dist\sig4a-<version>-windows.zip`. Bên trong ZIP, hai file EXE vẫn giữ tên chuẩn để tray, dashboard và hook tìm thấy nhau khi đặt cạnh nhau.
+
 Giữ **`claude-usage.exe` và `claude-usage-dashboard.exe` cạnh nhau** khi chép sang thư mục khác. Chạy `claude-usage.exe` để mở tray, sau đó mở dashboard từ biểu tượng tray. Trang **Tổng quan** có các lối tắt. Giao diện mặc định đen–cam; dùng **Màu giao diện** trên thanh tiêu đề để chọn **Cam**, **Xanh** hoặc **Tím**. Màu được lưu cho lần mở sau. Khi thu hẹp cửa sổ, cuộn phần nội dung để tới các nút phía dưới.
 
 ## Phím tắt và công cụ văn bản
