@@ -7,6 +7,8 @@ mod api;
 mod geom;
 mod live;
 mod region;
+mod setup;
+mod setup_trust;
 mod win;
 
 use api::Core;
@@ -310,6 +312,9 @@ impl App {
             "open_toolbox" => Value::Bool(win::open_toolbox()),
             "state" => c.state(),
             "local_ai_settings" => c.local_ai_settings(),
+            "local_ai_setup_status" if !self.quick_mode && a.is_empty() => setup::status(),
+            "local_ai_setup_start" if !self.quick_mode && a.is_empty() => setup::start(),
+            "local_ai_setup_cancel" if !self.quick_mode && a.is_empty() => setup::cancel(),
             "test_notify" => c.flag(&c.paths.testflag),
             "refresh" => c.flag(&c.paths.flag),
             "hook_status" => c.hook_status(),
@@ -746,6 +751,12 @@ fn main() {
                     // Prove the watchdog can kill the helper with neither renderer beats
                     // nor dashboard event-loop progress. Never present in ordinary release.
                     std::thread::sleep(Duration::from_millis(4800));
+                    return;
+                }
+                // Native UI tests provide controlled JS bridge data. Never install a
+                // package or pull weights from a scripted E2E dashboard process.
+                if e2e.is_some() && matches!(m.as_str(), "local_ai_setup_start" | "local_ai_setup_cancel") {
+                    let _ = webview.evaluate_script(&bridge_result(id, Ok(json!({"accepted":false,"code":"test_disabled"}))));
                     return;
                 }
                 if m == "__quick_presented" {

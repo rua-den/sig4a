@@ -7,16 +7,23 @@
   "phases": [
     {
       "id": "diagnostics",
-      "status": "in_progress",
+      "status": "passed",
       "acceptance": [
         "Show effective provider/address/model, server reachability, current model installation, and OCR image capability as supported, unsupported, or unknown; describe specific next action.",
         "Use Ollama model metadata and a truthful llama.cpp advisory where reliable capability evidence is absent; never infer vision from a model name and do not transmit user content during checks.",
         "Official Ollama gemma4:e2b supports image input. Test the end-to-end image request path on generated content and distinguish metadata, loopback contract, and verified real Gemma inference."
-      ]
+      ],
+      "evidence": {
+        "code_review_commit": "1cdfe3bcad693dada12a927f07dd469fe191d328",
+        "tested_commit": "63c63ceaa687212dec273ae9fdf96363eca2502e",
+        "windows_run": "https://github.com/rua-den/sig4a/actions/runs/46038075774",
+        "windows_scope": "Native WebView2 clicked diagnostic and sample actions. Local fixture verified exact metadata-only POST, no Show for remote aliases, explicit synthetic PNG OCR request and no saved config changes. Dashboard API tests: 41 passed, 0 failed.",
+        "offline_model_smoke": "Real Gemma 4 E2B offline on Linux CPU with llama.cpp b12776, Q4_0 weights and Q8_0 image projector. English and Vietnamese synthetic screenshots read exactly in 3.565 and 5.270 seconds; dense sample normalized extra spaces. Not a Windows Ollama inference test."
+      }
     },
     {
       "id": "windows-setup",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "Explicit 'Cài phần còn thiếu' action describes source and multi-GB download, uses fixed official Ollama.Ollama WinGet package and local gemma4:e2b preset, only installs what is absent, with bounded steps and actionable progress/failures. Show the publisher, sources, and size before the click. Do not bypass integrity checks or silently accept unexpected agreements.",
         "Only reuse a verified Ollama listener, not any process on the default port. Otherwise report the conflict. Start by absolute path with a child-only 127.0.0.1 bind and no-cloud flag. Never kill or reconfigure an existing Ollama or claim its cloud setting has been verified.",

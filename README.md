@@ -135,3 +135,21 @@ llama.cpp có thể hiện “chưa xác định” vì danh sách model không 
 Chọn **Thử model với ảnh mẫu** để gửi riêng một ảnh do ứng dụng tạo sẵn và kiểm
 tra model đọc đúng câu mẫu; báo có hỗ trợ từ metadata không có nghĩa là ảnh đã
 được thử thành công.
+
+**Cài phần còn thiếu** chỉ chạy khi bạn bấm. SIG4A nhận diện Ollama chính thức
+(Ollama Inc.) từ vị trí cài per-user và chỉ dùng Microsoft App Installer / WinGet
+để cài gói `Ollama.Ollama` từ nguồn `winget` nếu thiếu. [Ollama cho Windows](https://docs.ollama.com/windows)
+cần ít nhất khoảng 4 GB sau khi cài; model `gemma4:e2b` tải thêm khoảng
+4,6 GB cho bản Q4 từ [kho Ollama](https://ollama.com/library/gemma4) nếu chưa có; kích thước có thể đổi theo tag. Thư mục model có thể nằm trên ổ khác.
+SIG4A không tự đồng ý điều khoản, không nâng cấp Ollama và không gửi dữ liệu
+OCR/dịch trong quá trình cài.
+
+Nếu cổng 11434 thuộc một tiến trình chưa xác minh, cài đặt dừng chứ không dừng
+hay cấu hình lại tiến trình đó. Server do SIG4A khởi động dùng 127.0.0.1 và
+`OLLAMA_NO_CLOUD=1` riêng cho tiến trình mới; với Ollama đã chạy sẵn, SIG4A
+không thay đổi hay xác nhận cài đặt cloud. Giữ cửa sổ mở khi cài. Nút hủy chỉ
+dừng tiến trình thuộc lượt cài hiện tại, không gỡ gói đã cài hay xóa file model.
+
+Sau khi sẵn sàng, **Chọn preset Gemma 4 E2B** chỉ đổi backend, endpoint và
+model trong màn hình cấu hình. Bấm **Lưu Local AI** nếu muốn lưu lựa chọn; prompt
+không cần thay đổi.

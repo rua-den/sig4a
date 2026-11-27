@@ -156,7 +156,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
 <section class="toolpanel" id="tool-grammar"><div class="box"><div class="lbl">GRAMMAR</div><label>Văn bản tiếng Anh<textarea id="grammar-in" placeholder="Dán văn bản cần kiểm tra..." spellcheck="true"></textarea></label><div class="toolactions"><button class="b p" id="grammar-run" onclick="runTool('grammar')">Kiểm tra</button><button class="b" id="grammar-copy" onclick="copyResult('grammar-out')" disabled>Sao chép</button></div><p id="grammar-status" class="hint text-status" role="status" data-state="idle">Nhập hoặc dán nội dung để bắt đầu.</p><button hidden class="b" id="grammar-recovery" onclick="openAiRecovery('grammar')">Cài đặt Local AI</button><div class="result" id="grammar-out" contenteditable="plaintext-only" data-valid="false" data-placeholder="Kết quả sẽ hiển thị ở đây." role="textbox" aria-label="Kết quả Grammar"></div></div></section>
  <section class="toolpanel" id="tool-translation"><div class="box"><div class="lbl">TRANSLATION</div><label>Văn bản<textarea id="translation-in" placeholder="Dán văn bản cần dịch..."></textarea></label><label style="max-width:240px;margin-top:8px">Ngôn ngữ đích<select id="translation-lang"><option value="vi">Tiếng Việt (mặc định)</option><option value="en">English</option></select></label><div class="toolactions"><button class="b p" id="translation-run" onclick="runTool('translation')">Dịch</button><button class="b" id="translation-copy" onclick="copyResult('translation-out')" disabled>Sao chép</button></div><p id="translation-status" class="hint text-status" role="status" data-state="idle">Nhập hoặc dán nội dung để bắt đầu.</p><button hidden class="b" id="translation-recovery" onclick="openAiRecovery('translation')">Cài đặt Local AI</button><div class="result" id="translation-out" contenteditable="plaintext-only" data-valid="false" data-placeholder="Kết quả sẽ hiển thị ở đây." role="textbox" aria-label="Kết quả Translation"></div></div></section>
  <section class="toolpanel" id="tool-ocr"><div class="box"><div class="lbl">OCR</div><p class="hint">Dán ảnh trực tiếp hoặc chụp vùng bằng nút bên dưới. Chỉ nhận PNG, JPEG, WebP (tối đa 6 MB).</p><textarea id="ocr-in" readonly placeholder="Chưa có ảnh — hãy dán ảnh hoặc chụp một vùng màn hình..." style="min-height:56px;margin-top:8px"></textarea><img id="ocr-preview" class="ocr-preview" alt="Xem trước ảnh OCR"><div class="toolactions"><button class="b" id="ocr-capture" onclick="captureOcr()">Chụp vùng màn hình</button><button class="b" id="ocr-remove" onclick="removeOcr()" disabled>Xoá ảnh</button><button class="b p" id="ocr-run" onclick="runTool('ocr')" disabled>Nhận chữ</button><button class="b" id="ocr-copy" onclick="copyResult('ocr-out')" disabled>Sao chép</button><button class="b" data-quick-translate onclick="translateOcr()" disabled>Dịch</button></div><span class="hint" id="ocr-status" role="status">Chưa có ảnh.</span><button hidden class="b" id="ocr-recovery" onclick="openAiRecovery('ocr')">Cài đặt Local AI</button><div class="result" id="ocr-out" contenteditable="true" role="textbox" aria-label="Kết quả OCR">Kết quả OCR sẽ hiển thị ở đây.</div><section class="ocr-inline" id="ocr-inline" aria-label="Bản dịch tiếng Việt" hidden><div class="lbl">Bản dịch tiếng Việt</div><div class="result" id="ocr-translation-out" tabindex="0" role="status"></div><div class="toolactions"><button class="b" id="ocr-translation-copy" onclick="copyResult('ocr-translation-out')" disabled>Sao chép bản dịch</button></div></section></div></section>
- <section class="toolpanel" id="tool-localai"><div class="box"><div class="lbl">LOCAL AI</div><label>Endpoint loopback<input id="ai-endpoint" type="text" value="http://127.0.0.1:11434"></label><label style="max-width:240px;margin-top:8px">Backend<select id="ai-backend"><option value="ollama">Ollama</option><option value="llama_cpp">llama.cpp server</option></select></label><label style="max-width:420px;margin-top:8px">Model<input id="ai-model" list="ai-models" value="hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0" autocomplete="off"><datalist id="ai-models"></datalist></label><div class="modelcard"><b>LiquidAI LFM2.5-VL-450M-GGUF</b><br><span class="hint">Ollama HF pattern Q4: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q4_K_M</code>; Q8: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0</code>.<br>llama.cpp chọn ID thực từ <code>/v1/models</code>; khởi chạy server ngoài với listen loopback và model path phù hợp.</span></div><div class="ai-prompts"><b>Prompt tùy chỉnh</b><p class="hint">Chỉ gửi tới model local đã chọn. Dùng {text} để chèn nội dung; prompt dịch cần có cả {target}. Mỗi prompt tối đa 8 KB.</p><label>Grammar<textarea id="ai-prompt-grammar" spellcheck="false"></textarea></label><label>Dịch<textarea id="ai-prompt-translation" spellcheck="false"></textarea></label><label>OCR<textarea id="ai-prompt-ocr" spellcheck="false"></textarea></label><div class="toolactions"><button class="b" id="ai-prompt-reset" type="button">Khôi phục prompt mặc định</button></div></div><div class="toolactions"><button class="b" id="ai-check" onclick="checkAi()">Kiểm tra thành phần</button><button class="b" id="model-list" onclick="listModels()">Lấy model</button><button class="b" id="ai-test" onclick="testAi()">Thử model với ảnh mẫu</button><button class="b p" id="ai-save" onclick="saveAi()">Lưu Local AI</button></div><div class="modelcard" id="ai-diagnostics"><b>Thành phần Local AI</b><div id="ai-diag-config" class="hint"></div><div id="ai-diag-server" class="hint"></div><div id="ai-diag-model" class="hint"></div><div id="ai-diag-ocr" class="hint"></div></div><div class="result" id="ai-status" role="status" data-state="unchecked">Chưa kiểm tra. Chọn backend, endpoint và model rồi kiểm tra.</div><div id="ai-save-status" role="status" class="hint"></div><button hidden class="b" id="ai-back" onclick="returnToAi()">Quay lại công cụ</button></div></section>
+ <section class="toolpanel" id="tool-localai"><div class="box"><div class="lbl">LOCAL AI</div><label>Endpoint loopback<input id="ai-endpoint" type="text" value="http://127.0.0.1:11434"></label><label style="max-width:240px;margin-top:8px">Backend<select id="ai-backend"><option value="ollama">Ollama</option><option value="llama_cpp">llama.cpp server</option></select></label><label style="max-width:420px;margin-top:8px">Model<input id="ai-model" list="ai-models" value="hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0" autocomplete="off"><datalist id="ai-models"></datalist></label><div class="modelcard"><b>LiquidAI LFM2.5-VL-450M-GGUF</b><br><span class="hint">Ollama HF pattern Q4: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q4_K_M</code>; Q8: <code>hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0</code>.<br>llama.cpp chọn ID thực từ <code>/v1/models</code>; khởi chạy server ngoài với listen loopback và model path phù hợp.</span></div><section id="ai-setup" class="modelcard" hidden><b>Cài Local AI trên Windows</b><p class="hint">Chỉ cài phần còn thiếu. Ollama chính thức (Ollama Inc.) từ Microsoft WinGet cần ít nhất khoảng 4 GB sau khi cài. Gemma 4 E2B từ kho Ollama tải khoảng 4,6 GB cho bản Q4 nếu chưa có; kích thước có thể thay đổi theo tag. Thư mục model có thể nằm trên ổ khác. Cần mạng và đĩa trống. Không gửi văn bản hay ảnh của bạn, không đổi model đang chọn. Giữ cửa sổ mở trong lúc cài.</p><div class="toolactions"><button class="b" id="ai-setup-start" onclick="startAiSetup()">Cài phần còn thiếu</button><button class="b" id="ai-setup-cancel" onclick="cancelAiSetup()" hidden>Hủy cài đặt</button><button class="b" id="ai-setup-apply" onclick="applyAiSetup()" hidden>Chọn preset Gemma 4 E2B</button></div><div id="ai-setup-status" role="status" class="hint"></div></section><div class="ai-prompts"><b>Prompt tùy chỉnh</b><p class="hint">Chỉ gửi tới model local đã chọn. Dùng {text} để chèn nội dung; prompt dịch cần có cả {target}. Mỗi prompt tối đa 8 KB.</p><label>Grammar<textarea id="ai-prompt-grammar" spellcheck="false"></textarea></label><label>Dịch<textarea id="ai-prompt-translation" spellcheck="false"></textarea></label><label>OCR<textarea id="ai-prompt-ocr" spellcheck="false"></textarea></label><div class="toolactions"><button class="b" id="ai-prompt-reset" type="button">Khôi phục prompt mặc định</button></div></div><div class="toolactions"><button class="b" id="ai-check" onclick="checkAi()">Kiểm tra thành phần</button><button class="b" id="model-list" onclick="listModels()">Lấy model</button><button class="b" id="ai-test" onclick="testAi()">Thử model với ảnh mẫu</button><button class="b p" id="ai-save" onclick="saveAi()">Lưu Local AI</button></div><div class="modelcard" id="ai-diagnostics"><b>Thành phần Local AI</b><div id="ai-diag-config" class="hint"></div><div id="ai-diag-server" class="hint"></div><div id="ai-diag-model" class="hint"></div><div id="ai-diag-ocr" class="hint"></div></div><div class="result" id="ai-status" role="status" data-state="unchecked">Chưa kiểm tra. Chọn backend, endpoint và model rồi kiểm tra.</div><div id="ai-save-status" role="status" class="hint"></div><button hidden class="b" id="ai-back" onclick="returnToAi()">Quay lại công cụ</button></div></section>
  <section class="toolpanel" id="tool-live">
   <div class="box">
    <div class="lbl">LIVE TRANSLATE · THỬ NGHIỆM</div>
@@ -706,7 +706,7 @@ const nativeLive=window.__SIG4A_RUST_LIVE__===true&&!window.__QUICK_MODE__;
 if(nativeLive){document.querySelector('.toolnav [data-tool=live]').hidden=false;$('shortcut-live-row').hidden=false}
 function toolTab(t){
  if(t==='live'&&!nativeLive)return;
- if(t==='localai')void refreshAiSettingsIfClean();
+ if(t==='localai')void refreshAiSettingsIfClean();else clearTimeout(setupTimer);
  const previousFocus=document.activeElement;
  const previousRoute=activeRoute;
  const route=t==='localai'?'settings':(t==='grammar'||t==='translation'||t==='ocr'?'ai':t);
@@ -724,6 +724,7 @@ function toolTab(t){
  if(!window.__QUICK_MODE__&&previousFocus!==document.body&&previousFocus?.getClientRects().length===0){
   document.querySelector('.toolnav [aria-current="page"]')?.focus({preventScroll:true});
  }
+ if(t==='localai')void pollAiSetup();
  fit(true)
 }
 // Only this view polls. Polling and navigating never request the helper to launch.
@@ -1118,10 +1119,10 @@ function aiError(code,ai,kind){
  return messages[code]||messages.bridge_error;
 }
 function setAiStatus(state,text){$('ai-status').dataset.state=state;setText('ai-status',text);fit()}
-function syncAiControls(){for(const id of ['ai-check','model-list','ai-test'])$(id).disabled=aiCheckBusy||aiSaveBusy;$('ai-save').disabled=aiCheckBusy||aiSaveBusy}
+function syncAiControls(){for(const id of ['ai-check','model-list','ai-test'])$(id).disabled=aiCheckBusy||aiSaveBusy;$('ai-save').disabled=aiCheckBusy||aiSaveBusy;renderAiSetup()}
 function resetAiCheck(clearModels){
  aiCheckGeneration++;if(clearModels)$('ai-models').replaceChildren();
- showAiDiagnostics({});setText('ai-save-status','');setAiStatus('unchecked','Cấu hình đã đổi. Kiểm tra lại endpoint và model.');
+ showAiDiagnostics({});renderAiSetup();setText('ai-save-status','');setAiStatus('unchecked','Cấu hình đã đổi. Kiểm tra lại endpoint và model.');
 }
 function openAiRecovery(kind){
  aiReturn={kind,quick:document.body.classList.contains('quick')};
@@ -1209,6 +1210,100 @@ $('ai-model').addEventListener('input',()=>{aiConfigDirty=true;if(!$('ai-managed
 $('ai-managed').addEventListener('change',()=>{aiConfigDirty=true;if($('ai-managed').checked){aiManual={endpoint:$('ai-endpoint').value,backend:$('ai-backend').value,model:$('ai-model').value}}renderAiMode();resetAiCheck(true)});
 for(const kind of Object.keys(defaultAiPrompts))$('ai-prompt-'+kind).addEventListener('input',()=>{aiConfigDirty=true;resetAiCheck(false)});
 $('ai-prompt-reset').addEventListener('click',()=>{applyAiPrompts(defaultAiPrompts);aiConfigDirty=true;resetAiCheck(false);toast('Đã khôi phục prompt mặc định. Bấm Lưu Local AI để lưu.');});
+let setupState={phase:'idle'},setupBusy=false,setupTimer=0,setupPoll=null,setupGen=null,setupRevision=0;
+const setupPhases={
+ idle:'Chưa chạy cài đặt.',checking:'Đang kiểm tra Ollama đã cài…',
+ installing:'Đang cài Ollama chính thức bằng WinGet…',starting_server:'Đang kiểm tra tiến trình Ollama và khởi động nếu cần…',
+ checking_model:'Đang kiểm tra Gemma 4 E2B local…',pulling:'Đang tải Gemma 4 E2B; có thể mất vài phút…',
+ ready:'Ollama và model local đã sẵn sàng.',external_busy:'Một cửa sổ SIG4A khác đang cài. Đợi cửa sổ đó hoàn tất.',
+ cancelled:'Đã yêu cầu dừng các tiến trình cài đặt do SIG4A khởi chạy.',
+};
+const setupErrors={
+ busy:'Một cửa sổ khác đã bắt đầu cài. Đợi rồi thử lại.',
+ winget_unavailable:'Không tìm được WinGet đã xác minh. Cài hoặc cập nhật App Installer từ Microsoft Store rồi thử lại.',
+ untrusted_ollama:'Không xác minh được chữ ký hoặc vị trí Ollama. Cài lại Ollama chính thức rồi thử.',
+ ollama_missing:'Không tìm thấy Ollama chính thức sau khi cài. Kiểm tra Ollama rồi thử lại.',
+ port_conflict:'Cổng 11434 không thuộc một Ollama đã xác minh chỉ nghe loopback. SIG4A không dừng hay đổi cài đặt của tiến trình đó.',
+ server_unavailable:'Ollama không còn lắng nghe ở 127.0.0.1:11434. Kiểm tra tiến trình rồi thử lại.',
+ server_failed:'Ollama không khởi động được. Kiểm tra log Ollama và thử lại.',
+ server_timeout:'Ollama chưa mở cổng sau 30 giây. Kiểm tra log Ollama và thử lại.',
+ install_timeout:'Cài Ollama quá thời gian chờ. Kiểm tra lại App Installer rồi thử.',
+ install_failed:'WinGet không cài được. Nếu cần chấp nhận điều khoản, xem và xử lý trực tiếp trong WinGet, rồi thử lại.',
+ model_check_failed:'Không đọc được danh sách hoặc metadata Gemma từ Ollama. Kiểm tra phiên bản Ollama và thử lại.',
+ model_conflict:'Đã có tag gemma4:e2b nhưng không xác nhận là model local có vision. SIG4A không tải ghi đè tag này.',
+ pull_failed:'Không tải được Gemma từ Ollama. Kiểm tra mạng và dung lượng trống, rồi thử lại.',
+ pull_timeout:'Tải Gemma quá 20 phút. Kiểm tra mạng rồi thử lại.',
+ model_not_found:'Đã chạy tải nhưng không thấy Gemma local. Kiểm tra Ollama và thử lại.',
+ process_start_failed:'Windows không khởi chạy được thành phần đã xác minh. Kiểm tra chính sách thiết bị.',
+ untrusted_executable:'Không xác minh được đường dẫn tuyệt đối. Không có tiến trình nào được chạy.',
+ elevated:'Hãy mở SIG4A không dùng Run as administrator rồi thử lại.',
+ elevation_unknown:'Không xác minh được quyền tiến trình. Mở SIG4A dưới tài khoản thường rồi thử lại.',
+ lock_unavailable:'Không tạo được khóa cài đặt. Mở lại SIG4A rồi thử.',
+ job_unavailable:'Windows không cho chạy thành phần trong tiến trình được kiểm soát. Cài Ollama thủ công từ nguồn chính thức.',
+ test_disabled:'Không cài thật trong bài kiểm thử.',
+};
+function renderAiSetup(){
+ const active=setupState.active===true,phase=setupState.phase,ready=phase==='ready';
+ $('ai-setup-start').disabled=active||setupBusy;
+ $('ai-setup-cancel').hidden=!setupState.can_cancel;
+ $('ai-setup-cancel').disabled=setupBusy;
+ $('ai-setup-apply').hidden=!ready;
+ $('ai-setup-apply').disabled=setupBusy||aiConfigDirty||aiSaveBusy||aiCheckBusy||setupGen!==aiCheckGeneration;
+ let label=setupPhases[phase]||setupErrors[setupState.code]||'Không hoàn tất được cài đặt. Mở lại SIG4A hoặc cài Ollama thủ công.';
+ if(ready)label+=setupState.started_server
+  ?' SIG4A đã khởi động server chỉ trên 127.0.0.1; chế độ cloud tắt ở tiến trình mới.'
+  :' Giữ nguyên server Ollama đang chạy; SIG4A không xác nhận cài đặt cloud của server đó.';
+ if(ready&&$('ai-setup-apply').disabled&&!setupBusy)label+=' Nếu vừa sửa cấu hình, hãy lưu và chạy kiểm tra cài đặt lại trước khi chọn preset.';
+ if(setupState.exit_code!=null)label+=' Mã Windows: 0x'+Number(setupState.exit_code).toString(16).toUpperCase()+'.';
+ $('ai-setup-status').dataset.phase=phase;
+ setText('ai-setup-status',label);
+}
+function aiSetupIsVisible(){return !window.__QUICK_MODE__&&$('tool-localai').classList.contains('on')}
+function pollAiSetup(){
+ clearTimeout(setupTimer);
+ if(!aiSetupIsVisible())return;
+ if(setupPoll)return setupPoll;
+ const rev=setupRevision;
+ setupPoll=(async()=>{
+  try{const result=await api.local_ai_setup_status();if(rev===setupRevision&&result&&typeof result.phase==='string')setupState=result}
+  catch(e){if(rev===setupRevision)setupState={phase:'failed',code:'bridge_error'}}
+  finally{
+   setupPoll=null;
+   renderAiSetup();
+   if(setupState.active&&aiSetupIsVisible())setupTimer=setTimeout(pollAiSetup,750);
+  }
+ })();
+ return setupPoll;
+}
+async function startAiSetup(){
+ if(!aiSetupIsVisible()||setupBusy||setupState.active)return;
+ setupBusy=true;setupRevision++;renderAiSetup();
+ try{
+  await refreshAiSettingsIfClean();
+  setupGen=aiCheckGeneration;
+  const result=await api.local_ai_setup_start();
+  if(result?.accepted)setupState={phase:'checking',active:true};
+  else setupState={phase:'failed',code:result?.code};
+ }catch(e){setupState={phase:'failed',code:'bridge_error'}}
+ finally{setupBusy=false;renderAiSetup()}
+ if(setupState.active||setupState.code==='busy')void pollAiSetup();
+}
+async function cancelAiSetup(){
+ if(!aiSetupIsVisible()||setupBusy||!setupState.can_cancel)return;
+ setupBusy=true;setupRevision++;renderAiSetup();
+ try{await api.local_ai_setup_cancel()}catch(e){}
+ finally{setupBusy=false;renderAiSetup();await setupPoll;void pollAiSetup()}
+}
+async function applyAiSetup(){
+ if(!aiSetupIsVisible()||setupBusy||setupState.phase!=='ready'||aiConfigDirty||aiSaveBusy||aiCheckBusy)return;
+ await refreshAiSettingsIfClean();
+ if(aiConfigDirty||aiSaveBusy||aiCheckBusy||setupGen!==aiCheckGeneration){renderAiSetup();return}
+ aiManual={endpoint:endpointDefaults.ollama,backend:'ollama',model:'gemma4:e2b'};
+ lastBackend='ollama';endpointTouched=false;$('ai-managed').checked=false;
+ aiConfigDirty=true;renderAiMode();resetAiCheck(true);
+ setText('ai-save-status','Đã chọn Gemma 4 E2B, chưa lưu. Bấm Lưu Local AI nếu muốn áp dụng.');
+}
+$('ai-setup').hidden=!!window.__QUICK_MODE__;
 const shortcutNames={toolbox:'Mở Tool Box',grammar:'Grammar',translation:'Translate',ocr:'OCR',live:'Live Translate'};
 function applyShortcuts(bindings){
  for(const [key,label] of Object.entries(bindings)){

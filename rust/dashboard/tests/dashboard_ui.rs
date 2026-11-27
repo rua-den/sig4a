@@ -674,6 +674,22 @@ fn dashboard_process_end_to_end() {
     drop(diagnostics);
     diagnostic_worker.join().unwrap();
 
+    // Exercise the one-click consent/status UI with a synthetic installer. The
+    // native e2e bridge separately refuses to start or cancel an actual setup.
+    let (setup_window, result) = run_script(
+        &local, &home, tmp.path(), "local-ai-setup",
+        concat!(r#"
+for (const action of ['local_ai_setup_start', 'local_ai_setup_cancel']) {
+  const response = await api[action]();
+  if (response?.accepted !== false || response?.code !== 'test_disabled') {
+    throw new Error('E2E must block production setup IPC: ' + action);
+  }
+}
+"#, include_str!("js/local_ai_setup.js")),
+    );
+    assert_eq!(result, json!({"local_ai_setup":true}), "{result}");
+    drop(setup_window);
+
     let log = fs::read_to_string(data.join("events.log")).unwrap_or_default();
     assert!(
         !log.contains("js error") && !log.contains("dashboard:"),
