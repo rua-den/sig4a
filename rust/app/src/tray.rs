@@ -44,7 +44,7 @@ const WM_ICON: u32 = WM_APP + 1;
 const WM_TOAST: u32 = WM_APP + 2;
 const WM_SHOW: u32 = hotkeys::OPEN_MESSAGE;
 const HOTKEY_ID_FIRST: i32 = 100;
-const HOTKEY_ID_END: i32 = HOTKEY_ID_FIRST + 8;
+const HOTKEY_ID_END: i32 = HOTKEY_ID_FIRST + (2 * hotkeys::COUNT) as i32;
 const MAX_SELECTION_BYTES: usize = 12 * 1024;
 
 pub const ID_OPEN: usize = 1;
@@ -115,7 +115,7 @@ struct State {
     shared: Arc<Shared>,
     hicon: isize,
     taskbar_created: u32,
-    hotkeys: [Option<Registered>; 4],
+    hotkeys: [Option<Registered>; hotkeys::COUNT],
     /// WinRT toast with our own AUMID (release only); false = tray balloon.
     winrt: bool,
 }
@@ -385,7 +385,9 @@ fn command(hwnd: HWND, st: &mut State, id: usize) {
 /// Open the dashboard: its own process (`claude-usage-dashboard.exe` next to this exe). A dashboard that is already
 /// open focuses itself and the new process exits, so repeated clicks never stack windows. A missing exe or
 /// WebView2 is reported with a message instead of a crash (the tray and the hook do not need either).
-fn open_dashboard(paths: &Paths) {
+fn open_dashboard(paths: &Paths) { open_dashboard_page(paths, false); }
+
+fn open_dashboard_page(paths: &Paths, live: bool) {
     use std::os::windows::process::CommandExt;
     log(paths, "open dashboard requested");
     if std::env::var_os("CU_NO_DASHBOARD").is_some() {
@@ -402,9 +404,9 @@ fn open_dashboard(paths: &Paths) {
         return;
     }
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let spawned = std::process::Command::new(&exe)
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
+    let mut command = std::process::Command::new(&exe);
+    if live { command.arg("--live-translate"); }
+    let spawned = command.creation_flags(CREATE_NO_WINDOW).spawn();
     match spawned {
         Ok(child) => {
             // SAFETY: grant only the child a chance to activate its dashboard.
@@ -498,7 +500,7 @@ impl State {
 
         // Acquire all new chords before relinquishing any old ones. A chord we already own
         // can move to a different action without registering it, so swaps are atomic too.
-        let mut next = [None; 4];
+        let mut next = [None; hotkeys::COUNT];
         let mut acquired: Vec<Registered> = Vec::new();
         for (i, chord) in bindings.into_iter().enumerate() {
             let Some(chord) = chord else { continue; };
@@ -735,6 +737,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             if let Some(i) = st.hotkeys.iter().position(|s| s.as_ref().is_some_and(matches)) {
                 if i == 0 {
                     open_dashboard(&st.paths);
+                } else if hotkeys::KEYS[i] == "live" {
+                    open_dashboard_page(&st.paths, true);
                 } else {
                     let foreground = GetForegroundWindow();
                     launch_quick_tool(&st.paths, hotkeys::KEYS[i], foreground as usize, st.shared.clone());
@@ -874,7 +878,7 @@ pub fn run(paths: Paths) -> i32 {
             shared: shared.clone(),
             hicon: 0,
             taskbar_created: RegisterWindowMessageW(wide("TaskbarCreated").as_ptr()),
-            hotkeys: [None; 4],
+            hotkeys: [None; hotkeys::COUNT],
             winrt: daemon::autostart_allowed()
                 && std::env::current_exe().is_ok_and(|e| crate::toast::register(&e)),
         }));

@@ -5,6 +5,7 @@
 
 mod api;
 mod geom;
+mod live;
 mod region;
 mod win;
 
@@ -34,6 +35,7 @@ enum Ev {
     Call(u64, String, Vec<Value>),
     Done(u64, Result<Value, String>),
     QuickTool(String, String),
+    OpenLive,
     OcrDone(Option<u64>, Result<Option<region::Capture>, String>),
 }
 
@@ -114,6 +116,10 @@ unsafe extern "system" fn quick_subclass(
     _id: usize,
     data: usize,
 ) -> isize {
+    if msg == cu_core::hotkeys::LIVE_OPEN_MESSAGE && data != 0 {
+        let _ = (&*(data as *const EventLoopProxy<Ev>)).send_event(Ev::OpenLive);
+        return 1;
+    }
     if msg == WM_COPYDATA && data != 0 && lp != 0 {
         let cds = &*(lp as *const COPYDATASTRUCT);
         if cds.dwData == 0x4b5442 && cds.cbData <= 32 * 1024 && !cds.lpData.is_null() {
@@ -151,6 +157,9 @@ struct App {
     anchored: bool,
     geo: Geo,
     ready: bool,
+    live: live::Live,
+    live_page: bool,
+    live_pending: bool,
     quick_pending: Option<(String, String)>,
     /// `--e2e` result path: multi-stage scripts hand control to the test through `<out>.<stage>` files.
     #[cfg(any(debug_assertions, feature = "e2e"))]
@@ -181,6 +190,7 @@ impl App {
     /// `hide`: hide at once (feels instant), save the size, end the process.
     fn close(&mut self) -> ! {
         win::hide(self.hwnd);
+        self.live.close();
         if !self.quick_mode { self.persist_now(); }
         win::terminate()
     }
@@ -200,7 +210,7 @@ impl App {
             "shortcut_status" => {
                 use cu_core::hotkeys as hk;
                 match win::tray_call(hk::STATUS_MESSAGE, None) {
-                    Some(n) if (hk::STATUS..hk::STATUS + 16).contains(&n) => json!({"code":"ok","unavailable":n - hk::STATUS}),
+                    Some(n) if (hk::STATUS..hk::STATUS + hk::STATUS_COUNT).contains(&n) => json!({"code":"ok","unavailable":n - hk::STATUS}),
                     Some(hk::DISABLED) => json!({"code":"disabled"}),
                     _ => json!({"code":"tray"}),
                 }
@@ -216,9 +226,24 @@ impl App {
                     Some(hk::OK) => json!({"code":"ok","bindings":bindings}),
                     Some(hk::IO_ERROR) => json!({"code":"io"}),
                     Some(hk::DISABLED) => json!({"code":"disabled"}),
-                    Some(n) if (hk::CONFLICT..hk::CONFLICT + 4).contains(&n) => json!({"code":"conflict","action":hk::KEYS[n - hk::CONFLICT]}),
+                    Some(n) if (hk::CONFLICT..hk::CONFLICT + hk::COUNT).contains(&n) => json!({"code":"conflict","action":hk::KEYS[n - hk::CONFLICT]}),
                     _ => json!({"code":"tray"}),
                 }
+            }
+            "live_view" if !self.quick_mode => {
+                self.live_page = a.first().and_then(Value::as_bool).unwrap_or(false);
+                if !self.live_page {
+                    self.live.stop(false);
+                    win::set_topmost(self.hwnd, false);
+                }
+                self.live.call("live_state", &Value::Null)
+            }
+            "live_pin" if !self.quick_mode && self.live_page => {
+                win::set_topmost(self.hwnd, a.first().and_then(Value::as_bool).unwrap_or(false));
+                Value::Bool(true)
+            }
+            "live_list" | "live_start" | "live_stop" | "live_pause" | "live_state" if !self.quick_mode && self.live_page => {
+                self.live.call(m, a.first().unwrap_or(&Value::Null))
             }
             "open_toolbox" => Value::Bool(win::open_toolbox()),
             "state" => c.state(),
@@ -393,6 +418,7 @@ fn main() {
     };
     let quick = quick_tool();
     let quick_mode = quick.is_some();
+    let startup_live = !quick_mode && std::env::args().nth(1).as_deref() == Some("--live-translate");
     let startup_ocr = quick.as_ref().is_some_and(|(tool, _)| tool == "ocr");
     let instance_class = if quick_mode { win::QUICK_CLASS } else { win::CLASS };
     if let Some(existing) = win::find_existing(instance_class) {
@@ -403,7 +429,12 @@ fn main() {
         }
         // A quick process owns its visibility. In particular a timeout sending
         // WM_COPYDATA while the first picker is active must not unhide that HWND.
-        if !quick_mode { win::focus(existing); }
+        if !quick_mode {
+            if startup_live {
+                win::request_live_page(existing);
+            }
+            win::focus(existing);
+        }
         return;
     }
     let exe = std::env::current_exe().unwrap_or_default();
@@ -512,6 +543,9 @@ fn main() {
             persist_at: None,
         },
         ready: false,
+        live: live::Live::default(),
+        live_page: false,
+        live_pending: startup_live,
         quick_pending: quick.filter(|(tool, _)| tool != "ocr"),
         #[cfg(any(debug_assertions, feature = "e2e"))]
         e2e_out: e2e.as_ref().map(|(_, o)| o.clone()),
@@ -532,6 +566,9 @@ fn main() {
 
     event_loop.run(move |event, _, flow| {
         match event {
+            Event::UserEvent(Ev::OpenLive) => {
+                if !app.quick_mode { app.live_pending = true; }
+            }
             Event::UserEvent(Ev::QuickTool(tool, text)) => {
                 if tool == "ocr" {
                     if !present.awaiting_render() && start_capture(None, &window, &proxy) {
@@ -678,6 +715,11 @@ fn main() {
         // A quick OCR panel can only open after the picker has closed. Keep it
         // hidden during capture, even if WebView initialization exceeds the timeout.
         let capturing = OCR_BUSY.load(Ordering::Acquire);
+        app.live.tick(Instant::now());
+        if app.ready && app.live_pending && !capturing {
+            app.live_pending = false;
+            let _ = webview.evaluate_script("toolTab('live')");
+        }
 
         if app.ready && !capturing {
             if let Some((tool, text)) = app.quick_pending.take() {
@@ -739,6 +781,10 @@ fn main() {
             app.persist_now();
         }
         let mut next: Option<Instant> = app.geo.persist_at;
+        if app.live.active_worker() {
+            let t = Instant::now() + Duration::from_millis(25);
+            next = Some(next.map_or(t, |n| n.min(t)));
+        }
         if let Some(t) = present.deadline {
             next = Some(next.map_or(t, |n| n.min(t)));
         }

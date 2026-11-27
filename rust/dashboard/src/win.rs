@@ -157,6 +157,11 @@ pub fn install_quick_subclass(hwnd: isize, proc: SUBCLASSPROC, data: usize) -> b
     unsafe { SetWindowSubclass(h(hwnd), proc, 1, data) != 0 }
 }
 
+pub fn request_live_page(hwnd: isize) {
+    // This only selects a page; it doesn't carry settings or start a session.
+    unsafe { PostMessageW(hwnd as _, cu_core::hotkeys::LIVE_OPEN_MESSAGE, 0, 0); }
+}
+
 pub fn send_quick(hwnd: isize, payload: &[u8]) -> bool {
     if payload.len() > 32 * 1024 {
         return false;
