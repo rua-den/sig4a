@@ -1,12 +1,39 @@
 {
   "title": "Readable Claude Usage dashboard and remapped tool shortcut verification",
   "baseline": "92f96bfcec8146fe224ae2e26923cea1a052a4e9",
-  "status": "in_progress",
+  "status": "passed",
   "acceptance": [
-    {"id":"USAGELAYOUT-1","case":"Consistent account layout, color-coded quota tracks with numeric labels, separately grouped resets and status, compact stable display under long names/updates at normal and narrow Windows widths.","status":"pending"},
-    {"id":"USAGELAYOUT-2","case":"Keep actual account sorting, loading/empty/stale/error/available states, retry, hooks and all usage actions intact and accessible. Real WebView2 regressions and native screenshot evidence.","status":"pending"},
-    {"id":"USAGELAYOUT-3","case":"From actual Windows settings remap Grammar, Translate and OCR, verify new physical chords invoke the right tool and old chords no longer invoke them, then restart tray and prove settings persisted. Prior Tool Box remap independently verified.","status":"pending"}
+    {
+      "id": "USAGELAYOUT-1",
+      "case": "Consistent account layout, color-coded quota tracks with numeric labels, separately grouped resets and status, compact stable display under long names/updates at normal and narrow Windows widths.",
+      "status": "passed",
+      "evidence": "Native ordinary Windows dashboard, 780 and 420 logical px, visibly aligned 5h/7d meter labels, real screenshots, and real WebView2 geometry/refresh stability checks: https://github.com/rua-den/sig4a/actions/runs/45947210827/job/140334545741 ; https://github.com/rua-den/sig4a/actions/runs/45947210827/job/140334545523"
+    },
+    {
+      "id": "USAGELAYOUT-2",
+      "case": "Keep actual account sorting, loading/empty/stale/error/available states, retry, hooks and all usage actions intact and accessible. Real WebView2 regressions and native screenshot evidence.",
+      "status": "passed",
+      "evidence": "Native WebView2 layout/legacy/responsive plus full locked Windows suite (206 passed, 0 failed, 1 pre-existing optional ignored); native stale/cache/HTTP-error/control proof and standard required build smoke: https://github.com/rua-den/sig4a/actions/runs/45947210827/job/140334545523 ; https://github.com/rua-den/sig4a/actions/runs/45947210827/job/140334545741 ; https://github.com/rua-den/sig4a/actions/runs/45946472741/job/140332208440"
+    },
+    {
+      "id": "USAGELAYOUT-3",
+      "case": "From actual Windows settings remap Grammar, Translate and OCR, verify new physical chords invoke the right tool and old chords no longer invoke them, then restart tray and prove settings persisted. Prior Tool Box remap independently verified.",
+      "status": "passed",
+      "evidence": "Ordinary current release: real Settings saves Ctrl+Shift+F6/F7/F8, new physical chords produce Grammar/Translate/OCR with actual external selection or physical PNG crop/copy, old chords release and do not open windows, same result after tray restart: https://github.com/rua-den/sig4a/actions/runs/45947210827/job/140334545670"
+    }
   ],
-  "advisor":{"status":"pending"},
-  "gate":{"status":"pending","rule":"Record only verified cases and merge only on exact Advisor review plus Windows coverage."}
+  "advisor": {
+    "status": "approved",
+    "evidence": "Independent GPT-6.2 Astra approved exact tree ac77e7473fd9e6c4f48805a42c54ace570814b77; Windows conditions subsequently passed."
+  },
+  "gate": {
+    "status": "passed",
+    "rule": "Record only verified cases and merge only on exact Advisor review plus Windows coverage.",
+    "closed_at": "2026-11-27T05:51:23.511Z"
+  },
+  "tested_product": "7f154f4580d238ebe805a0b281f343a4d3683f78",
+  "limitations": [
+    "Ordinary release tested on hosted Windows, not on the user's PC.",
+    "Synthetic Usage data and deterministic local model outputs isolate the UI, global shortcut, and clipboard paths."
+  ]
 }
