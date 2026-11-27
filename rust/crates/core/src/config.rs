@@ -27,7 +27,7 @@ pub fn defaults() -> Config {
         "widget_show_reset5": true, "widget_show_reset7": true, "widget_tooltip": true,
         "widget_label": "alias", "widget_font": 100, "widget_opacity": 100,
         "widget_theme": "auto", "widget_plate": false, "widget_hidden": [], "widget_style": "rings",
-        "widget_layout": "auto", "cleaner_roots": [], "cleaner_skip_recent_days": 0, "cleaner_dups_min_kb": 0,
+        "widget_layout": "auto", "ocr_popup_always_on_top": true, "cleaner_roots": [], "cleaner_skip_recent_days": 0, "cleaner_dups_min_kb": 0,
         "widget_cx": null, "widget_cy": null, "widget_angle": 0.0
     });
     match v {
@@ -78,6 +78,13 @@ pub fn get_f64(cfg: &Config, key: &str, default: f64) -> f64 {
 /// Bool with Python truthiness when the key is present (`if cfg.get(k)`), `default` when missing.
 pub fn get_bool(cfg: &Config, key: &str, default: bool) -> bool {
     cfg.get(key).map_or(default, truthy)
+}
+
+/// A missing or malformed value preserves the default: keep the OCR popup on top.
+pub fn ocr_popup_always_on_top(cfg: &Config) -> bool {
+    cfg.get("ocr_popup_always_on_top")
+        .and_then(Value::as_bool)
+        .unwrap_or(true)
 }
 
 /// String value, else `default`.
@@ -217,4 +224,21 @@ pub fn save_config_with(
         thread_num()
     ));
     atomic_write(&paths.config, &tmp, &text, attempts, delay)
+}
+
+
+#[cfg(test)]
+mod ocr_popup_tests {
+    use super::*;
+
+    #[test]
+    fn ocr_popup_topmost_defaults_on_and_only_explicit_false_disables_it() {
+        assert!(ocr_popup_always_on_top(&Config::new()));
+        let mut cfg = defaults();
+        assert_eq!(cfg["ocr_popup_always_on_top"], true);
+        for (value, expected) in [(json!(false), false), (json!(true), true), (json!("false"), true), (Value::Null, true)] {
+            cfg.insert("ocr_popup_always_on_top".into(), value);
+            assert_eq!(ocr_popup_always_on_top(&cfg), expected);
+        }
+    }
 }

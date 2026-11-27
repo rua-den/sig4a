@@ -36,6 +36,22 @@ pub fn rect(hwnd: isize) -> [i32; 4] {
     [r.left, r.top, r.right - r.left, r.bottom - r.top]
 }
 
+/// Change only the z-order band of our quick window, without activating it.
+pub fn set_topmost(hwnd: isize, on: bool) {
+    // SAFETY: using our own HWND, with flags that preserve its geometry and activation.
+    unsafe {
+        SetWindowPos(
+            h(hwnd),
+            if on { HWND_TOPMOST } else { HWND_NOTOPMOST },
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        );
+    }
+}
+
 /// SetWindowPos(NOZORDER | NOACTIVATE): never shows a hidden window (the page sizes it first).
 pub fn place(hwnd: isize, r: [i32; 4]) {
     // SAFETY: plain call on our own window.
