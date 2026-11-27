@@ -1,0 +1,55 @@
+name: SIG4A exact native Tool Box verification
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/toolbox-proof.yml', '.github/toolbox-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: 5ff45a76f33bc1459530fefc65d0a6d7d23a75fd
+jobs:
+  native-toolbox:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - working-directory: product/rust
+        name: Ordinary locked release, no test-only feature
+        run: cargo build --locked --release --workspace
+      - name: Real desktop global keys, selection, focus, and clipboard
+        shell: pwsh
+        run: ./proof/.github/toolbox-proof/native.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: toolbox-native-screenshots
+          path: evidence/*.png
+          if-no-files-found: ignore
+  locked-workspace:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          persist-credentials: false
+      - working-directory: rust
+        name: All locked tests including native dashboard integrations
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne $env:PRODUCT_SHA) { throw 'wrong product revision' }
+          $old=(Get-TimeZone).Id
+          try {
+            Set-TimeZone -Id 'SE Asia Standard Time'
+            cargo test --locked --workspace -- --test-threads=1 --show-output
+            $code=$LASTEXITCODE
+          } finally { Set-TimeZone -Id $old }
+          exit $code
