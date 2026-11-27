@@ -4,6 +4,7 @@
 #![windows_subsystem = "windows"]
 
 mod api;
+mod diagnostics_export;
 mod geom;
 mod live;
 mod region;
@@ -42,6 +43,7 @@ const LIVE_LEASE: Duration = Duration::from_secs(3);
 
 enum Ev {
     Call(u64, String, Vec<Value>),
+    DiagnosticsPreview { id: u64, valid_args: bool },
     Done(u64, Result<Value, String>),
     QuickTool(String, String),
     OpenLive,
@@ -614,6 +616,12 @@ fn main() {
             if let Ok(v) = serde_json::from_str::<Value>(req.body()) {
                 let id = v["id"].as_u64().unwrap_or(0);
                 let m = v["m"].as_str().unwrap_or("").to_string();
+                if m == "diagnostics_export_preview" {
+                    let _ = handler_proxy.send_event(Ev::DiagnosticsPreview {
+                        id, valid_args: diagnostics_export::has_exact_empty_args(&v),
+                    });
+                    return;
+                }
                 let a = v["a"].as_array().cloned().unwrap_or_default();
                 let _ = handler_proxy.send_event(Ev::Call(id, m, a));
             }
@@ -737,6 +745,16 @@ fn main() {
                             }
                         }
                     }
+                }
+            }
+            Event::UserEvent(Ev::DiagnosticsPreview { id, valid_args }) => {
+                if id != 0 {
+                    let reply = if !valid_args || app.quick_mode {
+                        Err("diagnostics_unavailable".into())
+                    } else {
+                        diagnostics_export::preview()
+                    };
+                    let _ = webview.evaluate_script(&bridge_result(id, reply));
                 }
             }
             Event::UserEvent(Ev::Done(id, r)) => {
