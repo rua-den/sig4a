@@ -8,6 +8,8 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <InternalsVisibleTo Include="Sig4a.LiveTranslate.InferenceSmoke" />
     <EmbeddedResource Include="translation-assets.json" LogicalName="Sig4a.TranslationAssets" />
     <PackageReference Include="NAudio.Wasapi" Version="[2.2.1]" />
     <PackageReference Include="org.k2fsa.sherpa.onnx" Version="[1.12.30]" />

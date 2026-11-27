@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Channels;
 
-sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
+sealed class OfflineTranslation(Action<long, string, string> translated, Action unavailable, CancellationToken sessionToken)
 {
     const string Engine = "sig4a-hymt";
     const string Model = "HY-MT1.5-1.8B-Q4_K_M.gguf";
@@ -18,6 +18,7 @@ sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
     readonly Channel<(long Seq, string En)> queue = Channel.CreateBounded<(long, string)>(
         new BoundedChannelOptions(1) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.DropOldest });
     internal bool Released { get; private set; } = true;
+    internal event Action? InferenceDispatched;
 
     internal void Enqueue(long seq, string en) => queue.Writer.TryWrite((seq, en));
 
@@ -27,6 +28,11 @@ sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
         string runtime = Path.Combine(path, "runtime");
         foreach (string dir in new[] { Path.GetDirectoryName(path)!, path, runtime })
             if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) throw new IOException();
+        var acceptance = new FileInfo(Path.Combine(path, "publisher-terms.accepted"));
+        if (!acceptance.Exists || acceptance.Length != 64 ||
+            (acceptance.Attributes & FileAttributes.ReparsePoint) != 0 ||
+            await File.ReadAllTextAsync(acceptance.FullName, ct) != "d7d9db858500ac9073f4b5decef8e208454357226f535f65079ce4376047569f")
+            throw new IOException();
         using var pins = typeof(OfflineTranslation).Assembly.GetManifestResourceStream("Sig4a.TranslationAssets")
             ?? throw new IOException();
         using var json = await JsonDocument.ParseAsync(pins, cancellationToken: ct);
@@ -77,9 +83,15 @@ sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
                          k.StartsWith("LLAMA_", StringComparison.OrdinalIgnoreCase) ||
                          k.StartsWith("GGML_", StringComparison.OrdinalIgnoreCase) ||
                          k.EndsWith("_PROXY", StringComparison.OrdinalIgnoreCase))) cfg.Environment.Remove(key);
+            // The pinned server reads LLAMA_API_KEY in b12776. Never put the
+            // ephemeral credential in argv, stdout, config files or user settings.
+            string secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            cfg.Environment["LLAMA_API_KEY"] = secret;
             cfg.Environment["PATH"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32");
             foreach (var arg in new[] { "--host", "127.0.0.1", "--port", port.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                         "--alias", Engine, "-ngl", "0", "-t", "4", "-c", "2048", "-np", "1", "--no-webui",
+                         "--alias", Engine, "-ngl", "0", "-t", "4", "-c", "2048", "-np", "1", "--no-webui", "--no-ui-mcp-proxy",
+                         "--offline", "--no-slots", "--no-cache-prompt", "--cache-ram", "0",
+                         "--no-context-shift", "--log-disable", "--timeout", "6",
                          "-m", Path.Combine(path, Model) })
                 cfg.ArgumentList.Add(arg);
             sessionToken.ThrowIfCancellationRequested();
@@ -121,6 +133,23 @@ sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
                 }
             }
 
+            using (var check = CancellationTokenSource.CreateLinkedTokenSource(sessionToken))
+            {
+                check.CancelAfter(TimeSpan.FromSeconds(3));
+                // Test the actual child, without including any microphone text.
+                // Admit content only if an unauthenticated inference request is denied.
+                using var denied = await client.PostAsync("/v1/chat/completions",
+                    JsonContent(new { messages = Array.Empty<object>() }), check.Token);
+                if (denied.StatusCode is not (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden))
+                    throw new IOException();
+                client.DefaultRequestHeaders.Authorization = new("Bearer", secret);
+                foreach (var route in new[] { "/slots", "/metrics" })
+                {
+                    using var probe = await client.GetAsync(route, HttpCompletionOption.ResponseHeadersRead, check.Token);
+                    if (probe.IsSuccessStatusCode) throw new IOException();
+                }
+            }
+
             await foreach (var job in queue.Reader.ReadAllAsync(sessionToken))
             {
                 using var deadline = CancellationTokenSource.CreateLinkedTokenSource(sessionToken);
@@ -135,7 +164,9 @@ sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
                         repeat_penalty = 1.05, seed = 7301, cache_prompt = false
                     })
                 };
-                using var result = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+                var pending = client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+                InferenceDispatched?.Invoke();
+                using var result = await pending;
                 result.EnsureSuccessStatusCode();
                 using var body = await result.Content.ReadAsStreamAsync(deadline.Token);
                 var bytes = new byte[32_769];
@@ -144,12 +175,12 @@ sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
                 using var json = JsonDocument.Parse(bytes.AsMemory(0, got), new() { MaxDepth = 12 });
                 var choice = json.RootElement.GetProperty("choices")[0];
                 if (choice.GetProperty("finish_reason").GetString() != "stop") continue;
-                if (choice.GetProperty("message").GetProperty("content").GetString() is { } vi && vi.Trim().Length != 0)
-                    Program.Translated(owner, job.Seq, job.En, vi);
+                if (!sessionToken.IsCancellationRequested && choice.GetProperty("message").GetProperty("content").GetString() is { } vi && vi.Trim().Length != 0)
+                    translated(job.Seq, job.En, vi);
             }
         }
         catch (OperationCanceledException) when (sessionToken.IsCancellationRequested) { }
-        catch (Exception) { Program.TranslatorUnavailable(owner); }
+        catch (Exception) { unavailable(); }
         finally
         {
             if (process is not null)
@@ -157,11 +188,11 @@ sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
                 try
                 {
                     if (!process.HasExited) process.Kill(entireProcessTree: true);
-                    using var reaper = new CancellationTokenSource(2000);
+                    using var reaper = new CancellationTokenSource(1200);
                     await process.WaitForExitAsync(reaper.Token);
                     Released = true;
                     if (consumeOut is not null && consumeErr is not null)
-                        await Task.WhenAny(Task.WhenAll(consumeOut, consumeErr), Task.Delay(300));
+                        await Task.WhenAny(Task.WhenAll(consumeOut, consumeErr), Task.Delay(100));
                 }
                 catch (Exception) { Released = false; }
                 finally { process.Dispose(); }
@@ -176,7 +207,7 @@ sealed class OfflineTranslation(Session owner, CancellationToken sessionToken)
         return content;
     }
 
-    static async ValueTask<Stream> OwnedSocket(Process process, int port, CancellationToken ct)
+    internal static async ValueTask<Stream> OwnedSocket(Process process, int port, CancellationToken ct)
     {
         var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         try

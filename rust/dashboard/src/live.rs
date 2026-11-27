@@ -5,12 +5,12 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::os::windows::{io::{AsRawHandle, FromRawHandle, OwnedHandle}, process::CommandExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{self, Receiver, SyncSender, TryRecvError}};
+use std::sync::{Arc, Condvar, Mutex, atomic::{AtomicBool, Ordering}, mpsc::{self, Receiver, SyncSender, TryRecvError}};
 use std::time::{Duration, Instant};
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_ALREADY_EXISTS, INVALID_HANDLE_VALUE},
     System::{Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Thread32First, Thread32Next, THREADENTRY32, TH32CS_SNAPTHREAD},
-        JobObjects::{AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject, JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE},
+        JobObjects::{AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject, TerminateJobObject, JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE},
         Threading::{CreateMutexW, OpenThread, ResumeThread, CREATE_NO_WINDOW, CREATE_SUSPENDED, THREAD_SUSPEND_RESUME}},
 };
 
@@ -167,6 +167,37 @@ fn assign_and_resume(child: &Child, job: &OwnedHandle) -> io::Result<()> {
     }
 }
 
+
+#[derive(Default)]
+struct Watch {
+    deadline: Option<(Instant, &'static str)>,
+    exit: bool,
+    tripped: Option<&'static str>,
+}
+type WatchState = Arc<(Mutex<Watch>, Condvar)>;
+
+fn monitor(job: OwnedHandle, state: WatchState) {
+    let (lock, wake) = &*state;
+    let mut guard = lock.lock().unwrap();
+    loop {
+        if guard.exit { return; }
+        match guard.deadline {
+            None => guard = wake.wait(guard).unwrap(),
+            Some((end, code)) if Instant::now() >= end => {
+                guard.tripped = Some(code);
+                drop(guard);
+                // Independent of Tao/WebView progress; every process in this Job is terminated.
+                unsafe { TerminateJobObject(job.as_raw_handle() as _, 1); }
+                return;
+            }
+            Some((end, _)) => {
+                let remaining = end.saturating_duration_since(Instant::now());
+                guard = wake.wait_timeout(guard, remaining).unwrap().0;
+            }
+        }
+    }
+}
+
 struct Helper {
     // A local-session singleton also covers two dashboards raced before their HWNDs exist.
     _singleton: OwnedHandle,
@@ -175,6 +206,7 @@ struct Helper {
     send: SyncSender<Value>,
     receive: Receiver<Message>,
     broken: Arc<AtomicBool>,
+    watch: WatchState,
 }
 impl Helper {
     fn open() -> Result<Self, &'static str> {
@@ -189,6 +221,7 @@ impl Helper {
             owner
         };
         let job = job().map_err(|_| "internal")?;
+        let monitor_job = job.try_clone().map_err(|_| "internal")?;
         let mut child = Command::new(&exe)
             .current_dir(exe.parent().ok_or("backend_missing")?)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
@@ -224,7 +257,20 @@ impl Helper {
             }
             read_failed.store(true, Ordering::Release);
         });
-        Ok(Self {_singleton:singleton, job:Some(job), child, send, receive, broken})
+        let watch = Arc::new((Mutex::new(Watch::default()), Condvar::new()));
+        let watcher = watch.clone();
+        std::thread::spawn(move || monitor(monitor_job, watcher));
+        Ok(Self {_singleton:singleton, job:Some(job), child, send, receive, broken, watch})
+    }
+
+    fn arm(&self, deadline: Option<(Instant, &'static str)>) {
+        let (lock, wake) = &*self.watch;
+        lock.lock().unwrap().deadline = deadline;
+        wake.notify_one();
+    }
+
+    fn tripped(&self) -> Option<&'static str> {
+        self.watch.0.lock().unwrap().tripped
     }
 
     fn shutdown(&mut self, grace: Duration) {
@@ -237,8 +283,13 @@ impl Helper {
                 std::thread::sleep(Duration::from_millis(10));
             }
         }
-        // Closing the sole non-inheritable job handle kills the whole process tree.
-        drop(self.job.take());
+        // Both handles live only in the dashboard. Explicit termination also
+        // covers an independent watchdog that still owns the duplicate.
+        if let Some(job) = self.job.take() {
+            unsafe { TerminateJobObject(job.as_raw_handle() as _, 1); }
+        }
+        self.watch.0.lock().unwrap().exit = true;
+        self.watch.1.notify_one();
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
@@ -269,6 +320,7 @@ pub struct Live {
     phase: Phase,
     pause: bool,
     deadline: Option<Instant>,
+    renderer_deadline: Option<Instant>,
     generation: u64,
     translate: bool,
     caption: Caption,
@@ -278,7 +330,7 @@ pub struct Live {
 impl Default for Live {
     fn default() -> Self {
         Self {helper:None,devices:Vec::new(),listing:None,phase:Phase::Idle,pause:false,deadline:None,
-            generation:0,translate:false,caption:Caption::default(),code:None}
+            renderer_deadline:None,generation:0,translate:false,caption:Caption::default(),code:None}
     }
 }
 
@@ -293,7 +345,22 @@ impl Live {
                 Err(code) => { self.fail(code); return; }
             }
         }
-        if self.helper.as_ref().unwrap().send.try_send(message).is_err() { self.fail("protocol_error"); }
+        let helper = self.helper.as_ref().unwrap();
+        match self.phase {
+            Phase::Starting => {
+                // Arm before the first Start byte can reach the suspended/Job-bound helper.
+                let Some(lease) = self.renderer_deadline else { self.fail("view_lost"); return; };
+                helper.arm(Some((lease, "view_lost")));
+            }
+            Phase::Stopping => {
+                let stop = self.deadline.expect("Stopping phase has bounded ACK time");
+                let lease = self.renderer_deadline.unwrap_or(stop);
+                if lease <= stop { helper.arm(Some((lease, "view_lost"))); }
+                else { helper.arm(Some((stop, "timeout"))); }
+            }
+            _ => {}
+        }
+        if helper.send.try_send(message).is_err() { self.fail("protocol_error"); }
     }
 
     fn fail(&mut self, code: &'static str) {
@@ -303,6 +370,21 @@ impl Live {
         self.deadline = None;
         self.caption = Caption::default();
         self.code = Some(code);
+    }
+
+    pub fn renew_view(&mut self, deadline: Instant) {
+        self.renderer_deadline = Some(deadline);
+        if matches!(self.phase, Phase::Starting | Phase::Listening) {
+            if let Some(helper) = &self.helper { helper.arm(Some((deadline, "view_lost"))); }
+        }
+    }
+
+    pub fn view_lost(&mut self) {
+        self.renderer_deadline = None;
+        if matches!(self.phase, Phase::Starting | Phase::Listening) {
+            let code = self.helper.as_ref().and_then(Helper::tripped).unwrap_or("view_lost");
+            self.fail(code);
+        }
     }
 
     pub fn close(&mut self) {
@@ -378,7 +460,11 @@ impl Live {
             Message::Status(n, started) if n == self.generation => {
                 match (self.phase, started) {
                     (Phase::Starting, true) => { self.phase = Phase::Listening; self.deadline = None; }
-                    (Phase::Stopping, false) => { self.phase = if self.pause {Phase::Paused} else {Phase::Idle}; self.deadline = None; }
+                    (Phase::Stopping, false) => {
+                        self.phase = if self.pause { Phase::Paused } else { Phase::Idle };
+                        self.deadline = None;
+                        if let Some(helper) = &self.helper { helper.arm(None); }
+                    }
                     // An in-flight start acknowledgement must not undo Stop.
                     (Phase::Stopping, true) | (Phase::Idle | Phase::Paused, false) => {}
                     _ => return Err("protocol_error"),
@@ -427,6 +513,7 @@ impl Live {
         }
         for _ in 0..QUEUE {
             let Some(helper) = self.helper.as_ref() else { break; };
+            if let Some(code) = helper.tripped() { self.fail(code); break; }
             if helper.broken.load(Ordering::Acquire) { self.fail("protocol_error"); break; }
             match helper.receive.try_recv() {
                 Ok(message) => {

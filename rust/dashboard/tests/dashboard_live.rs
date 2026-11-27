@@ -23,8 +23,8 @@ fn dashboard_live_translate_protocol_and_windows_job() {
     let fixture = helper_dir.join("Sig4a.LiveTranslate.exe");
     let pid = helper_dir.join("pid.fixture");
     let protocol = helper_dir.join("commands.fixture");
-    let mut run = Run::start_from(&dash, &sb.local, &sb.home, sb.root.path(), "live_translate",
-        include_str!("js/live_translate.js"), "");
+    let mut run = Run::start_from_visibility(&dash, &sb.local, &sb.home, sb.root.path(), "live_translate",
+        include_str!("js/live_translate.js"), "", true);
     run.stage("install");
     fs::create_dir(&helper_dir).unwrap();
     assert!(Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
@@ -42,11 +42,17 @@ fn dashboard_live_translate_protocol_and_windows_job() {
     run.rust_check("timeout killed/reaped the exact helper child", unsafe { WaitForSingleObject(first, 3000) } == 0, "");
     unsafe { CloseHandle(first); }
     run.go("after-timeout");
+    run.stage("before-lease-loss");
+    let stalling = fixture_handle(&pid);
+    run.go("before-lease-loss");
+    run.rust_check("native watchdog killed the helper before stalled dashboard loop could recover",
+        unsafe { WaitForSingleObject(stalling, 4200) } == 0, "");
+    unsafe { CloseHandle(stalling); }
     run.stage("before-hard-kill");
     let second = fixture_handle(&pid);
     let commands = fs::read_to_string(&protocol).unwrap_or_default();
     run.rust_check("no extra start from refresh, duplicate start, tab visit, or device change",
-        commands.lines().filter(|l| l.starts_with("start ")).collect::<Vec<_>>() == ["start 1", "start 2", "start 3", "start 4"], commands);
+        commands.lines().filter(|l| l.starts_with("start ")).collect::<Vec<_>>() == ["start 1", "start 2", "start 3", "start 4", "start 5", "start 6"], commands);
     run.guard.0.kill().unwrap(); // deliberately bypass graceful exit to prove kill-on-close
     run.guard.0.wait().unwrap();
     run.rust_check("hard dashboard termination killed the helper Job", unsafe { WaitForSingleObject(second, 3000) } == 0, "");

@@ -10,7 +10,6 @@ using SherpaOnnx;
 sealed partial class Session(long id, string source, string? deviceId, bool translate)
 {
     internal long Id => id;
-    internal bool WantsTranslation => translate;
     OfflineTranslation? translator;
     Task? translationWork;
     long latestSequence;
@@ -26,7 +25,7 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
 
     static readonly string ModelDir = Path.Combine(AppContext.BaseDirectory, "models", "zipformer");
     const string ModelStem = "epoch-99-avg-1-chunk-16-left-128";
-    static OnlineRecognizer LoadModel()
+    internal static OnlineRecognizer LoadModel()
     {
         var names = new[] { "tokens.txt", $"encoder-{ModelStem}.int8.onnx", $"decoder-{ModelStem}.onnx", $"joiner-{ModelStem}.int8.onnx" };
         if ((File.GetAttributes(Path.GetDirectoryName(ModelDir)!) & FileAttributes.ReparsePoint) != 0 ||
@@ -129,6 +128,9 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
             if (Cancelled) return;
             capture.StartRecording();
             issuedStart = true;
+            // Detach the input promptly even if recognition is currently executing.
+            // Registration invokes immediately if Stop already won the race.
+            using var stopAudio = cancel.Token.Register(capture.StopRecording);
             // Wait for actual WASAPI Start on NAudio's capture thread, not just its scheduling.
             var startup = Stopwatch.StartNew();
             while (capture.CaptureState != CaptureState.Capturing && !stopped.Task.IsCompleted &&
@@ -144,7 +146,9 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
             if (!Program.Started(this)) return;
             if (translate)
             {
-                translator = new OfflineTranslation(this, cancel.Token);
+                translator = new OfflineTranslation(
+                    (seq, en, vi) => Program.Translated(this, seq, en, vi),
+                    () => Program.TranslatorUnavailable(this), cancel.Token);
                 translationWork = Task.Run(translator.Run);
             }
             var clock = Stopwatch.StartNew();
@@ -195,6 +199,11 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
         catch (Exception e) { failure = DeviceCode(e, issuedStart); }
         finally
         {
+            // Stop inference and source concurrently. Capture and child reaping
+            // share a deadline so no unbounded ACK precedes the parent's kill.
+            var disposeClock = Stopwatch.StartNew();
+            bool stopping = Cancelled;
+            cancel.Cancel();
             audio.Writer.TryComplete();
             if (capture is not null)
             {
@@ -207,17 +216,14 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
                 }
                 catch (Exception) { released = false; }
             }
-            // Translation cannot survive Stop, device loss, quit or a source change.
+            while (audio.Reader.TryRead(out var discarded)) Array.Clear(discarded);
             if (translationWork is not null)
             {
-                // Program.Finished distinguishes user cancellation from internal failure.
-                bool stopping = Cancelled;
-                cancel.Cancel();
-                if (await Task.WhenAny(translationWork, Task.Delay(2_750)) != translationWork ||
+                int remaining = Math.Max(0, 1_800 - (int)disposeClock.ElapsedMilliseconds);
+                if (await Task.WhenAny(translationWork, Task.Delay(remaining)) != translationWork ||
                     translator?.Released != true) released = false;
-                Program.Finished(this, failure, released, stopping);
             }
-            else Program.Finished(this, failure, released, Cancelled);
+            Program.Finished(this, failure, released, stopping);
         }
     }
 

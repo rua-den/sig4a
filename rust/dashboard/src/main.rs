@@ -30,12 +30,14 @@ const SHIM: &str = include_str!("shim.js");
 const PERSIST_DELAY: Duration = Duration::from_millis(800);
 const READY_TIMEOUT: Duration = Duration::from_secs(4);
 const QUICK_PRESENT_TIMEOUT: Duration = Duration::from_secs(8);
+const LIVE_LEASE: Duration = Duration::from_secs(3);
 
 enum Ev {
     Call(u64, String, Vec<Value>),
     Done(u64, Result<Value, String>),
     QuickTool(String, String),
     OpenLive,
+    LiveNavigation,
     OcrDone(Option<u64>, Result<Option<region::Capture>, String>),
 }
 
@@ -158,7 +160,8 @@ struct App {
     geo: Geo,
     ready: bool,
     live: live::Live,
-    live_page: bool,
+    live_page: Option<String>,
+    live_heartbeat: Option<Instant>,
     live_pending: bool,
     quick_pending: Option<(String, String)>,
     /// `--e2e` result path: multi-stage scripts hand control to the test through `<out>.<stage>` files.
@@ -203,6 +206,30 @@ impl App {
         }
     }
 
+    fn check_live_lease(&mut self, now: Instant) {
+        if !win::visible_live_window(self.hwnd)
+            || self.live_heartbeat.is_none_or(|seen| now.saturating_duration_since(seen) >= LIVE_LEASE)
+        {
+            self.live_heartbeat = None;
+            self.live.view_lost();
+        }
+    }
+
+    fn record_live_heartbeat(&mut self, now: Instant) {
+        if win::visible_live_window(self.hwnd) {
+            self.live_heartbeat = Some(now);
+            self.live.renew_view(now + LIVE_LEASE);
+        }
+    }
+
+    fn live_token(value: Option<&Value>) -> Option<&str> {
+        value.and_then(Value::as_str).filter(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+    }
+
+    fn live_page_matches(&self, value: Option<&Value>) -> bool {
+        Self::live_token(value).is_some_and(|token| self.live_page.as_deref() == Some(token))
+    }
+
     fn call(&mut self, window: &Window, m: &str, a: &[Value]) -> Result<Value, String> {
         let f = |i: usize| a.get(i).and_then(Value::as_f64).unwrap_or(0.0);
         let c = &self.core;
@@ -231,18 +258,38 @@ impl App {
                 }
             }
             "live_view" if !self.quick_mode => {
-                self.live_page = a.first().and_then(Value::as_bool).unwrap_or(false);
-                if !self.live_page {
+                let Some(token) = Self::live_token(a.get(1)) else { return Ok(Value::Null); };
+                if a.first().and_then(Value::as_bool) == Some(true) {
+                    if self.live_page.as_deref() != Some(token) {
+                        self.live.view_lost();
+                        self.live_page = Some(token.to_owned());
+                    }
+                    self.record_live_heartbeat(Instant::now());
+                } else if self.live_page.as_deref() == Some(token) {
+                    self.live_page = None;
+                    self.live_heartbeat = None;
                     self.live.stop(false);
                     win::set_topmost(self.hwnd, false);
                 }
                 self.live.call("live_state", &Value::Null)
             }
-            "live_pin" if !self.quick_mode && self.live_page => {
+            "live_heartbeat" if !self.quick_mode && self.live_page_matches(a.first()) => {
+                let now = Instant::now();
+                self.check_live_lease(now);
+                self.record_live_heartbeat(now);
+                Value::Null
+            }
+            "live_pin" if !self.quick_mode && self.live_page_matches(a.get(1)) => {
                 win::set_topmost(self.hwnd, a.first().and_then(Value::as_bool).unwrap_or(false));
                 Value::Bool(true)
             }
-            "live_list" | "live_start" | "live_stop" | "live_pause" | "live_state" if !self.quick_mode && self.live_page => {
+            "live_list" | "live_start" | "live_stop" | "live_pause" | "live_state"
+                if !self.quick_mode && self.live_page_matches(a.get(1)) =>
+            {
+                self.check_live_lease(Instant::now());
+                if m == "live_start" && self.live_heartbeat.is_none() {
+                    return Ok(self.live.call("live_state", &Value::Null));
+                }
                 self.live.call(m, a.first().unwrap_or(&Value::Null))
             }
             "open_toolbox" => Value::Bool(win::open_toolbox()),
@@ -507,6 +554,7 @@ fn main() {
     };
     let mut ctx = WebContext::new(Some(if quick_mode { storage_dir_named(&core.paths.data, "webview-quick") } else { storage_dir(&core.paths.data) }));
     let handler_proxy = proxy.clone();
+    let nav_proxy = proxy.clone();
     let mode_script = format!("window.__SIG4A_RUST_LIVE__=true;window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
     let built = WebViewBuilder::new_with_web_context(&mut ctx)
         .with_html(core.page(UI_HTML, quick_mode))
@@ -514,10 +562,16 @@ fn main() {
         .with_initialization_script(&mode_script)
         .with_background_color((10, 10, 10, 255))
         .with_incognito(true)
+        .with_navigation_handler(move |uri| {
+            // NavigateToString is the bundled about:blank document. Block foreign top-level navigation.
+            let _ = nav_proxy.send_event(Ev::LiveNavigation);
+            uri == "about:blank"
+        })
         .with_ipc_handler(move |req| {
             if let Ok(v) = serde_json::from_str::<Value>(req.body()) {
                 let id = v["id"].as_u64().unwrap_or(0);
                 let m = v["m"].as_str().unwrap_or("").to_string();
+                if m.starts_with("live_") && req.uri().to_string() != "about:blank" { return; }
                 let a = v["a"].as_array().cloned().unwrap_or_default();
                 let _ = handler_proxy.send_event(Ev::Call(id, m, a));
             }
@@ -544,7 +598,8 @@ fn main() {
         },
         ready: false,
         live: live::Live::default(),
-        live_page: false,
+        live_page: None,
+        live_heartbeat: None,
         live_pending: startup_live,
         quick_pending: quick.filter(|(tool, _)| tool != "ocr"),
         #[cfg(any(debug_assertions, feature = "e2e"))]
@@ -565,7 +620,12 @@ fn main() {
     }
 
     event_loop.run(move |event, _, flow| {
+        app.check_live_lease(Instant::now());
         match event {
+            Event::UserEvent(Ev::LiveNavigation) => {
+                app.live.view_lost();
+                app.live_heartbeat = None;
+            }
             Event::UserEvent(Ev::OpenLive) => {
                 if !app.quick_mode { app.live_pending = true; }
             }
@@ -641,6 +701,13 @@ fn main() {
                 }
             }
             Event::UserEvent(Ev::Call(id, m, a)) => {
+                #[cfg(any(debug_assertions, feature = "e2e"))]
+                if m == "__e2e_suspend_tao" && e2e.is_some() {
+                    // Prove the watchdog can kill the helper with neither renderer beats
+                    // nor dashboard event-loop progress. Never present in ordinary release.
+                    std::thread::sleep(Duration::from_millis(4800));
+                    return;
+                }
                 if m == "__quick_presented" {
                     if app.quick_mode
                         && !OCR_BUSY.load(Ordering::Acquire)

@@ -36,6 +36,11 @@ pub fn rect(hwnd: isize) -> [i32; 4] {
     [r.left, r.top, r.right - r.left, r.bottom - r.top]
 }
 
+pub fn visible_live_window(hwnd: isize) -> bool {
+    // A minimized dashboard has no visible listening indicator.
+    unsafe { IsWindowVisible(h(hwnd)) != 0 && IsIconic(h(hwnd)) == 0 }
+}
+
 /// Change only the z-order band of our quick window, without activating it.
 pub fn set_topmost(hwnd: isize, on: bool) {
     // SAFETY: using our own HWND, with flags that preserve its geometry and activation.

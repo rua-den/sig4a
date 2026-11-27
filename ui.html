@@ -166,7 +166,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
    <p class="hint" id="live-source-hint">Tiếng máy nghe mọi ứng dụng phát âm thanh qua thiết bị đã chọn, gồm cả thông báo.</p>
    <button class="b" id="live-refresh" type="button">Làm mới thiết bị</button>
    <div class="toolactions"><label><input type="checkbox" id="live-translate"> Bản dịch tiếng Việt thử nghiệm</label><label><input type="checkbox" id="live-pin"> Ghim cửa sổ trên cùng</label></div>
-   <p class="hint" id="live-vi-warning" hidden>Bản dịch có thể sai tên, số hoặc đảo nghĩa. Đối chiếu dòng tiếng Anh; không dùng bản dịch để chốt quyết định quan trọng.</p>
+   <p class="hint" id="live-vi-warning" hidden>Bản dịch có thể sai tên, số hoặc đảo nghĩa. Đối chiếu dòng tiếng Anh; không dùng bản dịch để chốt quyết định quan trọng. Model Tencent HY-MT cài riêng theo điều khoản của nhà phát hành. SIG4A là dự án độc lập của rua-den, không liên kết với Tencent và không được Tencent tài trợ hay bảo trợ.</p>
    <label id="live-consent-row" hidden><input type="checkbox" id="live-consent"> Tôi hiểu và bật bản dịch thử nghiệm cho phiên này.</label>
    <div class="toolactions">
     <button class="b p" id="live-start" type="button">Bắt đầu</button>
@@ -703,11 +703,12 @@ const liveErrors={
  translation_unavailable:'Không có bản dịch thử nghiệm. Phụ đề tiếng Anh vẫn hoạt động.',
  consent_required:'Cần xác nhận cảnh báo trước khi bật dịch thử nghiệm.',
  busy:'Phiên đang bận. Dừng trước khi thử lại.',
+ view_lost:'Không còn thấy cửa sổ phụ đề. Phiên đã dừng. Bấm Bắt đầu khi muốn nghe lại.',
  timeout:'Helper không phản hồi kịp và đã bị dừng. Thử lại sau khi kiểm tra thiết bị hoặc model.',
  protocol_error:'Helper không tương thích hoặc đã ngắt. Phiên đã dừng.',
  internal:'Không thể khởi động hoặc giám sát helper. Cài lại gói helper.'
 };
-let liveState={phase:'idle',listing:false,devices:[],en:'',vi:null},liveLoop=null,liveEpoch=0,liveRequest=false,livePollPending=false,liveDevicesKey=null;
+let liveState={phase:'idle',listing:false,devices:[],en:'',vi:null},liveLoop=null,liveEpoch=0,liveRequest=false,livePollPending=false,liveDevicesKey=null,liveNonce=null,liveHeartbeatLoop=null;
 function syncLiveControls(){
  const active=['starting','listening','stopping'].includes(liveState.phase);
  const work=active||liveState.listing||liveRequest;
@@ -758,7 +759,7 @@ function clearLiveCaption(){
 async function livePoll(){
  if(activeRoute!=='live'||liveRequest||livePollPending||!api)return;
  const token=liveEpoch;livePollPending=true;
- try{const state=await api.live_state();if(token===liveEpoch&&activeRoute==='live'&&!liveRequest)renderLive(state)}catch(_){}
+ try{const state=await api.live_state(null,liveNonce);if(token===liveEpoch&&activeRoute==='live'&&!liveRequest)renderLive(state)}catch(_){}
  finally{livePollPending=false}
 }
 async function liveCommand(method,payload){
@@ -771,7 +772,7 @@ async function liveCommand(method,payload){
  }
  liveRequest=true;syncLiveControls();
  try{
-  const state=await api[method](payload);
+  const state=await api[method](payload??null,liveNonce);
   if(token===liveEpoch&&activeRoute==='live')renderLive(state);
  }catch(_){
   if(token===liveEpoch&&activeRoute==='live')$('live-status').textContent='Không kết nối được với dashboard Windows.';
@@ -779,22 +780,29 @@ async function liveCommand(method,payload){
   if(token===liveEpoch){liveRequest=false;syncLiveControls()}
  }
 }
+function sendLiveHeartbeat(){
+ if(activeRoute==='live'&&liveNonce&&!document.hidden)window.__cu_send?.('live_heartbeat',[liveNonce]);
+}
 function openLiveView(){
  if(!api||window.__QUICK_MODE__)return;
  const token=++liveEpoch;
- void api.live_view(true).then(state=>{if(token===liveEpoch&&activeRoute==='live')renderLive(state)}).catch(()=>{});
+ liveNonce=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+ void api.live_view(true,liveNonce).then(state=>{if(token===liveEpoch&&activeRoute==='live')renderLive(state);sendLiveHeartbeat()}).catch(()=>{});
  clearInterval(liveLoop);liveLoop=setInterval(livePoll,160);
+ clearInterval(liveHeartbeatLoop);liveHeartbeatLoop=setInterval(sendLiveHeartbeat,600);
 }
 function leaveLiveView(){
+ const past=liveNonce;liveNonce=null;
  liveEpoch++;liveRequest=false;clearInterval(liveLoop);liveLoop=null;
+ clearInterval(liveHeartbeatLoop);liveHeartbeatLoop=null;
  clearLiveCaption();$('live-pin').checked=false;$('live-translate').checked=false;$('live-consent').checked=false;
- if(api)void api.live_view(false).catch(()=>{});
+ if(api&&past)void api.live_view(false,past).catch(()=>{});
 }
 $('live-source').addEventListener('change',()=>{liveDevicesKey=null;liveDevices();syncLiveControls()});
 $('live-device').addEventListener('change',syncLiveControls);
 $('live-translate').addEventListener('change',()=>{$('live-consent').checked=false;syncLiveControls()});
 $('live-consent').addEventListener('change',syncLiveControls);
-$('live-pin').addEventListener('change',()=>{if(api)void api.live_pin($('live-pin').checked).catch(()=>{})});
+$('live-pin').addEventListener('change',()=>{if(api)void api.live_pin($('live-pin').checked,liveNonce).catch(()=>{})});
 $('live-refresh').addEventListener('click',()=>void liveCommand('live_list'));
 $('live-start').addEventListener('click',()=>{
  const payload={source:$('live-source').value,device_id:$('live-device').value||null,
@@ -806,7 +814,8 @@ $('live-stop').addEventListener('click',()=>{
  $('live-consent').checked=false;$('live-translate').checked=false;
  void liveCommand('live_stop');
 });
-window.addEventListener('pagehide',()=>{if(activeRoute==='live')window.__cu_send?.('live_view',[false])});
+window.addEventListener('pagehide',()=>{if(activeRoute==='live'&&liveNonce)window.__cu_send?.('live_view',[false,liveNonce])});
+document.addEventListener('visibilitychange',sendLiveHeartbeat);
 liveDevices();syncLiveControls();
 function textResultValue(out){return out.childElementCount?out.innerText:out.textContent}
 async function copyResult(id){const el=$(id);

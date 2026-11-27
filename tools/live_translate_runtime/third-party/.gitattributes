@@ -4,3 +4,5 @@ NAudio-v2.2.1-SHA256.txt text eol=lf
 onnxruntime-v1.23.2-*.txt -text whitespace=cr-at-eol,-blank-at-eof,-blank-at-eol
 HY-MT1.5-1.8B-LICENSE.txt -text whitespace=cr-at-eol,-blank-at-eof,-blank-at-eol
 llama.cpp-b12776-LICENSE.txt -text whitespace=cr-at-eol,-blank-at-eof,-blank-at-eol
+sherpa-onnx-v1.12.30-LICENSE.txt -text whitespace=cr-at-eol,-blank-at-eof,-blank-at-eol
+HY-MT1.5-1.8B-NOTICE.txt -text
