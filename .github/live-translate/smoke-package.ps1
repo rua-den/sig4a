@@ -60,6 +60,19 @@ try {
         if ($app.HasExited) { throw "Extracted dashboard exited early ($($app.ExitCode))." }
     } until ($app.MainWindowHandle -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 20)
     if (!$app.MainWindowHandle) { throw 'Extracted ordinary dashboard did not show its native window.' }
+    # A native HWND alone can be blank. Confirm the actual ordinary WebView2
+    # navigation contains the experimental entry and existing tools.
+    $uia = Join-Path $PSScriptRoot 'desktop-uia.ps1'
+    $seen = $false
+    $timer.Restart()
+    do {
+        $raw = powershell.exe -NoProfile -File $uia -Hwnd ($app.MainWindowHandle.ToInt64()) -Name 'Live Translate|Claude Usage|Tool Box' -Mode list
+        if ($LASTEXITCODE -ne 0) { throw 'Native dashboard UI automation failed.' }
+        $names = @((($raw -join "`n") | ConvertFrom-Json).items | Where-Object {!$_.offscreen} | ForEach-Object name)
+        $seen = ($names -match 'Live Translate') -and ($names -match 'Claude Usage')
+        if (!$seen) { Start-Sleep -Milliseconds 250 }
+    } until ($seen -or $timer.Elapsed.TotalSeconds -gt 22)
+    if (!$seen) { throw 'Extracted dashboard has no visible Live Translate and Claude Usage navigation.' }
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
     'SIG4A archive verified: actual released dashboard, explicit inventory, invalid source no fallback, no passive helper/capture. No physical endpoints accessed.'
 } finally {

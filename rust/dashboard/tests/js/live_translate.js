@@ -1,3 +1,4 @@
+check('bundled content is at the exact local Windows document URL', location.href === 'https://sig4a-bundled.localhost/dashboard.html');
 toolTab('live');
 check('real Tool Box Live page is shown', $('tool-live').classList.contains('on'));
 check('translated captions disabled by default', !$('live-translate').checked);
@@ -66,7 +67,7 @@ check('restored heartbeat does not automatically reopen audio', $('live-lamp').d
 $('live-start').click();
 check('explicit restart required after heartbeat loss', await waitFor(() => $('live-lamp').dataset.listening==='true',2500));
 location.assign('https://sig4a.invalid/must-not-navigate');
-check('foreign navigation is blocked and shuts down the active session', await waitFor(() => $('live-status').textContent.includes('Không còn thấy cửa sổ phụ đề'), 4000) && location.href === 'about:blank');
+check('foreign navigation is blocked and shuts down the active session', await waitFor(() => $('live-status').textContent.includes('Không còn thấy cửa sổ phụ đề'), 4000) && location.href === 'https://sig4a-bundled.localhost/dashboard.html');
 sendLiveHeartbeat();
 await sleep(350);
 $('live-start').click();

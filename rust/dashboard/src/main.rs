@@ -23,10 +23,16 @@ use tao::window::{Window, WindowBuilder};
 use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass};
 use windows_sys::Win32::UI::WindowsAndMessaging::{WM_COPYDATA, WM_NCDESTROY};
-use wry::{WebContext, WebViewBuilder};
+use wry::{http, WebContext, WebViewBuilder, WebViewBuilderExtWindows};
 
 const UI_HTML: &str = include_str!("../../../ui.html");
 const SHIM: &str = include_str!("shim.js");
+// Wry 0.55 remaps this internal custom scheme to this exact WebView2
+// HTTPS URL. Its response comes from memory; it is not a network server.
+const DASHBOARD_SCHEME: &str = "sig4a-bundled";
+const DASHBOARD_BUNDLE_URL: &str = "sig4a-bundled://localhost/dashboard.html";
+const DASHBOARD_DOCUMENT_URL: &str = "https://sig4a-bundled.localhost/dashboard.html";
+
 const PERSIST_DELAY: Duration = Duration::from_millis(800);
 const READY_TIMEOUT: Duration = Duration::from_secs(4);
 const QUICK_PRESENT_TIMEOUT: Duration = Duration::from_secs(8);
@@ -42,7 +48,7 @@ enum Ev {
 }
 
 fn bundled_document(uri: &str) -> bool {
-    uri == "about:blank"
+    uri == DASHBOARD_DOCUMENT_URL
 }
 
 fn revoke_page_for_navigation(page: &mut Option<String>, heartbeat: &mut Option<Instant>, replaces_document: bool) {
@@ -565,23 +571,42 @@ fn main() {
     let handler_proxy = proxy.clone();
     let nav_proxy = proxy.clone();
     let mode_script = format!("window.__SIG4A_RUST_LIVE__=true;window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
+    let page = core.page(UI_HTML, quick_mode).into_bytes();
     let built = WebViewBuilder::new_with_web_context(&mut ctx)
-        .with_html(core.page(UI_HTML, quick_mode))
+        .with_https_scheme(true)
+        .with_custom_protocol(DASHBOARD_SCHEME.into(), move |_, request| {
+            // Windows Wry reverts the URL to the custom scheme in this callback.
+            let allowed = request.method() == http::Method::GET && request.uri().to_string() == DASHBOARD_BUNDLE_URL;
+            let mut response = http::Response::builder()
+                .header("Cache-Control", "no-store")
+                .header("X-Content-Type-Options", "nosniff");
+            if allowed {
+                response = response
+                    .header("Content-Type", "text/html; charset=utf-8")
+                    .header("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'");
+                response.body(std::borrow::Cow::Owned(page.clone())).unwrap()
+            } else {
+                response.status(404).body(std::borrow::Cow::Borrowed(&[])).unwrap()
+            }
+        })
+        .with_url(DASHBOARD_BUNDLE_URL)
         .with_initialization_script(SHIM)
         .with_initialization_script(&mode_script)
         .with_background_color((10, 10, 10, 255))
         .with_incognito(true)
         .with_navigation_handler(move |uri| {
-            // NavigateToString is the bundled about:blank document. Block foreign top-level navigation.
+            // Allow only the fixed bundled Windows URL. A navigation request
+            // may differ from a committed document origin (e.g. NavigateToString).
             let replaces_document = bundled_document(&uri);
             let _ = nav_proxy.send_event(Ev::LiveNavigation { replaces_document });
             replaces_document
         })
         .with_ipc_handler(move |req| {
+            // The script bridge is globally injected by Wry; validate the actual WebView2 source.
+            if !bundled_document(&req.uri().to_string()) { return; }
             if let Ok(v) = serde_json::from_str::<Value>(req.body()) {
                 let id = v["id"].as_u64().unwrap_or(0);
                 let m = v["m"].as_str().unwrap_or("").to_string();
-                if m.starts_with("live_") && !bundled_document(&req.uri().to_string()) { return; }
                 let a = v["a"].as_array().cloned().unwrap_or_default();
                 let _ = handler_proxy.send_event(Ev::Call(id, m, a));
             }
@@ -941,7 +966,7 @@ mod live_navigation_tests {
     fn replacement_revokes_old_nonce_and_denied_navigation_only_revokes_lease() {
         let mut page = None;
         let mut lease = None;
-        revoke_page_for_navigation(&mut page, &mut lease, bundled_document("about:blank"));
+        revoke_page_for_navigation(&mut page, &mut lease, bundled_document(DASHBOARD_DOCUMENT_URL));
         assert!(page.is_none() && lease.is_none(), "initial bundled navigation starts without a nonce");
 
         let old = "8e4de8659de000dadb17df7800a17dae";
@@ -952,9 +977,12 @@ mod live_navigation_tests {
         assert!(lease.is_none());
 
         lease = Some(Instant::now());
-        revoke_page_for_navigation(&mut page, &mut lease, bundled_document("about:blank"));
+        revoke_page_for_navigation(&mut page, &mut lease, bundled_document(DASHBOARD_DOCUMENT_URL));
         assert_ne!(page.as_deref(), Some(old), "old-document heartbeats cannot match after reload");
         assert!(page.is_none() && lease.is_none());
-        assert!(!bundled_document("about:blank#foreign"));
+        assert!(!bundled_document("about:blank"));
+        assert!(!bundled_document("data:text/html,foreign"));
+        assert!(!bundled_document("https://sig4a-bundled.localhost/other"));
+        assert!(!bundled_document("https://sig4a-bundled.localhost/dashboard.html?foreign"));
     }
 }
