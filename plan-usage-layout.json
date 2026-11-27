@@ -1,0 +1,12 @@
+{
+  "title": "Readable Claude Usage dashboard and remapped tool shortcut verification",
+  "baseline": "92f96bfcec8146fe224ae2e26923cea1a052a4e9",
+  "status": "in_progress",
+  "acceptance": [
+    {"id":"USAGELAYOUT-1","case":"Consistent account layout, color-coded quota tracks with numeric labels, separately grouped resets and status, compact stable display under long names/updates at normal and narrow Windows widths.","status":"pending"},
+    {"id":"USAGELAYOUT-2","case":"Keep actual account sorting, loading/empty/stale/error/available states, retry, hooks and all usage actions intact and accessible. Real WebView2 regressions and native screenshot evidence.","status":"pending"},
+    {"id":"USAGELAYOUT-3","case":"From actual Windows settings remap Grammar, Translate and OCR, verify new physical chords invoke the right tool and old chords no longer invoke them, then restart tray and prove settings persisted. Prior Tool Box remap independently verified.","status":"pending"}
+  ],
+  "advisor":{"status":"pending"},
+  "gate":{"status":"pending","rule":"Record only verified cases and merge only on exact Advisor review plus Windows coverage."}
+}
