@@ -1,6 +1,6 @@
 {
   "title": "Sig4a Settings · Kiểm tra nhanh",
-  "status": "in_progress",
+  "status": "passed",
   "baseline": {
     "start": "After Audio Check PR #35 merges, rebase/cut the implementation branch from exact latest main containing both #34 and #35; record that SHA in the repo plan. Draft review only before then.",
     "inspected_audio_check": "efec55d4d132881491038a6395de64136c4ce3e3",
@@ -95,7 +95,7 @@
     },
     {
       "id": "status_and_navigation",
-      "status": "in_progress",
+      "status": "passed",
       "acceptance": [
         "Five read-only cards and exact existing links. Start from already available bounded status; do not reread/enumerate profiles on overview open. For hook use existing cached, bounded summary when available or just link. For shortcuts show saved/unbound plus untested, never infer individual registration from bitmask. Keep explicit refresh bounded; no worker buildup and timeout != missing. Refresh must send no HTTP outside the exact signed+socket-pinned default Ollama path, even for a saved custom loopback.",
         "Keep main settings navigation, accessibility, popup isolation, legacy actions and setup untouched. Empty/offline/unavailable states must have actionable next steps. Advisor first-phase checkpoint on side effects and truthful wording."
@@ -103,7 +103,7 @@
     },
     {
       "id": "fixed_model_checks",
-      "status": "pending",
+      "status": "passed",
       "acceptance": [
         "Implement the sole v1 inference profile: signed official existing Ollama on exact loopback with attached-owner socket proof, fresh env-forced status, exact unique local gemma4:e2b and fixed samples using :local, with no generic fallback. Prove both tests work on an admissible path or block this phase and consult Advisor; no trust downgrade for compatibility.",
         "Advisor reviews exact implementation phase diff, especially request restrictions, worker accounting, ownership/cancellation, privacy, output handling and fixture scoring."
@@ -111,7 +111,7 @@
     },
     {
       "id": "verification",
-      "status": "pending",
+      "status": "passed",
       "acceptance": [
         "Native tests cover exact native bytes/argument and response schema, zero HTTP before connected proof, actual server-side reverse tuple including ephemeral port, listener swap before connect, fake/client/missing/ambiguous owner rows, daemon exit/PID reuse, replacement stream re-proof, cache-only Authenticode fail closed, strict cloud source env|both vs config/false/malformed/unsupported, exact unique local Gemma vs missing/duplicate/remote, no release bypass or fallback, shared per-process busy, deadline and stale handling. Cover status/link and zero new reads/actions on page open. Include Windows real TCP-table accepted-socket fixture; no user data or tools. Verify exact :local/no-drop behavior and reject remote/tool/non-assistant/incomplete or token-cap responses. Reject exact raw IPC schema/size before general bridge coercion; deny result completion after route swap, minimize, same URI reload and close. Negative production-shaped Refresh tests for unauthorized endpoint, custom loopback, managed/llama.cpp, missing/wrong scope, bad signer or tuple, asserting zero HTTP; positive Refresh proves exactly one pinned GET /api/tags and no other requests.",
         "Real hosted Windows WebView2 tests open Settings Quick Check and assert zero Local AI HTTP, notifications, Live device/helper launch, hook runs or writes on open; Refresh sends metadata only. Click both tests (exact fixture requests with no user fields), check pass/mismatch and literal output, busy/stale/reopen/settings changes, safe action links, degraded states and focus. Keep prior dashboard, Local AI setup, Audio Check, OCR and hotkey suites. Include the dedicated native UI fixture with required execution in standard hosted Windows workflow as well as full/specialized Windows workflow; fake responder verifies synthetic bridge behavior and must never enable the production trust bypass.",
@@ -136,7 +136,11 @@
       "environment": "Isolated Linux Ollama v0.31.1 with pinned local Gemma manifest above, native-shaped fixed local request. Supporting observation only, not Windows package proof.",
       "observed_reply": "Robot có hai hộp màu xanh dương.",
       "result": "3/3 exact replies, HTTP 200 with done_reason=stop, 62 prompt tokens and 9 generated tokens on each completion.",
-      "elapsed_seconds": [24.992, 1.368, 1.325]
+      "elapsed_seconds": [
+        24.992,
+        1.368,
+        1.325
+      ]
     },
     "only_proposed_new_normalized_variant": "robot có hai hộp màu xanh dương",
     "freeze_before_product_edit": [
@@ -205,6 +209,53 @@
       },
       "resolution": "Preserve both native view fences. The normal release ZIP first proves Quick Check passive entry and unauthorized HTTP refusal, then explicitly invokes real Win32 English consent/download/verification/offline inference in the same isolated package. The signed Ollama proof runs on a separate package extraction and is never combined with English setup. Keep exact owned-dashboard relaunch, bounded root/ASCII localized UIA, and actual localized English dialog/button identities.",
       "combined_windows": "Pending repeat at the exact combined revision; signed production positive not yet run."
+    },
+    "exact_acceptance": {
+      "tested_revision": "161fffac8a628de955f2cea6b7f27fb099034cd9",
+      "tested_tree": "9075e2107d23075f16c6e941013cbbbbf7aa88c0",
+      "integrated_main": "2032859753dd33399488a7722f117a529f13c89f",
+      "independent_source_review": {
+        "local_revision": "a60847bf1170cc38e3ba3b9b9519f018584258e0",
+        "plan_revision": "9c79fbeb537a03b67fc28390d7913dd7202cd16c",
+        "plan_sha256": "013c52977588e932468c8c1e9a3aca27b98d96cb84de13bd8c9e42a8257fd0a7",
+        "result": "Exact tree independently source-approved, then passed the hosted gates below."
+      },
+      "standard_windows": "https://github.com/rua-den/sig4a/actions/runs/46075083646",
+      "full_windows": "https://github.com/rua-den/sig4a/actions/runs/46075083557/job/140760816859",
+      "full_regression": {
+        "passed": 263,
+        "failed": 0,
+        "ignored": 1
+      },
+      "local_engine": "https://github.com/rua-den/sig4a/actions/runs/46075083557/job/140760816618",
+      "ordinary_zip_job": "https://github.com/rua-den/sig4a/actions/runs/46075083557/job/140760816550",
+      "ordinary_zip_artifact": "https://github.com/rua-den/sig4a/actions/runs/46075083557/artifacts/15233929736",
+      "ordinary_outcome": "Actual owned dashboard UI showed passive Settings entry and refused the unauthorized endpoint without HTTP, hook, config, notification flag, or Live helper effects; the independent subsequent explicit native English install verified the pinned download and true synthetic offline inference.",
+      "signed_windows": {
+        "job": "https://github.com/rua-den/sig4a/actions/runs/46076912117/job/140766690183",
+        "artifact": "https://github.com/rua-den/sig4a/actions/runs/46076912117/artifacts/15235827028",
+        "tested_archive_sha256": "72eaaa1c832d70b980e000dda4ddae649a6c9ddca20af792451c7a1cb7c20459",
+        "provider": "Official Authenticode-verified Ollama v0.31.1",
+        "provider_archive_sha256": "9ecf5a631561c7dff3a143925f11e2008327be738a7279fcf0c5462b9c422700",
+        "signed_image_sha256": "ffb61f3800d250a080155fe6243c87e6effa67b0686546252c965bc8cb736b77",
+        "local_model": "gemma4:e2b",
+        "manifest_sha256": "b37049369adfe3d2b653af0ab301a062ca5cbe96ace6aa0d3f2559ee9b563fc2",
+        "cloud_disabled": true,
+        "cloud_source": "env",
+        "translation": {
+          "actual_ui_click": true,
+          "status": 200,
+          "result": "match",
+          "app_ms": 7750
+        },
+        "grammar": {
+          "actual_ui_click": true,
+          "status": 200,
+          "result": "match",
+          "app_ms": 1330
+        },
+        "limits": "Only these two fixed text fixtures on the retained local daemon. No general quality, physical audio/device, or system-wide egress guarantee."
+      }
     }
   },
   "revision": "advisor-offline-v1-final-refresh",
