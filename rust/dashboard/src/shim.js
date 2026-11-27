@@ -2,6 +2,23 @@
 // window.pywebview.api.<method>(...args) -> Promise, the 'pywebviewready' event, and the title-bar drag region.
 (function () {
   const pend = new Map();
+  const qcPending = new Map();
+  let qcDocument = null;
+  function forgetQc(id, value) {
+    const item = qcPending.get(id);
+    if (!item) return;
+    clearTimeout(item.timer);
+    qcPending.delete(id);
+    item.resolve(value);
+  }
+  window.__cu_qc_forget = () => { for (const id of qcPending.keys()) forgetQc(id, null); };
+  window.__cu_qc_resolve = (id, documentNonce, epoch, value) => {
+    const item = qcPending.get(id);
+    if (!item || documentNonce !== qcDocument) return;
+    if (value?.code !== "view_lost" && (location.search !== "?view=quick-check" ||
+        (item.scope && item.scope.slice(0,16) !== epoch))) return;
+    forgetQc(id, value);
+  };
   let n = 0;
   window.__cu_resolve = function (id, ok, v) {
     const p = pend.get(id);
@@ -14,8 +31,14 @@
   const call = (m, a) =>
     new Promise((res, rej) => {
       const id = ++n;
-      pend.set(id, { res: res, rej: rej });
-      window.ipc.postMessage(JSON.stringify({ id: id, m: m, a: a }));
+      if (typeof m === "string" && m.startsWith("qc_")) {
+        qcDocument ??= Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2,"0")).join("");
+        qcPending.set(id, {resolve:res,scope:a[0],timer:setTimeout(() => forgetQc(id,{code:"timeout"}), 34000)});
+        window.ipc.postMessage("sig4a-qc:" + JSON.stringify({id,m,a:[qcDocument,...a]}));
+      } else {
+        pend.set(id, {res,rej});
+        window.ipc.postMessage(JSON.stringify({id,m,a}));
+      }
     });
   window.pywebview = { api: new Proxy({}, { get: (_, m) => (...a) => call(m, a) }) };
   window.addEventListener('error', (e) => send('__log', [String(e.message) + ' @' + e.lineno + ':' + e.colno]));

@@ -1,5 +1,5 @@
 # Hosted Windows smoke of the ordinary extracted package. Does not open a physical endpoint.
-param([Parameter(Mandatory)][string]$Archive)
+param([Parameter(Mandatory)][string]$Archive, [string]$RealGemmaManifestSha256 = "")
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 $root = Join-Path $env:RUNNER_TEMP ('sig4a-extracted-' + [guid]::NewGuid())
@@ -28,6 +28,8 @@ $psi.RedirectStandardOutput = $true
 $psi.CreateNoWindow = $true
 $probe = $null
 $app = $null
+$refusalListener = $null
+$proofDaemon = $null
 try {
     $probe = [Diagnostics.Process]::Start($psi)
     $first = $probe.StandardOutput.ReadLineAsync()
@@ -52,6 +54,21 @@ try {
     $env:CU_NO_AUTOSTART = '1'
     $env:CU_NO_REPAIR = '1'
     $env:CU_NO_DASHBOARD = '1'
+    # Production refusal proof: a never-authorized ephemeral loopback endpoint. No e2e flags or fake code.
+    $refusalListener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $refusalListener.Start()
+    $data = Join-Path $env:LOCALAPPDATA 'claude-usage'
+    $hooks = Join-Path $env:USERPROFILE '.claude'
+    New-Item -ItemType Directory -Force $data,$hooks | Out-Null
+    $hookConfig = Join-Path $hooks 'settings.json'
+    Set-Content -LiteralPath $hookConfig -Value '{}' -Encoding utf8NoBOM
+    $fixtureConfig = Join-Path $data 'config.json'
+    $port = ([Net.IPEndPoint]$refusalListener.LocalEndpoint).Port
+    if ($port -eq 11434) { throw 'Ephemeral refusal fixture unexpectedly used reserved Ollama port.' }
+    @{profiles=@(@{name='fixture';path=$hooks});autostart=$false;local_ai_backend='ollama';local_ai_endpoint="http://127.0.0.1:$port";local_ai_model='gemma4:e2b';local_ai_managed=$false} |
+        ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $fixtureConfig -Encoding utf8NoBOM
+    $fixtureHash = (Get-FileHash -LiteralPath $fixtureConfig).Hash
+    $hookHash = (Get-FileHash -LiteralPath $hookConfig).Hash
     Add-Type @'
 using System;
 using System.Runtime.InteropServices;
@@ -120,9 +137,75 @@ public static class Sig4aPackageSmokeWin {
     }
     'Native UIA found visible Live Translate and Claude Usage in the extracted app.'
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
+    function Wait-PackageUia([string]$Pattern, [string]$Mode, [string]$Kind='', [int]$Seconds=12) {
+        $clock = [Diagnostics.Stopwatch]::StartNew()
+        do {
+            $uiaArgs = @('-NoProfile','-STA','-File',$uia,'-Hwnd',"$($hwnd.ToInt64())",'-Name',$Pattern,'-Mode',$Mode)
+            if ($Kind) { $uiaArgs += @('-Kind',$Kind) }
+            $raw = & powershell.exe @uiaArgs
+            if ($LASTEXITCODE -ne 0) { throw 'Native Quick Check UI automation failed.' }
+            $item = ($raw -join "`n") | ConvertFrom-Json
+            if ($item.found) { return $item }
+            Start-Sleep -Milliseconds 200
+        } until ($clock.Elapsed.TotalSeconds -gt $Seconds)
+        throw "Native Quick Check UI did not reach expected control: $Pattern ($Mode)"
+    }
+    function Assert-PackageRefusalBoundary([string]$Phase) {
+        if ($refusalListener.Pending()) { throw "$Phase connected to the unauthorized endpoint." }
+        if ((Get-FileHash -LiteralPath $fixtureConfig).Hash -ne $fixtureHash -or
+            (Get-FileHash -LiteralPath $hookConfig).Hash -ne $hookHash -or
+            (Test-Path -LiteralPath (Join-Path $data 'notify_test.flag'))) {
+            throw "$Phase modified configuration, a hook, or the notification flag."
+        }
+        if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw "$Phase started the Live Translate helper." }
+    }
+    Wait-PackageUia '^Cài đặt$' 'invoke' 'Button' | Out-Null
+    Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button' | Out-Null
+    Wait-PackageUia '^Chưa kiểm tra[.]$' 'state' | Out-Null
+    Start-Sleep -Milliseconds 500
+    Assert-PackageRefusalBoundary 'Quick Check opening'
+    Wait-PackageUia '^Làm mới trạng thái$' 'invoke' 'Button' | Out-Null
+    Wait-PackageUia '^Đã làm mới; có trạng thái chưa xác minh[.]$' 'state' | Out-Null
+    Wait-PackageUia '^Thử Translation$' 'invoke' 'Button' | Out-Null
+    Wait-PackageUia 'Mẫu thử chỉ hỗ trợ Ollama chính thức trên cổng mặc định' 'state' | Out-Null
+    Assert-PackageRefusalBoundary 'Refresh and fixed model sample refusal'
+    'Ordinary Quick Check Settings route verified: passive entry and real refusal with no connection/config write/hook/flag/helper.'
+    if ($RealGemmaManifestSha256) {
+        $app.Kill($true); [void]$app.WaitForExit(5000); $app.Dispose(); $app = $null
+        . (Join-Path $PSScriptRoot '../quick-check/signed-ollama-proof.ps1')
+        $proofDaemon = Start-SignedOllamaProof -Scratch (Join-Path $profile 'ollama-proof') -ManifestSha256 $RealGemmaManifestSha256
+        $config = Get-Content -LiteralPath $fixtureConfig -Raw | ConvertFrom-Json -AsHashtable
+        $config.local_ai_endpoint = 'http://127.0.0.1:11434'
+        $config | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $fixtureConfig -Encoding utf8NoBOM
+        $fixtureHash = (Get-FileHash -LiteralPath $fixtureConfig).Hash
+        $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
+        $timer.Restart()
+        $hwnd = [IntPtr]::Zero
+        do {
+            Start-Sleep -Milliseconds 200
+            $app.Refresh()
+            if ($app.HasExited) { throw 'Extracted proof dashboard exited before reopening.' }
+            $hwnd = [Sig4aPackageSmokeWin]::FindDashboard([uint32]$app.Id, $app.MainWindowHandle)
+        } until ($hwnd -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 20)
+        if ($hwnd -eq [IntPtr]::Zero) { throw 'Extracted proof dashboard did not become visible.' }
+        [void][Sig4aPackageSmokeWin]::SetWindowPos($hwnd, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014)
+        [void][Sig4aPackageSmokeWin]::SetForegroundWindow($hwnd)
+        Wait-PackageUia '^Cài đặt$' 'invoke' 'Button' | Out-Null
+        Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button' | Out-Null
+        foreach ($label in @('Translation','Grammar')) {
+            Wait-PackageUia ("^Thử $label$") 'invoke' 'Button' | Out-Null
+            $state = Wait-PackageUia ("^$label.+Mẫu khớp[.] Ollama báo Cloud đã tắt[.]") 'state' '' 36
+            Write-Host "PRODUCTION_SAMPLE_MATCH: $($state.name)"
+        }
+        if ($proofDaemon.HasExited) { throw 'The same signed Ollama daemon was not retained across the package samples.' }
+        Assert-PackageRefusalBoundary 'Signed package Quick Check actions'
+    } else {
+        'REAL_SIGNED_OLLAMA_GEMMA_NOT_RUN: optional job needs independently reviewed exact model digest.'
+    }
     'SIG4A archive verified: actual released dashboard, explicit inventory, invalid source no fallback, no passive helper/capture. No physical endpoints accessed.'
 } finally {
-    foreach ($p in @($probe,$app)) {
+    if ($refusalListener) { $refusalListener.Stop() }
+    foreach ($p in @($probe,$app,$proofDaemon)) {
         if ($p) {
             if (!$p.HasExited) { $p.Kill($true); [void]$p.WaitForExit(5000) }
             $p.Dispose()

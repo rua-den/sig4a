@@ -3,7 +3,7 @@ param(
  [string]$Id='',
  [string]$Name='',
  [string]$Kind='',
- [ValidateSet('point','focus','state','list')][string]$Mode='point'
+ [ValidateSet('point','focus','state','list','invoke')][string]$Mode='point'
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,WindowsBase
@@ -50,6 +50,12 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
       try {$e.GetCurrentPattern([Windows.Automation.ScrollItemPattern]::Pattern).ScrollIntoView();$c=$e.Current} catch {}
     }
     if($Mode -eq 'focus' -and $c.IsEnabled){ try{$e.SetFocus()}catch{continue} }
+    if($Mode -eq 'invoke'){
+      if(!$c.IsEnabled){continue}
+      try{$e.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()}catch{continue}
+      @{found=$true;name=$c.Name;id=$c.AutomationId}|ConvertTo-Json -Compress
+      exit 0
+    }
     $item=@{found=$true;name=$c.Name;id=$c.AutomationId;kind=$c.ControlType.ProgrammaticName;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen;focused=$e.Current.HasKeyboardFocus}
     try {$item.selectedText=@($e.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).GetSelection() | ForEach-Object {$_.GetText(-1)})} catch {}
     try {$item.toggle=[string]$e.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Current.ToggleState} catch {}

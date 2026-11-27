@@ -11,9 +11,12 @@ path = "src/main.rs"
 [dependencies]
 cu-cleaner = { path = "../crates/cleaner" }
 cu-core = { path = "../crates/core" }
+httparse = "=1.10.1"
+serde = "=1.0.229"
 serde_json = { version = "=1.0.140", features = ["preserve_order"] }
 ureq = { version = "=3.5.2", default-features = false, features = ["rustls", "platform-verifier", "json"] }
 tao = { version = "=0.35.3", default-features = false, features = ["rwh_06"] }
+webview2-com = "=0.38.2"
 wry = { version = "=0.55.1", default-features = false, features = ["os-webview", "protocol"] }
 windows-sys = { version = "=0.59.0", features = ["Win32_Foundation", "Win32_Storage", "Win32_Storage_Packaging_Appx", "Win32_Storage_FileSystem", "Win32_NetworkManagement", "Win32_NetworkManagement_IpHelper", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security_WinTrust", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Diagnostics_ToolHelp", "Win32_Security", "Win32_UI_WindowsAndMessaging", "Win32_UI_Controls", "Win32_UI_Shell", "Win32_System_DataExchange", "Win32_Graphics_Gdi", "Win32_System_Registry", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse"] }
 
