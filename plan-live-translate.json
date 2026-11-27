@@ -85,6 +85,12 @@
           "status": "verified_partial",
           "case": "Official HY-MT Q4_K_M local text translation ran with p95 1178 ms on the original 48 clean references and 1695 ms on the new 24 technical reference inputs. Blind accuracy, full pipeline with real endpointing and physical Windows input still pending.",
           "evidence": "https://github.com/rua-den/sig4a/actions/runs/45983335033/job/140452517457"
+        },
+        {
+          "status": "failed_exploratory_targets",
+          "case": "Blind clean-input review of HY-MT Q4_K_M: 109/122 annotated facts and 5/7 critical negations on original references; 37/61 and 10/15 on 24 freshly held-out technical inputs. Same-run LFM 25/122 and 1/7 on original, 5/61 and 1/15 fresh. Faster ASR cannot resolve these translation errors. Use HY-MT only for exploration, do not select or change Phase 1 acceptance.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45983335033",
+          "tested_revision": "3f599f178ac32346e74b1bc4c7adae6ed923dce7"
         }
       ]
     },
