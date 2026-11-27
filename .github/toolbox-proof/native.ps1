@@ -303,9 +303,28 @@ function Prove-Copy([IntPtr]$h,[string]$button,[string]$expected,[string]$name='
  Click-Control $h $name $button
  [void](Wait-Proof "actual clipboard received '$expected'" {try{(Get-Clipboard -Raw -ErrorAction Stop) -ceq $expected}catch{$false}} 10)
 }
+function Exposed-Point([IntPtr]$h,[int]$left,[int]$top,[int]$right,[int]$bottom){
+ if($right -le $left -or $bottom -le $top){return}
+ # Try the center, then sample near all edges without allowing a hit outside the verified HWND.
+ foreach($fx in @(0.50,0.04,0.96,0.20,0.80,0.35,0.65)){
+  foreach($fy in @(0.50,0.04,0.96,0.20,0.80,0.35,0.65)){
+   $xx=[int]($left+($right-$left-1)*$fx);$yy=[int]($top+($bottom-$top-1)*$fy)
+   if((Root-At $xx $yy) -eq $h){return @{x=$xx;y=$yy}}
+  }
+ }
+}
+function External-Point([string]$label){
+ return Wait-Proof $label {
+  Exposed-Point $fixtureH $f.x $f.y ($f.x+$f.w) ($f.y+$f.h)
+ } 8
+}
 function Focus-Fixture([bool]$selection=$false){
- PhysicalClick $fixtureH ($f.x+125) ($f.y+46)
+ # The dashboard may cover the editor. Activate the normal WPF window first
+ # through an exposed pixel proven to belong to it, then physically click its editor.
+ $available=External-Point 'exposed fixture pixel under current window stack'
+ PhysicalClick $fixtureH $available.x $available.y
  [void](Wait-Proof 'synthetic WPF editor foreground' {[ProofWin]::GetForegroundWindow() -eq $fixtureH} 8)
+ Click-Control $fixtureH '' 'sig4a-synthetic-edit' 'Edit'
  if($selection){Send-Keys @(17,65)}else{Send-Keys @(39)}
  $selected=Find-Control $fixtureH '' 'sig4a-synthetic-edit' 'Edit' 'state'
  if($selection){
@@ -327,6 +346,7 @@ function Open-Shortcut([int[]]$keys){
 function Capture-Crop {
  Focus-Fixture
  $x=[int]$f.x+10;$y=[int]$f.y+15
+ Assert-Proof ((Root-At $x $y) -eq $fixtureH -and (Root-At ($x+360) ($y+85)) -eq $fixtureH) 'Physical screenshot endpoints do not belong to the foreground synthetic fixture'
  Send-Keys @(17,18,79)
  $pk=Product-Window $pickerClass 'native global OCR capture picker'
  [void](Wait-Proof 'selector owns both physical drag endpoints' {(Root-At $x $y) -eq $pk -and (Root-At ($x+360) ($y+85)) -eq $pk} 12)
@@ -343,13 +363,16 @@ function Capture-Crop {
 }
 function Assert-Float([IntPtr]$h){
  $r=[ProofWin+Rect]::new();Assert-Proof ([ProofWin]::GetWindowRect($h,[ref]$r)) 'No grammar popup bounds'
- $x=[int](($r.Left+$r.Right)/2);$y=[int](($r.Top+$r.Bottom)/2)
- Assert-Proof ($x -gt $f.x -and $x -lt $f.x+$f.w -and $y -gt $f.y -and $y -lt $f.y+$f.h) 'Test app does not overlap grammar popup'
- Assert-Proof ((Root-At $x $y) -eq $h) 'Popup not initially at overlap sample'
- PhysicalClick $fixtureH ($f.x+840) ($f.y+65)
+ $left=[Math]::Max($r.Left,$f.x);$top=[Math]::Max($r.Top,$f.y)
+ $right=[Math]::Min($r.Right,($f.x+$f.w));$bottom=[Math]::Min($r.Bottom,($f.y+$f.h))
+ $sharedPoint=Exposed-Point $h $left $top $right $bottom
+ Assert-Proof (!!$sharedPoint) 'Normal app and Grammar popup do not share a currently exposed physical sample'
+ $outside=External-Point 'visible normal app pixel not covered by grammar popup'
+ Assert-Proof ($outside.x -lt $r.Left -or $outside.x -ge $r.Right -or $outside.y -lt $r.Top -or $outside.y -ge $r.Bottom) 'Selected external click was not outside Grammar rectangle'
+ PhysicalClick $fixtureH $outside.x $outside.y
  [void](Wait-Proof 'external app gained focus after real outside click' {[ProofWin]::GetForegroundWindow() -eq $fixtureH} 8)
  Start-Sleep -Milliseconds 700
- Assert-Proof ([ProofWin]::GetForegroundWindow() -eq $fixtureH -and (Root-At $x $y) -eq $h) 'Grammar popup vanished or reclaimed external focus'
+ Assert-Proof ([ProofWin]::GetForegroundWindow() -eq $fixtureH -and (Root-At $sharedPoint.x $sharedPoint.y) -eq $h) 'Grammar popup vanished or reclaimed external focus'
 }
 function Require-Focused-UIA([IntPtr]$h,[string]$id) {
  [void](Find-Control $h '' $id '' 'state')
