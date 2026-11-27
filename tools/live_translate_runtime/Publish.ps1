@@ -16,7 +16,12 @@ dotnet restore $project -p:SelfContained=true --locked-mode
 if ($LASTEXITCODE -ne 0) { throw 'Pinned helper dependency restore failed.' }
 $assets = Join-Path $PSScriptRoot 'obj/project.assets.json'
 $restore = Get-Content -Raw -LiteralPath $assets | ConvertFrom-Json -AsHashtable
-foreach ($target in @('net8.0-windows7.0/win-x64','net8.0-windows7.0/linux-x64')) {
+# NuGet versions differ in whether the Windows default platform version
+# appears in the asset key. Read the selected framework key from the graph.
+$frameworks = @($restore.project.frameworks.Keys)
+if ($frameworks.Count -ne 1) { throw 'Expected a single declared helper target framework.' }
+foreach ($rid in @('win-x64','linux-x64')) {
+    $target = $frameworks[0] + '/' + $rid
     if (!$restore.targets.ContainsKey($target)) { throw "Declared helper restore target missing: $target" }
 }
 $packageFile = @($restore.packageFolders.Keys | ForEach-Object {
