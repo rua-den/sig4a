@@ -5,6 +5,7 @@
 
 mod api;
 mod geom;
+mod live;
 mod region;
 mod win;
 
@@ -22,19 +23,37 @@ use tao::window::{Window, WindowBuilder};
 use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass};
 use windows_sys::Win32::UI::WindowsAndMessaging::{WM_COPYDATA, WM_NCDESTROY};
-use wry::{WebContext, WebViewBuilder};
+use wry::{http, WebContext, WebViewBuilder, WebViewBuilderExtWindows};
 
 const UI_HTML: &str = include_str!("../../../ui.html");
 const SHIM: &str = include_str!("shim.js");
+// Wry 0.55 remaps this internal custom scheme to this exact WebView2
+// HTTPS URL. Its response comes from memory; it is not a network server.
+const DASHBOARD_SCHEME: &str = "sig4a-bundled";
+const DASHBOARD_BUNDLE_URL: &str = "sig4a-bundled://localhost/dashboard.html";
+const DASHBOARD_DOCUMENT_URL: &str = "https://sig4a-bundled.localhost/dashboard.html";
+
 const PERSIST_DELAY: Duration = Duration::from_millis(800);
 const READY_TIMEOUT: Duration = Duration::from_secs(4);
 const QUICK_PRESENT_TIMEOUT: Duration = Duration::from_secs(8);
+const LIVE_LEASE: Duration = Duration::from_secs(3);
 
 enum Ev {
     Call(u64, String, Vec<Value>),
     Done(u64, Result<Value, String>),
     QuickTool(String, String),
+    OpenLive,
+    LiveNavigation { replaces_document: bool },
     OcrDone(Option<u64>, Result<Option<region::Capture>, String>),
+}
+
+fn bundled_document(uri: &str) -> bool {
+    uri == DASHBOARD_DOCUMENT_URL
+}
+
+fn revoke_page_for_navigation(page: &mut Option<String>, heartbeat: &mut Option<Instant>, replaces_document: bool) {
+    *heartbeat = None;
+    if replaces_document { *page = None; }
 }
 
 fn bridge_result(id: u64, result: Result<Value, String>) -> String {
@@ -114,6 +133,10 @@ unsafe extern "system" fn quick_subclass(
     _id: usize,
     data: usize,
 ) -> isize {
+    if msg == cu_core::hotkeys::LIVE_OPEN_MESSAGE && data != 0 {
+        let _ = (&*(data as *const EventLoopProxy<Ev>)).send_event(Ev::OpenLive);
+        return 1;
+    }
     if msg == WM_COPYDATA && data != 0 && lp != 0 {
         let cds = &*(lp as *const COPYDATASTRUCT);
         if cds.dwData == 0x4b5442 && cds.cbData <= 32 * 1024 && !cds.lpData.is_null() {
@@ -151,6 +174,10 @@ struct App {
     anchored: bool,
     geo: Geo,
     ready: bool,
+    live: live::Live,
+    live_page: Option<String>,
+    live_heartbeat: Option<Instant>,
+    live_pending: bool,
     quick_pending: Option<(String, String)>,
     /// `--e2e` result path: multi-stage scripts hand control to the test through `<out>.<stage>` files.
     #[cfg(any(debug_assertions, feature = "e2e"))]
@@ -181,6 +208,7 @@ impl App {
     /// `hide`: hide at once (feels instant), save the size, end the process.
     fn close(&mut self) -> ! {
         win::hide(self.hwnd);
+        self.live.close();
         if !self.quick_mode { self.persist_now(); }
         win::terminate()
     }
@@ -193,6 +221,30 @@ impl App {
         }
     }
 
+    fn check_live_lease(&mut self, now: Instant) {
+        if !win::visible_live_window(self.hwnd)
+            || self.live_heartbeat.is_none_or(|seen| now.saturating_duration_since(seen) >= LIVE_LEASE)
+        {
+            self.live_heartbeat = None;
+            self.live.view_lost();
+        }
+    }
+
+    fn record_live_heartbeat(&mut self, now: Instant) {
+        if win::visible_live_window(self.hwnd) {
+            self.live_heartbeat = Some(now);
+            self.live.renew_view(now + LIVE_LEASE);
+        }
+    }
+
+    fn live_token(value: Option<&Value>) -> Option<&str> {
+        value.and_then(Value::as_str).filter(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+    }
+
+    fn live_page_matches(&self, value: Option<&Value>) -> bool {
+        Self::live_token(value).is_some_and(|token| self.live_page.as_deref() == Some(token))
+    }
+
     fn call(&mut self, window: &Window, m: &str, a: &[Value]) -> Result<Value, String> {
         let f = |i: usize| a.get(i).and_then(Value::as_f64).unwrap_or(0.0);
         let c = &self.core;
@@ -200,7 +252,7 @@ impl App {
             "shortcut_status" => {
                 use cu_core::hotkeys as hk;
                 match win::tray_call(hk::STATUS_MESSAGE, None) {
-                    Some(n) if (hk::STATUS..hk::STATUS + 16).contains(&n) => json!({"code":"ok","unavailable":n - hk::STATUS}),
+                    Some(n) if (hk::STATUS..hk::STATUS + hk::STATUS_COUNT).contains(&n) => json!({"code":"ok","unavailable":n - hk::STATUS}),
                     Some(hk::DISABLED) => json!({"code":"disabled"}),
                     _ => json!({"code":"tray"}),
                 }
@@ -216,9 +268,44 @@ impl App {
                     Some(hk::OK) => json!({"code":"ok","bindings":bindings}),
                     Some(hk::IO_ERROR) => json!({"code":"io"}),
                     Some(hk::DISABLED) => json!({"code":"disabled"}),
-                    Some(n) if (hk::CONFLICT..hk::CONFLICT + 4).contains(&n) => json!({"code":"conflict","action":hk::KEYS[n - hk::CONFLICT]}),
+                    Some(n) if (hk::CONFLICT..hk::CONFLICT + hk::COUNT).contains(&n) => json!({"code":"conflict","action":hk::KEYS[n - hk::CONFLICT]}),
                     _ => json!({"code":"tray"}),
                 }
+            }
+            "live_view" if !self.quick_mode => {
+                let Some(token) = Self::live_token(a.get(1)) else { return Ok(Value::Null); };
+                if a.first().and_then(Value::as_bool) == Some(true) {
+                    if self.live_page.as_deref() != Some(token) {
+                        self.live.view_lost();
+                        self.live_page = Some(token.to_owned());
+                    }
+                    self.record_live_heartbeat(Instant::now());
+                } else if self.live_page.as_deref() == Some(token) {
+                    self.live_page = None;
+                    self.live_heartbeat = None;
+                    self.live.stop(false);
+                    win::set_topmost(self.hwnd, false);
+                }
+                self.live.call("live_state", &Value::Null)
+            }
+            "live_heartbeat" if !self.quick_mode && self.live_page_matches(a.first()) => {
+                let now = Instant::now();
+                self.check_live_lease(now);
+                self.record_live_heartbeat(now);
+                Value::Null
+            }
+            "live_pin" if !self.quick_mode && self.live_page_matches(a.get(1)) => {
+                win::set_topmost(self.hwnd, a.first().and_then(Value::as_bool).unwrap_or(false));
+                Value::Bool(true)
+            }
+            "live_list" | "live_start" | "live_stop" | "live_pause" | "live_state"
+                if !self.quick_mode && self.live_page_matches(a.get(1)) =>
+            {
+                self.check_live_lease(Instant::now());
+                if m == "live_start" && self.live_heartbeat.is_none() {
+                    return Ok(self.live.call("live_state", &Value::Null));
+                }
+                self.live.call(m, a.first().unwrap_or(&Value::Null))
             }
             "open_toolbox" => Value::Bool(win::open_toolbox()),
             "state" => c.state(),
@@ -393,6 +480,7 @@ fn main() {
     };
     let quick = quick_tool();
     let quick_mode = quick.is_some();
+    let startup_live = !quick_mode && std::env::args().nth(1).as_deref() == Some("--live-translate");
     let startup_ocr = quick.as_ref().is_some_and(|(tool, _)| tool == "ocr");
     let instance_class = if quick_mode { win::QUICK_CLASS } else { win::CLASS };
     if let Some(existing) = win::find_existing(instance_class) {
@@ -403,7 +491,12 @@ fn main() {
         }
         // A quick process owns its visibility. In particular a timeout sending
         // WM_COPYDATA while the first picker is active must not unhide that HWND.
-        if !quick_mode { win::focus(existing); }
+        if !quick_mode {
+            if startup_live {
+                win::request_live_page(existing);
+            }
+            win::focus(existing);
+        }
         return;
     }
     let exe = std::env::current_exe().unwrap_or_default();
@@ -476,14 +569,41 @@ fn main() {
     };
     let mut ctx = WebContext::new(Some(if quick_mode { storage_dir_named(&core.paths.data, "webview-quick") } else { storage_dir(&core.paths.data) }));
     let handler_proxy = proxy.clone();
-    let mode_script = format!("window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
+    let nav_proxy = proxy.clone();
+    let mode_script = format!("window.__SIG4A_RUST_LIVE__=true;window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
+    let page = core.page(UI_HTML, quick_mode).into_bytes();
     let built = WebViewBuilder::new_with_web_context(&mut ctx)
-        .with_html(core.page(UI_HTML, quick_mode))
+        .with_https_scheme(true)
+        .with_custom_protocol(DASHBOARD_SCHEME.into(), move |_, request| {
+            // Windows Wry reverts the URL to the custom scheme in this callback.
+            let allowed = request.method() == http::Method::GET && request.uri().to_string() == DASHBOARD_BUNDLE_URL;
+            let mut response = http::Response::builder()
+                .header("Cache-Control", "no-store")
+                .header("X-Content-Type-Options", "nosniff");
+            if allowed {
+                response = response
+                    .header("Content-Type", "text/html; charset=utf-8")
+                    .header("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'");
+                response.body(std::borrow::Cow::Owned(page.clone())).unwrap()
+            } else {
+                response.status(404).body(std::borrow::Cow::<'static, [u8]>::Borrowed(&[])).unwrap()
+            }
+        })
+        .with_url(DASHBOARD_BUNDLE_URL)
         .with_initialization_script(SHIM)
         .with_initialization_script(&mode_script)
         .with_background_color((10, 10, 10, 255))
         .with_incognito(true)
+        .with_navigation_handler(move |uri| {
+            // Allow only the fixed bundled Windows URL. A navigation request
+            // may differ from a committed document origin (e.g. NavigateToString).
+            let replaces_document = bundled_document(&uri);
+            let _ = nav_proxy.send_event(Ev::LiveNavigation { replaces_document });
+            replaces_document
+        })
         .with_ipc_handler(move |req| {
+            // The script bridge is globally injected by Wry; validate the actual WebView2 source.
+            if !bundled_document(&req.uri().to_string()) { return; }
             if let Ok(v) = serde_json::from_str::<Value>(req.body()) {
                 let id = v["id"].as_u64().unwrap_or(0);
                 let m = v["m"].as_str().unwrap_or("").to_string();
@@ -512,6 +632,10 @@ fn main() {
             persist_at: None,
         },
         ready: false,
+        live: live::Live::default(),
+        live_page: None,
+        live_heartbeat: None,
+        live_pending: startup_live,
         quick_pending: quick.filter(|(tool, _)| tool != "ocr"),
         #[cfg(any(debug_assertions, feature = "e2e"))]
         e2e_out: e2e.as_ref().map(|(_, o)| o.clone()),
@@ -531,7 +655,19 @@ fn main() {
     }
 
     event_loop.run(move |event, _, flow| {
+        app.check_live_lease(Instant::now());
         match event {
+            Event::UserEvent(Ev::LiveNavigation { replaces_document }) => {
+                app.live.view_lost();
+                // An accepted replacement forgets the old renderer nonce, even for
+                // a same-URI reload. A blocked attempt leaves the current document
+                // in place; it can acquire a fresh lease but never restart on its own.
+                revoke_page_for_navigation(&mut app.live_page, &mut app.live_heartbeat, replaces_document);
+                if replaces_document && !app.quick_mode { win::set_topmost(app.hwnd, false); }
+            }
+            Event::UserEvent(Ev::OpenLive) => {
+                if !app.quick_mode { app.live_pending = true; }
+            }
             Event::UserEvent(Ev::QuickTool(tool, text)) => {
                 if tool == "ocr" {
                     if !present.awaiting_render() && start_capture(None, &window, &proxy) {
@@ -604,6 +740,13 @@ fn main() {
                 }
             }
             Event::UserEvent(Ev::Call(id, m, a)) => {
+                #[cfg(any(debug_assertions, feature = "e2e"))]
+                if m == "__e2e_suspend_tao" && e2e.is_some() {
+                    // Prove the watchdog can kill the helper with neither renderer beats
+                    // nor dashboard event-loop progress. Never present in ordinary release.
+                    std::thread::sleep(Duration::from_millis(4800));
+                    return;
+                }
                 if m == "__quick_presented" {
                     if app.quick_mode
                         && !OCR_BUSY.load(Ordering::Acquire)
@@ -678,6 +821,11 @@ fn main() {
         // A quick OCR panel can only open after the picker has closed. Keep it
         // hidden during capture, even if WebView initialization exceeds the timeout.
         let capturing = OCR_BUSY.load(Ordering::Acquire);
+        app.live.tick(Instant::now());
+        if app.ready && app.live_pending && !capturing {
+            app.live_pending = false;
+            let _ = webview.evaluate_script("toolTab('live')");
+        }
 
         if app.ready && !capturing {
             if let Some((tool, text)) = app.quick_pending.take() {
@@ -739,6 +887,10 @@ fn main() {
             app.persist_now();
         }
         let mut next: Option<Instant> = app.geo.persist_at;
+        if app.live.active_worker() {
+            let t = Instant::now() + Duration::from_millis(25);
+            next = Some(next.map_or(t, |n| n.min(t)));
+        }
         if let Some(t) = present.deadline {
             next = Some(next.map_or(t, |n| n.min(t)));
         }
@@ -803,5 +955,34 @@ mod quick_presentation_tests {
         assert!(present.acknowledge(Some(token)));
         assert!(!present.awaiting_render()); // OCR model inference need not have finished
         assert_eq!(present.deadline, None);
+    }
+}
+
+#[cfg(test)]
+mod live_navigation_tests {
+    use super::*;
+
+    #[test]
+    fn replacement_revokes_old_nonce_and_denied_navigation_only_revokes_lease() {
+        let mut page = None;
+        let mut lease = None;
+        revoke_page_for_navigation(&mut page, &mut lease, bundled_document(DASHBOARD_DOCUMENT_URL));
+        assert!(page.is_none() && lease.is_none(), "initial bundled navigation starts without a nonce");
+
+        let old = "8e4de8659de000dadb17df7800a17dae";
+        page = Some(old.to_owned());
+        lease = Some(Instant::now());
+        revoke_page_for_navigation(&mut page, &mut lease, bundled_document("https://sig4a.invalid/"));
+        assert_eq!(page.as_deref(), Some(old), "blocked navigation leaves the same document");
+        assert!(lease.is_none());
+
+        lease = Some(Instant::now());
+        revoke_page_for_navigation(&mut page, &mut lease, bundled_document(DASHBOARD_DOCUMENT_URL));
+        assert_ne!(page.as_deref(), Some(old), "old-document heartbeats cannot match after reload");
+        assert!(page.is_none() && lease.is_none());
+        assert!(!bundled_document("about:blank"));
+        assert!(!bundled_document("data:text/html,foreign"));
+        assert!(!bundled_document("https://sig4a-bundled.localhost/other"));
+        assert!(!bundled_document("https://sig4a-bundled.localhost/dashboard.html?foreign"));
     }
 }

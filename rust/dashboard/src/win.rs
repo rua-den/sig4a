@@ -36,6 +36,11 @@ pub fn rect(hwnd: isize) -> [i32; 4] {
     [r.left, r.top, r.right - r.left, r.bottom - r.top]
 }
 
+pub fn visible_live_window(hwnd: isize) -> bool {
+    // A minimized dashboard has no visible listening indicator.
+    unsafe { IsWindowVisible(h(hwnd)) != 0 && IsIconic(h(hwnd)) == 0 }
+}
+
 /// Change only the z-order band of our quick window, without activating it.
 pub fn set_topmost(hwnd: isize, on: bool) {
     // SAFETY: using our own HWND, with flags that preserve its geometry and activation.
@@ -155,6 +160,11 @@ pub fn focus(hwnd: isize) {
 
 pub fn install_quick_subclass(hwnd: isize, proc: SUBCLASSPROC, data: usize) -> bool {
     unsafe { SetWindowSubclass(h(hwnd), proc, 1, data) != 0 }
+}
+
+pub fn request_live_page(hwnd: isize) {
+    // This only selects a page; it doesn't carry settings or start a session.
+    unsafe { PostMessageW(hwnd as _, cu_core::hotkeys::LIVE_OPEN_MESSAGE, 0, 0); }
 }
 
 pub fn send_quick(hwnd: isize, payload: &[u8]) -> bool {

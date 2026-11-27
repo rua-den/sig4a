@@ -1,0 +1,208 @@
+{
+  "title": "Windows Live Translate v1",
+  "baseline": "84926dcaab809543611f43e82b5886bb1eca4445",
+  "status": "in_progress",
+  "scope": {
+    "audio": "One explicitly selected source at a time: system playback by default (all apps on the selected render endpoint) or microphone. Never mix or automatically switch to the mic.",
+    "ui": "Tool Box page, movable optionally pinned overlay without focus stealing on updates, prominent Vietnamese final captions, optional English, Start/Pause/Resume/Stop and configurable shortcut that only opens the UI.",
+    "privacy": "Local-only processing; no audio/transcript persistence, telemetry, or transmitting meeting content to a remote service. Audio starts only on explicit Start/Resume. Pause/Stop/close releases the capture endpoint. Switching releases old endpoint and invalidates queued results first.",
+    "excluded": [
+      "TTS",
+      "summaries",
+      "speaker attribution",
+      "per-app playback isolation",
+      "cloud providers"
+    ]
+  },
+  "plan_review": {
+    "status": "approved",
+    "reviewer": "GPT-6.2 Astra",
+    "reviewed_draft_sha256": "ecf3171dfe4a8c2fe093721431eb86bedad4123cfea5860afc74a9e694b5bc60",
+    "scope": "Approved to start Phase 1, not an acceptance pass; review refinements incorporated below."
+  },
+  "phases": [
+    {
+      "id": 1,
+      "title": "Capture and recognition benchmark",
+      "status": "in_progress",
+      "tasks": [
+        "Run Windows capture proof for real endpoint playback through headphones and a real mic, including selecting devices and release on Stop. Clearly separate fixture/virtual from physical evidence.",
+        "Compare whisper.cpp base.en and sherpa-onnx streaming English Zipformer 20M using the same pinned, synthetic or consented meeting fixtures. Freeze a held-out manifest (at least 40 utterances, varied voices, annotated speech-end times, pre-scored facts, critical negations and silence controls), model hashes/config and scoring denominators before collecting results. Use identical wall-clock-paced input on the same build/hardware and timestamp publication of a visible final caption. Benchmark current local LFM 450M as text translator separately before testing end to end. Do not change OCR defaults.",
+        "Log software and machine configuration, comparable workload, model/download size separately from deployed size, cold load, steady CPU/RAM, queue/drop counts, raw latencies and annotated accuracy; retain no real meeting content."
+      ],
+      "acceptance": [
+        {
+          "id": "LT1-a",
+          "status": "pending",
+          "case": "Physical mic and headphone playback verified separately; no silent fallback, endpoint closes on Stop, no fixture substituted for physical verification. Operator confirms physical selected headphone playback and distinct identifiable physical mic input without cross-source leakage. Hosted/virtual checks may be collected first but cannot pass this case."
+        },
+        {
+          "id": "LT1-b",
+          "status": "pending",
+          "case": "Speaker-diverse annotated fixtures cover accents, names, numbers, silence and negation; score end-to-end stable Vietnamese captions from end of speech using warmed models. Provisional goals median <=2.5 s, p95 <=5 s, >=90% pre-scored details preserved with zero critical negation reversals. Missing/dropped captions count against coverage and as +infinity for latency percentiles, and no final captions may appear in silence controls."
+        },
+        {
+          "id": "LT1-c",
+          "status": "pending",
+          "case": "Benchmark artifacts justify selected local engines and explicitly list limitations. Independent Advisor approval."
+        }
+      ],
+      "observations": [
+        {
+          "status": "verified_partial",
+          "case": "Native WASAPI Windows compilation and invalid-endpoint/no-auto-fallback checks succeeded. Hosted machine had zero render and capture endpoints, so runtime capture and hardware are not verified.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45977648093/job/140433306980"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Pinned synthetic Windows replay completed for two offline ASR chains with the same LFM Q8 weights through local llama.cpp. All 48 speech cases emitted a caption; Sherpa p50/p95 1375/2787 ms, Whisper p50/p95 10866/17737 ms. Limitations: synthetic en-US voices with oracle segmentation, not VAD or real devices; utterance content/accuracy is not yet accepted, early review reveals clipped English prefixes and incorrect Vietnamese amounts.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45978546306/job/140436315074",
+          "artifact": "https://github.com/rua-den/sig4a/actions/runs/45978546306/artifacts/15188646838",
+          "tested_revision": "a6fba24529a8af9923306a57346d0a34996d226e"
+        },
+        {
+          "status": "failed_exploratory_targets",
+          "case": "Independent model-blinded bilingual review and matched source/freeze/result SHA-256: Whisper/LFM retained 40/122 annotated facts and clearly preserved 1/7 critical negations; Sherpa/LFM retained 1/122 and clearly preserved 0/7. These are exact exploratory fixture results, not human or accent-diverse certification. Reject both tested pipelines as configured; isolate MT using clean and ASR-transcribed text and diagnose systematic Sherpa prefix loss before retest.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45978546306/artifacts/15188646838"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Sherpa 20M first word matched 0/48 in one-shot and paced replay and only 11/48 with +800 ms pre-roll using the same verified synthetic WAVs. This recipe is not a v1 candidate. Separate local translation diagnostic on clean references: official Marian EN→VI p95 342 ms vs LFM p95 1327 ms, not full pipeline latency. Accuracy and revised ASR candidate still being verified.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45981066971",
+          "tested_revision": "fd303b48eceb403ed2e77d4ab19eec7d4c6c9c9e"
+        },
+        {
+          "status": "failed_exploratory_targets",
+          "case": "Identical clean English input independently translated and graded blind: current Marian preserved 61/122 facts and 2/7 critical negations clearly; current LFM preserved 25/122 and 1/7. Neither is selected. This clean-text diagnostic isolates translation errors independent of speech recognition. Next evaluate a stronger dedicated offline MT engine and alternative low-latency ASR; thresholds remain unchanged.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45981066971/artifacts/15188619626"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Alternative June English Zipformer: 48/48 utterances, 46/48 exact first words, p95 797 ms ASR-only on exact existing PCM, zero observed hallucinations in two silence controls. Tiny.en p95 996 ms with both silence cases nonempty. Oracle segments only, not live VAD or device proof.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45983133617/job/140451838363"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Official HY-MT Q4_K_M local text translation ran with p95 1178 ms on the original 48 clean references and 1695 ms on the new 24 technical reference inputs. Blind accuracy, full pipeline with real endpointing and physical Windows input still pending.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45983335033/job/140452517457"
+        },
+        {
+          "status": "failed_exploratory_targets",
+          "case": "Blind clean-input review of HY-MT Q4_K_M: 109/122 annotated facts and 5/7 critical negations on original references; 37/61 and 10/15 on 24 freshly held-out technical inputs. Same-run LFM 25/122 and 1/7 on original, 5/61 and 1/15 fresh. Faster ASR cannot resolve these translation errors. Use HY-MT only for exploration, do not select or change Phase 1 acceptance.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45983335033",
+          "tested_revision": "3f599f178ac32346e74b1bc4c7adae6ed923dce7"
+        },
+        {
+          "status": "failed_exploratory_targets",
+          "case": "Continuous synthetic PCM with real RNNT endpoint detection and local HY-MT, corrected offline scorer 91bf027: 45/48 original utterances produced one eligible caption, 2 premature endpoints; 3 unavailable/invalid are counted as infinite, p50 2883 ms and p95 nonfinite. No nonempty ASR events in the selected noise/silence windows. Attribution is time-window based and publication timing is a Tk proxy, not SIG4A UI. Candidate does not reach Phase 1 latency or held-out accuracy gates.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45984800139/job/140457535771",
+          "artifact": "https://github.com/rua-den/sig4a/actions/runs/45984800139/artifacts/15191641656",
+          "tested_revision": "f8da26ef822e83a549b281be4c4843b99aa18b4d"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Optional self-contained operator-only Windows x64 diagnostic built; exact extracted ZIP smoke confirms no device opens on self-check and rejection of unattended modes. ZIP revision, inner digest, dependency notices verified. Physical mic/headphone or SIG4A app proof not supplied. Operator decides whether to run and manually share aggregate measurements only.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45985809619/job/140461010889",
+          "tested_revision": "69c5379c1b82c5b234368e72b95d482058475453"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Tool Box and overlay integration",
+      "status": "pending",
+      "acceptance": [
+        {
+          "id": "LT2-a",
+          "status": "pending",
+          "case": "Tool Box and remappable unbound-by-default shortcut open one UI without starting capture; known existing shortcuts still work; rebinding and restart tested on Windows."
+        },
+        {
+          "id": "LT2-b",
+          "status": "pending",
+          "case": "Bilingual overlay shows stable accessible captions without stealing focus; manual Pause/Resume/Stop/close and device loss reflect state. A bounded worker pipeline rejects obsolete events after Pause, Stop, source/device changes or shutdown; verify real overlay latency against Phase 1 target."
+        },
+        {
+          "id": "LT2-c",
+          "status": "pending",
+          "case": "Use loopback-only inference endpoints without cloud fallback; use content-free logs/errors. No cloud or disk sink for audio or captions; no output from old sessions. Show actionable errors for missing models, unsupported device, or disabled microphone permission. Independent Advisor approval."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Windows release acceptance",
+      "status": "pending",
+      "acceptance": [
+        {
+          "id": "LT3-a",
+          "status": "pending",
+          "case": "Ordinary non-e2e Windows build runs a representative 60-minute soak with no growing lag/memory/queue; record evidence and observed device/runtime limitations."
+        },
+        {
+          "id": "LT3-b",
+          "status": "pending",
+          "case": "Real Windows mic and headphones, device removal/reconnect, locked full suite, existing tool UI regression, and release archive smoke. Do not claim physical evidence based only on virtual endpoints."
+        },
+        {
+          "id": "LT3-c",
+          "status": "pending",
+          "case": "Independent Advisor reviews the exact release tree; attach run evidence before marking passed or merging. No tag or release publication implied."
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "status": "pending",
+    "rule": "Advisor reviews plan before Luna codes; each later phase waits on prior phase evidence and review. Main stays unchanged until exact integrated product is reviewed and acceptance passes. Owner-authorized experimental merge is a separate gated path, not a pass of the existing quality/release gates."
+  },
+  "experimental_merge": {
+    "status": "passed",
+    "authorization": "Owner requested Experimental Live Translate on main; improve candidate quality afterwards. Applies to this experimental opt-in launch only; release/quality gates are not passed.",
+    "commit_baseline": "84926dcaab809543611f43e82b5886bb1eca4445",
+    "presentation": "English first; Vietnamese intentionally opt-in with persistent test warning. Tool is off on launch; no cloud, recording, automatic capture, or audio-source fallback.",
+    "architecture": "Existing Rust/WebView2 dashboard and tray integration; a separately supervised Windows companion exchanges bounded NDJSON over private stdin/stdout. Keep capture, resampling, local ASR and ephemeral data in companion. Pin model/runtime and make explicit setup/package safe. If no Vietnamese local model installed, English stays usable and the UI reports why VI is unavailable.",
+    "protocol": {
+      "commands": [
+        "list",
+        "start(source=playback|mic,device_id optional only for default playback,translate=false)",
+        "stop",
+        "quit"
+      ],
+      "events": [
+        "devices",
+        "status",
+        "caption(en required,vi optional)",
+        "error(code only)"
+      ],
+      "lifetime": "One supervised helper, one explicit active source; kill/reap child or close per-session on stop, pause, close, switch and owner death; require generation checks. No audio through WebView, no caption content in logs."
+    },
+    "merge_required": [
+      "Independent Advisor reviews exact app, privacy, helper model packaging, no embedded secrets or untrusted downloads",
+      "Locked Windows build and regression of existing Tool Box features",
+      "Exact extracted Windows preview archive actually launches normal UI",
+      "Deterministic synthetic and real Windows capability/failure paths proving explicit start, single source, stop, no late output/reopen, no recording or cloud fallback",
+      "Document that actual physical devices and translation quality are unverified where no proof, never mark milestones passed without evidence"
+    ],
+    "followup": [
+      "Acoustic physical test and end-to-end 60-minute soak",
+      "Original EN→VI p50/p95, fact and critical negation targets"
+    ],
+    "advisor_precode": {
+      "status": "approved",
+      "reviewed_draft": "06ea86612eed43f882080a2d3e92c123d68af01b",
+      "reviewer": "GPT-6.2 Astra",
+      "contract": "docs/live-translate-experimental-protocol.md"
+    },
+    "tested_product": "bacd315fc4929eb18d2550f78a4c2950df97777b",
+    "evidence": {
+      "review": "GPT-6.2 Astra approved exact product tree at ab40b74a02845419d31d79b754f18dc09d84812d; compared to bacd315fc4929eb18d2550f78a4c2950df97777b with only the package smoke harness changed.",
+      "standard": "https://github.com/rua-den/sig4a/actions/runs/45992837541/job/140484755646",
+      "full_product_regression": "212 passed, 0 failed, 1 pre-existing optional ignored; native live WebView2/stop, process Job cleanup and renderer lease. Same application sources on 96c13be60fb53376c18356a561b8e88ac7040ec9, compare changes only .github/live-translate/smoke-package.ps1. https://github.com/rua-den/sig4a/actions/runs/45991182150/job/140479103495",
+      "local_english_engine": "https://github.com/rua-den/sig4a/actions/runs/45992837974/job/140484758296",
+      "ordinary_packaged_ui": "https://github.com/rua-den/sig4a/actions/runs/45992837974/job/140484758327",
+      "artifact": "https://github.com/rua-den/sig4a/actions/runs/45992837974/artifacts/15194193124",
+      "limitations": "Experimental only. Physical Windows microphone/headphone endpoint capture and release, end-to-end optional Vietnamese using the actual product, long soak, and translation accuracy/latency acceptance remain unverified or unpassed; earlier timing/accuracy diagnostics are not passes. No release or tag."
+    }
+  }
+}

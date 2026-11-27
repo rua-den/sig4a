@@ -1,7 +1,8 @@
 //! Shared shortcut grammar and dashboard/tray protocol. Windows ownership is checked by the tray.
 use serde_json::{json, Value};
 
-pub const KEYS: [&str; 4] = ["toolbox", "grammar", "translation", "ocr"];
+pub const COUNT: usize = 5;
+pub const KEYS: [&str; COUNT] = ["toolbox", "grammar", "translation", "ocr", "live"];
 pub const CONFIG: &str = "global_shortcuts";
 pub const TRAY_CLASS: &str = "ClaudeUsageTray";
 pub const APPLY_MESSAGE: usize = 0x5347484b;
@@ -13,13 +14,15 @@ pub const IO_ERROR: usize = 3;
 pub const DISABLED: usize = 4;
 pub const CONFLICT: usize = 16;
 pub const STATUS: usize = 32;
+pub const STATUS_COUNT: usize = 1 << COUNT;
+pub const LIVE_OPEN_MESSAGE: u32 = 0x8000 + 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Chord {
     pub mods: u32,
     pub vk: u32,
 }
-pub type Bindings = [Option<Chord>; 4];
+pub type Bindings = [Option<Chord>; COUNT];
 
 impl Chord {
     pub fn parse(s: &str) -> Result<Option<Self>, ()> {
@@ -74,14 +77,19 @@ impl Chord {
 
 pub fn defaults() -> Bindings {
     [None, Some(Chord { mods: 3, vk: b'G' as u32 }),
-        Some(Chord { mods: 3, vk: b'T' as u32 }), Some(Chord { mods: 3, vk: b'O' as u32 })]
+        Some(Chord { mods: 3, vk: b'T' as u32 }), Some(Chord { mods: 3, vk: b'O' as u32 }), None]
 }
 
 /// Error: offending action index and whether it repeats a chord used by an earlier action.
 pub fn parse(v: &Value) -> Result<Bindings, (usize, bool)> {
-    let mut out = [None; 4];
+    let mut out = [None; COUNT];
     for (i, key) in KEYS.iter().enumerate() {
-        let value = v[*key].as_str().ok_or((i, false))?;
+        // The previous four-field on-disk/bridge format remains accepted with Live unbound.
+        let value = match v.get(*key) {
+            None if *key == "live" => "",
+            Some(value) => value.as_str().ok_or((i, false))?,
+            None => return Err((i, false)),
+        };
         let chord = Chord::parse(value).map_err(|_| (i, false))?;
         if chord.is_some() && out[..i].contains(&chord) {
             return Err((i, true));
@@ -110,8 +118,12 @@ mod tests {
     #[test]
     fn accepts_and_canonicalizes_distinct_bindings_and_explicit_disable() {
         let p = parse(&json!({"toolbox":"alt + ctrl+b","grammar":"","translation":"Ctrl+Shift+f11","ocr":"Alt+9"})).unwrap();
-        assert_eq!(value(p), json!({"toolbox":"Ctrl+Alt+B","grammar":"","translation":"Ctrl+Shift+F11","ocr":"Alt+9"}));
+        assert_eq!(value(p), json!({"toolbox":"Ctrl+Alt+B","grammar":"","translation":"Ctrl+Shift+F11","ocr":"Alt+9","live":""}));
         assert_eq!(parse(&value(defaults())), Ok(defaults()));
+        assert_eq!(p[4], None);
+        let with_live = parse(&json!({"toolbox":"","grammar":"Ctrl+Alt+G","translation":"Ctrl+Alt+T","ocr":"Ctrl+Alt+O","live":"Ctrl+Shift+L"})).unwrap();
+        assert_eq!(value(with_live)["live"], "Ctrl+Shift+L");
+        assert_eq!(parse(&json!({"toolbox":"","grammar":"Ctrl+Alt+G","translation":"Ctrl+Alt+T","ocr":"Ctrl+Alt+O","live":"Ctrl+Alt+O"})), Err((4, true)));
         assert_eq!(configured(&crate::config::defaults()), defaults());
     }
 
