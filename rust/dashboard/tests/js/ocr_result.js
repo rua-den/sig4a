@@ -21,9 +21,13 @@ window.pywebview.api = new Proxy(originalApi, {
       return data => new Promise(resolve => requests.push({ data, resolve }));
     }
     if (key === 'ocr_capture') return () => new Promise(resolve => { capture = resolve; });
-    if (key === 'local_models') return (...data) => aiCheckBusy
-      ? new Promise(resolve => readiness.push({ data, resolve }))
-      : delayedInventory || Promise.resolve({models: ['new-model']});
+    if (key === 'local_ai_diagnostics') return (...data) => new Promise(resolve => readiness.push({
+      data,
+      resolve: result => resolve(Array.isArray(result.models)
+        ? {server:'reachable',model_status:result.models.includes(data[2])?'listed':'missing',ocr:'unknown',...result}
+        : result),
+    }));
+    if (key === 'local_models') return () => delayedInventory || Promise.resolve({models: ['new-model']});
     return target[key];
   },
 });
@@ -76,8 +80,11 @@ try {
   readiness[2].resolve({ models: [] }); await emptyCheck;
   check(state() === 'missing_model', 'empty list did not give an actionable diagnosis');
   const connected = checkAi(); await tick();
-  readiness[3].resolve({ models: ['fixture-vision', 'bad-cloud'] }); await connected;
+  readiness[3].resolve({ models: ['fixture-vision', 'bad-cloud'], ocr: 'supported' }); await connected;
   check(state() === 'connected' && node('ai-models').options.length === 1, 'discovery must not claim OCR ready or offer a cloud model');
+  check(node('ai-diag-config').textContent.includes('18081') &&
+    node('ai-diag-ocr').textContent.includes('chưa thử ảnh') && requests.length === 0,
+    'diagnostics must show metadata without submitting image');
   const test = testAi(); await tick();
   readiness[4].resolve({ models: ['fixture-vision'] }); await tick();
   check(state() === 'testing' && requests[0].data.image.startsWith('data:image/png;base64,') && requests[0].data.task === 'ocr', 'model test did not make an OCR request');

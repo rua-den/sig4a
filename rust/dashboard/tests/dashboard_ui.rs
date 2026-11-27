@@ -169,6 +169,95 @@ fn local_ai_fixture() -> (String, mpsc::Receiver<Value>, std::thread::JoinHandle
     (endpoint, rx, worker)
 }
 
+// Statically ordered socket transcript: a check may send a model ID but never
+// content, a remote alias may not reach /api/show, and an explicit sample is
+// the only action that sends any image. This is a bridge test, not real OCR.
+fn diagnostics_fixture() -> (String, std::thread::JoinHandle<()>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    let worker = std::thread::spawn(move || {
+        let inventory = json!({"models":[
+            {"name":"gemma4:e2b"},
+            {"name":"remote-vision","remote_model":"remote-fixture","remote_host":"https://example.invalid"}
+        ]});
+        let metadata = json!({"capabilities":["completion","vision"]});
+        let exchanges = [
+            ("GET /api/tags HTTP/1.1", inventory.clone()),
+            ("POST /api/show HTTP/1.1", metadata.clone()),
+            ("GET /api/tags HTTP/1.1", inventory.clone()),
+            ("GET /api/tags HTTP/1.1", inventory),
+            ("POST /api/show HTTP/1.1", metadata),
+            ("POST /api/chat HTTP/1.1", json!({"message":{"content":"Close the door."}})),
+        ];
+        let deadline = Instant::now() + Duration::from_secs(38);
+        for (expected, response) in exchanges {
+            let (mut stream, request, bytes) = loop {
+                let mut stream = match listener.accept() {
+                    Ok((stream, _)) => stream,
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
+                        std::thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    Err(e) => panic!("diagnostic fixture {expected}: {e}"),
+                };
+                stream.set_nonblocking(false).unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                let mut reader = BufReader::new(&mut stream);
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 {
+                    assert!(Instant::now() < deadline, "empty diagnostic fixture sockets");
+                    continue;
+                }
+                let request = line.trim_end().to_owned();
+                let mut len = 0;
+                loop {
+                    line.clear();
+                    assert!(reader.read_line(&mut line).unwrap() > 0, "truncated fixture header");
+                    if line == "\r\n" { break; }
+                    if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        len = value.trim().parse::<usize>().unwrap();
+                    }
+                }
+                assert!(len < 256 * 1024);
+                let mut bytes = vec![0; len];
+                reader.read_exact(&mut bytes).unwrap();
+                break (stream, request, bytes);
+            };
+            assert_eq!(request, expected);
+            match expected {
+                "GET /api/tags HTTP/1.1" => assert!(bytes.is_empty()),
+                "POST /api/show HTTP/1.1" => assert_eq!(
+                    serde_json::from_slice::<Value>(&bytes).unwrap(),
+                    json!({"model":"gemma4:e2b"})
+                ),
+                "POST /api/chat HTTP/1.1" => {
+                    let body: Value = serde_json::from_slice(&bytes).unwrap();
+                    assert_eq!(body["model"], "gemma4:e2b");
+                    assert_eq!(body["stream"], false);
+                    let message = &body["messages"][0];
+                    assert_eq!(message["role"], "user");
+                    assert!(message["content"].as_str().unwrap().contains("Transcribe the image exactly"));
+                    let images = message["images"].as_array().unwrap();
+                    assert_eq!(images.len(), 1);
+                    assert!(images[0].as_str().unwrap().starts_with("iVBORw0KGgo"), "base64 PNG");
+                }
+                _ => unreachable!(),
+            }
+            let response = response.to_string();
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response.len(), response).unwrap();
+        }
+        let grace = Instant::now() + Duration::from_millis(400);
+        while Instant::now() < grace {
+            match listener.accept() {
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(10)),
+                _ => panic!("unexpected request after explicit OCR sample"),
+            }
+        }
+    });
+    (endpoint, worker)
+}
+
 const SCRIPT1: &str = r#"
 await new Promise(r => setTimeout(r, 700));
 toolTab('usage'); await new Promise(r => setTimeout(r, 100)); document.querySelector('.toolnav').style.display='none';
@@ -317,6 +406,34 @@ $('ai-prompt-translation').dispatchEvent(new Event('input', { bubbles: true }));
 await saveAi();
 const cfg = (await api.state()).cfg;
 return { saved: cfg.local_ai_model, prompt: cfg.local_ai_prompt_translation?.startsWith('PERSISTED PROMPT') === true };
+"#;
+
+const CHECK_LOCAL_AI: &str = r#"
+toolTab('localai');
+const model = $('ai-model');
+function selectModel(value) {
+  model.value = value;
+  model.dispatchEvent(new Event('input', { bubbles: true }));
+}
+async function clickUntil(id, state) {
+  $(id).click();
+  for (let i = 0; i < 120; i++) {
+    if ($('ai-status').dataset.state === state && !$(id).disabled) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error('Expected ' + state + ': ' + $('ai-status').dataset.state + ' ' + $('ai-status').textContent);
+}
+await clickUntil('ai-check', 'connected');
+const server = $('ai-diag-server').textContent.includes('Đã kết nối');
+const modelFound = $('ai-diag-model').textContent.includes('gemma4:e2b');
+const metadata = $('ai-diag-ocr').textContent.includes('chưa thử ảnh');
+selectModel('remote-vision');
+await clickUntil('ai-check', 'missing_model');
+const remoteRejected = ![...$('ai-models').options].some(o => o.value === 'remote-vision');
+selectModel('gemma4:e2b');
+await clickUntil('ai-test', 'ready');
+const sample = $('ai-diag-ocr').textContent.includes('đọc đúng ảnh mẫu');
+return {server, modelFound, metadata, remoteRejected, sample};
 "#;
 
 #[test]
@@ -542,6 +659,36 @@ fn dashboard_process_end_to_end() {
     assert_eq!(result, json!({"first":"Bản dịch mẫu.","second":"Bản dịch mới.","inline":"Bản dịch mới.","remoteBlocked":true,"quick":true}), "{result}");
     drop(reused_quick);
     fixture.join().unwrap();
+
+    let (endpoint, diagnostic_worker) = diagnostics_fixture();
+    let mut config: Value = serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
+    config["local_ai_backend"] = json!("ollama");
+    config["local_ai_endpoint"] = json!(endpoint);
+    config["local_ai_model"] = json!("gemma4:e2b");
+    config["local_ai_managed"] = json!(false);
+    let original = serde_json::to_vec(&config).unwrap();
+    fs::write(&config_path, &original).unwrap();
+    let (diagnostics, result) = run_script(&local, &home, tmp.path(), "check-local-ai", CHECK_LOCAL_AI);
+    assert_eq!(result, json!({"server":true,"modelFound":true,"metadata":true,"remoteRejected":true,"sample":true}), "{result}");
+    assert_eq!(fs::read(&config_path).unwrap(), original, "diagnostics must not save settings");
+    drop(diagnostics);
+    diagnostic_worker.join().unwrap();
+
+    // Exercise the one-click consent/status UI with a synthetic installer. The
+    // native e2e bridge separately refuses to start or cancel an actual setup.
+    let (setup_window, result) = run_script(
+        &local, &home, tmp.path(), "local-ai-setup",
+        concat!(r#"
+for (const action of ['local_ai_setup_start', 'local_ai_setup_cancel']) {
+  const response = await api[action]();
+  if (response?.accepted !== false || response?.code !== 'test_disabled') {
+    throw new Error('E2E must block production setup IPC: ' + action);
+  }
+}
+"#, include_str!("js/local_ai_setup.js")),
+    );
+    assert_eq!(result, json!({"local_ai_setup":true}), "{result}");
+    drop(setup_window);
 
     let log = fs::read_to_string(data.join("events.log")).unwrap_or_default();
     assert!(

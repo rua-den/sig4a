@@ -7,6 +7,8 @@ mod api;
 mod geom;
 mod live;
 mod region;
+mod setup;
+mod setup_trust;
 mod win;
 
 use api::Core;
@@ -310,6 +312,9 @@ impl App {
             "open_toolbox" => Value::Bool(win::open_toolbox()),
             "state" => c.state(),
             "local_ai_settings" => c.local_ai_settings(),
+            "local_ai_setup_status" if !self.quick_mode && a.is_empty() => setup::status(),
+            "local_ai_setup_start" if !self.quick_mode && a.is_empty() => setup::start(),
+            "local_ai_setup_cancel" if !self.quick_mode && a.is_empty() => setup::cancel(),
             "test_notify" => c.flag(&c.paths.testflag),
             "refresh" => c.flag(&c.paths.flag),
             "hook_status" => c.hook_status(),
@@ -748,6 +753,12 @@ fn main() {
                     std::thread::sleep(Duration::from_millis(4800));
                     return;
                 }
+                // Native UI tests provide controlled JS bridge data. Never install a
+                // package or pull weights from a scripted E2E dashboard process.
+                if e2e.is_some() && matches!(m.as_str(), "local_ai_setup_start" | "local_ai_setup_cancel") {
+                    let _ = webview.evaluate_script(&bridge_result(id, Ok(json!({"accepted":false,"code":"test_disabled"}))));
+                    return;
+                }
                 if m == "__quick_presented" {
                     if app.quick_mode
                         && !OCR_BUSY.load(Ordering::Acquire)
@@ -782,7 +793,7 @@ fn main() {
                         }
                         return;
                     }
-                    if matches!(m.as_str(), "local_models" | "local_chat") {
+                    if matches!(m.as_str(), "local_models" | "local_chat" | "local_ai_diagnostics") {
                         if m == "local_chat" {
                             let o = a.first().and_then(Value::as_object);
                             let too_big = o.and_then(|x| x.get("text")).and_then(Value::as_str).is_some_and(|s| s.len() > 32 * 1024)
@@ -796,6 +807,11 @@ fn main() {
                         let p = proxy.clone();
                         std::thread::spawn(move || {
                             let r = match m.as_str() {
+                                "local_ai_diagnostics" => Ok(api::local_ai_diagnostics(
+                                    a.first().and_then(Value::as_str).unwrap_or(""),
+                                    a.get(1).and_then(Value::as_str).unwrap_or(""),
+                                    a.get(2).and_then(Value::as_str).unwrap_or(""),
+                                )),
                                 "local_models" => Ok(api::local_models(a.first().and_then(Value::as_str).unwrap_or("http://127.0.0.1:11434"), a.get(1).and_then(Value::as_str).unwrap_or("ollama"))),
                                 _ => {
                                     let o = a.first().and_then(Value::as_object);

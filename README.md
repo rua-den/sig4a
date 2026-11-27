@@ -123,3 +123,46 @@ Các lệnh kiểm tra định dạng và lint bổ sung:
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
 ```
+
+### Kiểm tra Local AI
+
+Trong **Cài đặt → Local AI**, chọn **Kiểm tra thành phần** để xem đúng backend,
+endpoint và model đang chọn, trạng thái kết nối, model local đã có hay chưa, và
+khả năng nhận ảnh. Kiểm tra chỉ đọc danh sách và metadata model qua loopback,
+không gửi đoạn văn hay ảnh của bạn. Ollama dùng trường `capabilities` trả về
+từ [API Show model details](https://docs.ollama.com/api-reference/show-model-details);
+llama.cpp có thể hiện “chưa xác định” vì danh sách model không xác nhận vision.
+Chọn **Thử model với ảnh mẫu** để gửi riêng một ảnh do ứng dụng tạo sẵn và kiểm
+tra model đọc đúng câu mẫu; báo có hỗ trợ từ metadata không có nghĩa là ảnh đã
+được thử thành công.
+
+**Cài phần còn thiếu** chỉ chạy khi bạn bấm. SIG4A nhận diện Ollama chính thức
+(Ollama Inc.) từ vị trí cài per-user và chỉ dùng Microsoft App Installer / WinGet
+để cài gói `Ollama.Ollama` từ nguồn `winget` nếu thiếu. [Ollama cho Windows](https://docs.ollama.com/windows)
+cần ít nhất khoảng 4 GB sau khi cài và trình cài có thể thêm Ollama vào chương
+trình tự khởi động cùng Windows; model `gemma4:e2b` tải thêm khoảng
+4,6 GB cho bản Q4 từ [kho Ollama](https://ollama.com/library/gemma4) nếu chưa có; kích thước có thể đổi theo tag. Thư mục model có thể nằm trên ổ khác.
+SIG4A không tự đồng ý điều khoản, không nâng cấp Ollama và không gửi dữ liệu
+OCR/dịch trong quá trình cài.
+
+Nếu cần cài Ollama, hãy tự thoát Ollama và server llama.cpp (kể cả LFM đi kèm),
+rồi đừng mở lại trong lúc cài. [Trình cài Ollama](https://raw.githubusercontent.com/ollama/ollama/main/app/ollama.iss)
+có thể dừng các tiến trình có tên `ollama.exe`, `ollama app.exe` hoặc
+`llama-server.exe`. SIG4A kiểm tra danh sách tiến trình ngay trước khi cho
+WinGet chạy và chặn cài nếu thấy bất kỳ tên nào trong số đó hoặc không kiểm
+tra được. SIG4A không tự dừng các tiến trình này; bước kiểm tra không thể
+ngăn một tiến trình được khởi động sau đó. Nếu `OLLAMA_HOST` hiện tại hoặc
+trong biến môi trường Windows khác địa chỉ mặc định 127.0.0.1:11434 hoặc
+không kiểm tra được, SIG4A không chạy WinGet hay tự sửa biến môi trường.
+
+Nếu cổng 11434 thuộc một tiến trình chưa xác minh, cài đặt dừng chứ không dừng
+hay cấu hình lại tiến trình đó. Server do SIG4A khởi động dùng 127.0.0.1 và
+`OLLAMA_NO_CLOUD=1` riêng cho tiến trình mới; với Ollama đã chạy sẵn, SIG4A
+không thay đổi hay xác nhận cài đặt cloud. Server tự khởi động bởi trình cài
+cũng không được xác nhận cài đặt cloud. Giữ cửa sổ mở khi cài. Nút hủy chỉ
+dừng tiến trình thuộc lượt cài hiện tại, không gỡ gói đã cài hay xóa file model.
+
+Trạng thái sẵn sàng chỉ xác nhận tag local và metadata vision, không thay
+cho thử ảnh mẫu hoặc xác thực nội dung trọng số. Sau khi sẵn sàng, **Chọn preset Gemma 4 E2B** chỉ đổi backend, endpoint và
+model trong màn hình cấu hình. Bấm **Lưu Local AI** nếu muốn lưu lựa chọn; prompt
+không cần thay đổi.
