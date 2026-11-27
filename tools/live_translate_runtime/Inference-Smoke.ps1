@@ -18,7 +18,12 @@ if (Test-Path -LiteralPath $pointer -PathType Leaf) {
 }
 elseif (!(Test-Path -LiteralPath $legacy -PathType Container)) { throw 'Provision verified EN assets in the test package first.' }
 if ($Vietnamese -and !(Test-Path -LiteralPath "$source/models/hymt")) { throw 'Provision verified VI assets first.' }
-dotnet publish "$PSScriptRoot/tests/inference/InferenceSmoke.csproj" -c Release -r win-x64 --self-contained true -o $dir
+# The referenced product project enforces its own full locked RID graph.
+# Don't narrow that graph with an implicit publish restore.
+$smokeProject = Join-Path $PSScriptRoot 'tests/inference/InferenceSmoke.csproj'
+dotnet restore $smokeProject -p:SelfContained=true
+if ($LASTEXITCODE -ne 0) { throw 'Unable to restore isolated smoke harness.' }
+dotnet publish $smokeProject --no-restore -c Release -r win-x64 --self-contained true -o $dir
 if ($LASTEXITCODE -ne 0) { throw 'Unable to publish isolated smoke harness.' }
 New-Item -ItemType Directory -Path "$dir/models" | Out-Null
 if ($slot) {

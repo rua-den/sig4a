@@ -213,6 +213,14 @@ textarea:focus{outline:0;border-color:var(--accent)}
    <label>Refresh (giây, tối thiểu 90)<input type="number" id="interval" min="90"></label>
    <label class="chk"><input type="checkbox" id="autosw">Chạy cùng Windows (ẩn ở tray)</label>
    <label class="chk" title="Tự làm mới phiên đăng nhập bằng refresh token đã lưu"><input type="checkbox" id="trefsw">Tự làm mới token hết hạn</label>
+   <section class="modelcard" id="diagnostics-report" aria-labelledby="diag-report-title" hidden>
+    <b id="diag-report-title">Báo cáo chẩn đoán</b>
+    <p class="hint">Chỉ gồm thông tin bản chạy và lịch sử cài Local AI của cửa sổ này, không kiểm tra trạng thái hiện tại. Không có tài khoản, đường dẫn, nhật ký, prompt hay nội dung của bạn. Không tự gửi báo cáo. Xem trước khi chia sẻ.</p>
+    <div class="toolactions"><button class="b" id="diag-report-preview" type="button">Xem báo cáo</button><button class="b" id="diag-report-copy" type="button" disabled>Sao chép JSON</button><button class="b" id="diag-report-clear" type="button" disabled>Xóa xem trước</button></div>
+    <textarea id="diag-report-json" aria-label="Báo cáo JSON xem trước" readonly spellcheck="false" rows="10" hidden></textarea>
+    <p class="hint">Xóa xem trước không thu hồi nội dung đã yêu cầu sao chép.</p>
+    <div id="diag-report-status" class="hint" role="status"></div>
+   </section>
   </div>
   <div class="set" id="alerts" hidden>
    <label>Cảnh báo ở %<input type="number" id="warn" min="1" max="100"></label>
@@ -735,6 +743,7 @@ function toolTab(t){
  if(t==='localai')void refreshAiSettingsIfClean();else clearTimeout(setupTimer);
  const previousFocus=document.activeElement;
  const previousRoute=activeRoute;
+ if(t!=='settings')clearDiagnosticsPreview();
  const route=t==='localai'?'settings':(t==='grammar'||t==='translation'||t==='ocr'?'ai':t);
  if(activeRoute==='cleaner'&&route!=='cleaner'){cancelCleanReview();stopCleanPoll();stopDupsPoll()}
  activeRoute=route;
@@ -1503,6 +1512,7 @@ async function openToolBox(){
  toast('Không mở được Tool Box. Kiểm tra SIG4A trong khay hệ thống.');
 }
 function tab(t){
+ if(t!=='gen')clearDiagnosticsPreview();
  for(const key of ['gen','look','alerts','hooks','ocrpopup','shortcuts','clean']){ $(key).hidden=key!==t;const button=$('t-'+key);if(button){button.classList.toggle('on',key===t);button.setAttribute('aria-pressed',String(key===t))} }
  if(t==='shortcuts')void loadShortcutStatus();
  if(t==='hooks')void hookStatus().catch(()=>{});
@@ -1510,6 +1520,86 @@ function tab(t){
  else {cancelCleanReview();stopCleanPoll();stopDupsPoll()}
  fit(true)
 }
+let diagnosticsRevision=0,diagnosticsPreview=null;
+function diagnosticsIsVisible(){
+ return !window.__QUICK_MODE__&&activeRoute==='settings'&&!document.body.classList.contains('localai-route')&&!$('gen').hidden;
+}
+function diagnosticsRecord(value,keys){
+ if(value===null||typeof value!=='object'||![Object.prototype,null].includes(Object.getPrototypeOf(value)))throw Error('schema');
+ const actual=Reflect.ownKeys(value);
+ if(actual.length!==keys.length)throw Error('schema');
+ const out=Object.create(null);
+ for(const key of keys){
+  const field=Object.getOwnPropertyDescriptor(value,key);
+  if(!field?.enumerable||!Object.hasOwn(field,'value'))throw Error('schema');
+  out[key]=field.value;
+ }
+ return out;
+}
+function diagnosticsEnum(value,allowed){
+ if(typeof value!=='string'||!allowed.includes(value))throw Error('schema');
+ return value;
+}
+function diagnosticsProject(raw){
+ const top=diagnosticsRecord(raw,['schema_version','app','local_ai_setup']);
+ if(top.schema_version!==1)throw Error('schema');
+ const app=diagnosticsRecord(top.app,['version','platform','arch','build']);
+ const setup=diagnosticsRecord(top.local_ai_setup,['scope','stage','issue']);
+ const version=app.version;
+ if(typeof version!=='string'||(version!=='unknown'&&(version.length>17||!/^(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})(?![\s\S])/.test(version))))throw Error('schema');
+ // All output records have null prototypes and own, allowlisted scalar values.
+ app.platform=diagnosticsEnum(app.platform,['windows','unknown']);
+ app.arch=diagnosticsEnum(app.arch,['x86_64','aarch64','x86','unknown']);
+ app.build=diagnosticsEnum(app.build,['release','debug','unknown']);
+ setup.scope=diagnosticsEnum(setup.scope,['last_recorded_in_this_dashboard_process']);
+ setup.stage=diagnosticsEnum(setup.stage,['not_observed','working','ready','cancelled','failed','unknown']);
+ setup.issue=diagnosticsEnum(setup.issue,['none','unavailable','provider_conflict','blocked_preflight','timeout','operation_failed','unknown']);
+ top.app=app;top.local_ai_setup=setup;
+ const approved=JSON.stringify(top,null,2);
+ if(new TextEncoder().encode(approved).length>4096)throw Error('schema');
+ return approved;
+}
+function clearDiagnosticsPreview(){
+ diagnosticsRevision++;diagnosticsPreview=null;
+ const text=$('diag-report-json');text.value='';text.hidden=true;
+ $('diag-report-preview').disabled=false;$('diag-report-copy').disabled=true;$('diag-report-clear').disabled=true;
+ setText('diag-report-status','');
+}
+async function showDiagnosticsPreview(){
+ if(!diagnosticsIsVisible()||$('diag-report-preview').disabled)return;
+ clearDiagnosticsPreview();
+ const revision=diagnosticsRevision;
+ $('diag-report-preview').disabled=true;$('diag-report-clear').disabled=false;
+ setText('diag-report-status','Đang chuẩn bị báo cáo…');
+ try{
+  const raw=await api.diagnostics_export_preview();
+  if(revision!==diagnosticsRevision||!diagnosticsIsVisible())return;
+  diagnosticsPreview=diagnosticsProject(raw);
+  const text=$('diag-report-json');text.value=diagnosticsPreview;text.hidden=false;
+  $('diag-report-copy').disabled=false;
+  setText('diag-report-status','Báo cáo chưa được sao chép hay gửi đi.');
+ }catch(e){
+  if(revision===diagnosticsRevision&&diagnosticsIsVisible())setText('diag-report-status','Không tạo được báo cáo. Thử lại.');
+ }finally{
+  if(revision===diagnosticsRevision&&diagnosticsIsVisible()){
+   $('diag-report-preview').disabled=false;fit(true);
+  }
+ }
+}
+async function copyDiagnosticsPreview(){
+ if(!diagnosticsIsVisible()||diagnosticsPreview===null)return;
+ const revision=diagnosticsRevision, reviewed=diagnosticsPreview;
+ try{
+  await navigator.clipboard.writeText(reviewed);
+  if(revision===diagnosticsRevision)setText('diag-report-status','Đã sao chép JSON.');
+ }catch(e){
+  if(revision===diagnosticsRevision)setText('diag-report-status','Không sao chép được. Có thể chọn và sao chép thủ công từ phần xem trước.');
+ }
+}
+$('diagnostics-report').hidden=!!window.__QUICK_MODE__;
+$('diag-report-preview').addEventListener('click',showDiagnosticsPreview);
+$('diag-report-copy').addEventListener('click',copyDiagnosticsPreview);
+$('diag-report-clear').addEventListener('click',()=>{clearDiagnosticsPreview();$('diag-report-preview').focus();fit(true)});
 function autoSave(){clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;save(true)},450)}
 let saving=Promise.resolve(),settingsBaseline=null,widgetProfilesSeed=null;
 async function closeDash(){if(autoT){clearTimeout(autoT);autoT=null;try{await save(true)}catch(e){}}try{await saving;await accentSaving}catch(e){}api.hide()}

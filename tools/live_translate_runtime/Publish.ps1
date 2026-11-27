@@ -10,10 +10,15 @@ if (Test-Path -LiteralPath $out) {
 }
 [void][IO.Directory]::CreateDirectory($out)
 $project = Join-Path $PSScriptRoot 'Sig4a.LiveTranslate.csproj'
-dotnet restore $project -r win-x64 -p:SelfContained=true --locked-mode
+# Lock file contains the full project RuntimeIdentifiers graph. Supplying
+# -r to restore narrows it on some SDKs; select win-x64 only at publish.
+dotnet restore $project -p:SelfContained=true --locked-mode
 if ($LASTEXITCODE -ne 0) { throw 'Pinned helper dependency restore failed.' }
 $assets = Join-Path $PSScriptRoot 'obj/project.assets.json'
 $restore = Get-Content -Raw -LiteralPath $assets | ConvertFrom-Json -AsHashtable
+foreach ($target in @('net8.0-windows7.0/win-x64','net8.0-windows7.0/linux-x64')) {
+    if (!$restore.targets.ContainsKey($target)) { throw "Declared helper restore target missing: $target" }
+}
 $packageFile = @($restore.packageFolders.Keys | ForEach-Object {
     Join-Path $_ 'sharpziplib/1.4.2/sharpziplib.1.4.2.nupkg'
 } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })

@@ -2,7 +2,13 @@
   "title": "Cài model phụ đề tiếng Anh ngay trong Live Translate",
   "status": "in_progress",
   "delivery": "Independent opt-in English model setup only; no coding or acceptance yet.",
-  "base": "a20328f66046eb71c8708107330b62e21da2f336",
+  "base": "59e12b6815d57c8051597b0c47613986d4159a5d",
+  "integration_evidence": {
+    "source": "Verified origin/main after merged PR #36 (Safe Diagnostics export).",
+    "revision": "59e12b6815d57c8051597b0c47613986d4159a5d",
+    "preserved": "Safe Diagnostics and hardened visible-dashboard smoke remain integrated with explicit English model setup, actual extracted-dashboard installer and isolated offline engine gates.",
+    "result": "Integrated baseline only; acceptance remains pending full hosted Windows tests on the merged revision."
+  },
   "scope": {
     "included": [
       "Explicit in-app install, real progress, cancel/retry, ready/missing/corrupt/failed state for the already supported English offline Sherpa model.",

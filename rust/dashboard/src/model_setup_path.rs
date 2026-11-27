@@ -14,15 +14,13 @@ use std::{
 use windows_sys::{
     Wdk::{
         Foundation::OBJECT_ATTRIBUTES,
-        Storage::FileSystem::{
-            NtOpenFile, FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN_REPARSE_POINT,
-            FILE_SYNCHRONOUS_IO_NONALERT,
-        },
+        Storage::FileSystem::{NtOpenFile, FILE_OPEN_REPARSE_POINT, FILE_SYNCHRONOUS_IO_NONALERT},
     },
     Win32::{
         Foundation::{
-            RtlNtStatusToDosError, HANDLE, INVALID_HANDLE_VALUE, STATUS_NO_SUCH_FILE,
-            STATUS_OBJECT_NAME_NOT_FOUND, UNICODE_STRING,
+            RtlNtStatusToDosError, HANDLE, INVALID_HANDLE_VALUE, STATUS_FILE_IS_A_DIRECTORY,
+            STATUS_NOT_A_DIRECTORY, STATUS_NO_SUCH_FILE, STATUS_OBJECT_NAME_NOT_FOUND,
+            STATUS_REPARSE_POINT_ENCOUNTERED, UNICODE_STRING,
         },
         Storage::FileSystem::{
             CreateFileW, FileAttributeTagInfo, GetFileInformationByHandleEx,
@@ -67,6 +65,22 @@ fn classify_io(error: io::Error) -> SetupPathError {
         SetupPathError::AccessDenied
     } else {
         SetupPathError::Invalid
+    }
+}
+
+fn classify_child_status(status: i32, helper_component: bool) -> SetupPathError {
+    match status {
+        STATUS_OBJECT_NAME_NOT_FOUND | STATUS_NO_SUCH_FILE if helper_component => {
+            SetupPathError::MissingHelper
+        }
+        // Preserve the native distinction: wrong type/reparse is not an
+        // ACL failure even when Windows maps it to ERROR_ACCESS_DENIED.
+        STATUS_FILE_IS_A_DIRECTORY | STATUS_NOT_A_DIRECTORY | STATUS_REPARSE_POINT_ENCOUNTERED => {
+            SetupPathError::Invalid
+        }
+        _ => classify_io(io::Error::from_raw_os_error(
+            unsafe { RtlNtStatusToDosError(status) } as i32,
+        )),
     }
 }
 
@@ -171,22 +185,13 @@ fn open_child(
             &obj,
             &mut status_block,
             FILE_SHARE_READ,
-            FILE_OPEN_REPARSE_POINT
-                | FILE_SYNCHRONOUS_IO_NONALERT
-                | if directory {
-                    FILE_DIRECTORY_FILE
-                } else {
-                    FILE_NON_DIRECTORY_FILE
-                },
+            // Open the exact leaf without following it; enforce both type and
+            // reparse attributes on this same held handle before returning.
+            FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
         )
     };
     if status < 0 {
-        if helper_component && matches!(status, STATUS_OBJECT_NAME_NOT_FOUND | STATUS_NO_SUCH_FILE)
-        {
-            return Err(SetupPathError::MissingHelper);
-        }
-        let error = unsafe { RtlNtStatusToDosError(status) };
-        return Err(classify_io(io::Error::from_raw_os_error(error as i32)));
+        return Err(classify_child_status(status, helper_component));
     }
     if native.is_null() || native == INVALID_HANDLE_VALUE {
         return Err(SetupPathError::Invalid);
@@ -350,6 +355,26 @@ mod tests {
     }
 
     #[test]
+    fn native_wrong_type_and_reparse_are_not_reported_as_permissions_or_absence() {
+        use windows_sys::Win32::Foundation::STATUS_ACCESS_DENIED;
+        for code in [
+            STATUS_FILE_IS_A_DIRECTORY,
+            STATUS_NOT_A_DIRECTORY,
+            STATUS_REPARSE_POINT_ENCOUNTERED,
+        ] {
+            assert_eq!(classify_child_status(code, true), SetupPathError::Invalid);
+        }
+        assert_eq!(
+            classify_child_status(STATUS_ACCESS_DENIED, true),
+            SetupPathError::AccessDenied
+        );
+        assert_eq!(
+            classify_child_status(STATUS_OBJECT_NAME_NOT_FOUND, true),
+            SetupPathError::MissingHelper
+        );
+    }
+
+    #[test]
     fn helper_resolution_never_uses_unc_or_unpinned_reparse_points() {
         let fixture = tempfile::tempdir().unwrap();
         let root = fixture.path();
@@ -381,11 +406,19 @@ mod tests {
             Some(SetupPathError::Invalid)
         );
         fs::remove_dir(indirect).unwrap();
-        junction(&fixed.join(EXE), &target);
+        fs::create_dir(fixed.join(EXE)).unwrap();
         assert_eq!(
             SetupHelper::open(&app.join("dash.exe")).err(),
             Some(SetupPathError::Invalid)
         );
+        fs::remove_dir(fixed.join(EXE)).unwrap();
+        junction(&fixed.join(EXE), &target);
+        // Some Windows filters reject the leaf itself with generic access
+        // denied. Either bounded refusal means no executable can escape.
+        assert!(matches!(
+            SetupHelper::open(&app.join("dash.exe")).err(),
+            Some(SetupPathError::Invalid | SetupPathError::AccessDenied)
+        ));
         fs::remove_dir(fixed.join(EXE)).unwrap();
         match std::os::windows::fs::symlink_file(target.join(EXE), fixed.join(EXE)) {
             Ok(()) => {

@@ -6,18 +6,34 @@ param(
  [ValidateSet('point','focus','state','list')][string]$Mode='point'
 )
 $ErrorActionPreference='Stop'
+# Windows PowerShell's console code page may not represent the UI's Vietnamese
+# accessible names. Escape every response (list, point, state, focus), so the
+# extracted dashboard's scripted install can assert the real Ready label.
+function Write-AsciiJson($value) {
+ $json=$value|ConvertTo-Json -Depth 5 -Compress
+ [regex]::Replace($json,'[^\x00-\x7f]',{param($m) '\u{0:x4}' -f [int][char]$m.Value[0]})
+}
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,WindowsBase
 Add-Type @'
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 public static class DesktopUiaWin {
  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
  public delegate bool EnumProc(IntPtr hwnd,IntPtr p);
  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr root,EnumProc proc,IntPtr p);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode,ExactSpelling=true)]
+ private static extern int GetClassNameW(IntPtr h,StringBuilder name,int count);
+ private static bool IsAuxiliary(IntPtr h) {
+  var name=new StringBuilder(256);
+  if(GetClassNameW(h,name,name.Capacity)==0)return false;
+  var cls=name.ToString();
+  return cls=="Tao Thread Event Target" || cls=="MSCTFIME UI" || cls=="IME";
+ }
  public static IntPtr[] Children(IntPtr root) {
   var x=new List<IntPtr>();
-  EnumChildWindows(root,(h,p)=>{x.Add(h);return true;},IntPtr.Zero);
+  EnumChildWindows(root,(h,p)=>{if(!IsAuxiliary(h))x.Add(h);return true;},IntPtr.Zero);
   return x.ToArray();
  }
 }
@@ -25,13 +41,33 @@ public static class DesktopUiaWin {
 [void][DesktopUiaWin]::SetProcessDPIAware()
 $main=[IntPtr]$Hwnd
 $names=[Collections.Generic.List[object]]::new()
+$rootBounds=$null
+$rootState='not_observed'
+$rootsRead=0
+$scanErrors=0
 foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
  try {
   $root=[Windows.Automation.AutomationElement]::FromHandle($h)
   if(!$root){continue}
+  $rootsRead++
+  if($Mode -eq 'list' -and $h -eq $main){
+    # Same UIA screen coordinate space as the descendants, not Win32's DPI
+    # virtualized GetWindowRect as observed by the invoking process.
+    $rootState='bounds_unavailable'
+    $rootInfo=$root.Current
+    $rect=$rootInfo.BoundingRectangle
+    if(!$rect.IsEmpty){
+      $rootState='observed'
+      $rootBounds=@{left=$rect.Left;top=$rect.Top;right=$rect.Right;bottom=$rect.Bottom;process_id=$rootInfo.ProcessId}
+    }
+  }
   $cond=[Windows.Automation.Condition]::TrueCondition
   foreach($e in $root.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)){
-    $c=$e.Current
+    try {$c=$e.Current} catch {
+      if($Mode -ne 'list'){throw}
+      $scanErrors++
+      continue
+    }
     if($Kind -and $c.ControlType.ProgrammaticName -notmatch ('[.]('+$Kind+')$')){continue}
     if(($Id -or $Name) -and !(($Id -and $c.AutomationId -ceq $Id) -or ($Name -and $c.Name -match $Name))){continue}
     if($Mode -eq 'list'){
@@ -63,11 +99,13 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
       $item.x=[int][Math]::Round($p.X);$item.y=[int][Math]::Round($p.Y)
     }
     if($Mode -ne 'point' -or ($item.enabled -and !$item.offscreen -and $item.ContainsKey('x'))){
-      $item|ConvertTo-Json -Compress
+      Write-AsciiJson $item
       exit 0
     }
   }
- }catch{}
+ }catch{if($Mode -eq 'list'){$scanErrors++}}
 }
-if($Mode -eq 'list'){@{items=@($names.ToArray())}|ConvertTo-Json -Depth 5 -Compress}
+if($Mode -eq 'list'){
+ Write-AsciiJson @{root=$rootBounds;root_state=$rootState;roots_read=$rootsRead;scan_errors=$scanErrors;items=@($names.ToArray())}
+}
 else{'{"found":false}'}

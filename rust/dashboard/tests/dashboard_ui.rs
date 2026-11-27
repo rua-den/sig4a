@@ -359,6 +359,8 @@ const out = {
   grammar: $('tool-grammar').classList.contains('on'),
   payload: $('grammar-in').value,
   pickerHidden: getComputedStyle($('accent').closest('.accent-picker')).display === 'none',
+  diagnosticsDenied: $('diagnostics-report').hidden &&
+    (await api.diagnostics_export_preview().then(()=>false,e=>e==='diagnostics_unavailable')),
   accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
 };
 setTimeout(() => api.hide(), 50);
@@ -604,6 +606,7 @@ fn dashboard_process_end_to_end() {
     assert_eq!(quick_result["grammar"], true, "quick opens grammar panel");
     assert_eq!(quick_result["payload"], "sample grammar payload", "quick stdin payload");
     assert_eq!(quick_result["pickerHidden"], true, "quick hides picker only");
+    assert_eq!(quick_result["diagnosticsDenied"], true, "quick window cannot preview diagnostics");
     assert_eq!(quick_result["accent"], "#c7a0ff", "quick inherits persisted purple accent");
     wait_for("quick process exit", 10, || quick.0.try_wait().unwrap().is_some());
     wait_for("quick window gone", 5, || window().is_null());
@@ -689,6 +692,20 @@ for (const action of ['local_ai_setup_start', 'local_ai_setup_cancel']) {
     );
     assert_eq!(result, json!({"local_ai_setup":true}), "{result}");
     drop(setup_window);
+
+    let mut hostile_config: Value = serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
+    hostile_config["local_ai_model"] = json!("PRIVATE_MODEL_CANARY");
+    hostile_config["local_ai_prompt_ocr"] = json!("PRIVATE_PROMPT_CANARY");
+    hostile_config["local_ai_endpoint"] = json!("http://127.0.0.1:1");
+    hostile_config["unrelated"] = json!({"email":"PRIVATE_EMAIL_CANARY@invalid","path":"C:\\secret"});
+    let hostile_bytes = serde_json::to_vec(&hostile_config).unwrap();
+    fs::write(&config_path, &hostile_bytes).unwrap();
+    let (report_window, result) = run_script(
+        &local, &home, tmp.path(), "diagnostics-export", include_str!("js/diagnostics_export.js"),
+    );
+    assert_eq!(result, json!({"diagnostics_export":true}), "{result}");
+    assert_eq!(fs::read(&config_path).unwrap(), hostile_bytes, "report must not change configuration");
+    drop(report_window);
 
     let log = fs::read_to_string(data.join("events.log")).unwrap_or_default();
     assert!(

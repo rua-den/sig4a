@@ -141,6 +141,120 @@ static STATE: Mutex<Progress> = Mutex::new(Progress {
 });
 static CANCEL: AtomicBool = AtomicBool::new(false);
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExportStage {
+    NotObserved,
+    Working,
+    Ready,
+    Cancelled,
+    Failed,
+    Unknown,
+}
+impl ExportStage {
+    pub const fn label(&self) -> &'static str {
+        match self {
+            Self::NotObserved => "not_observed",
+            Self::Working => "working",
+            Self::Ready => "ready",
+            Self::Cancelled => "cancelled",
+            Self::Failed => "failed",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExportIssue {
+    None,
+    Unavailable,
+    ProviderConflict,
+    BlockedPreflight,
+    Timeout,
+    OperationFailed,
+    Unknown,
+}
+impl ExportIssue {
+    pub const fn label(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Unavailable => "unavailable",
+            Self::ProviderConflict => "provider_conflict",
+            Self::BlockedPreflight => "blocked_preflight",
+            Self::Timeout => "timeout",
+            Self::OperationFailed => "operation_failed",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+pub struct ExportHistory {
+    pub stage: ExportStage,
+    pub issue: ExportIssue,
+}
+
+fn project_history(p: Progress) -> ExportHistory {
+    use ExportIssue as I;
+    use ExportStage as S;
+    let stage = match p.phase {
+        "idle" => S::NotObserved,
+        "checking" | "installing" | "starting_server" | "checking_model" | "pulling" => S::Working,
+        "ready" => S::Ready,
+        "cancelled" => S::Cancelled,
+        "failed" => S::Failed,
+        _ => S::Unknown,
+    };
+    let issue = match stage {
+        S::Unknown => I::Unknown,
+        S::Failed => match p.failure.map(|f| f.code) {
+            Some(
+                "winget_unavailable"
+                | "ollama_missing"
+                | "server_unavailable"
+                | "worker_unavailable"
+                | "lock_unavailable"
+                | "job_unavailable"
+                | "system_directory_unavailable",
+            ) => I::Unavailable,
+            Some("port_conflict" | "model_conflict" | "busy") => I::ProviderConflict,
+            Some(
+                "installer_processes_active"
+                | "installer_host_override"
+                | "installer_host_unverified"
+                | "process_scan_failed"
+                | "untrusted_ollama"
+                | "untrusted_executable"
+                | "elevated"
+                | "elevation_unknown",
+            ) => I::BlockedPreflight,
+            Some("install_timeout" | "server_timeout" | "pull_timeout") => I::Timeout,
+            Some(
+                "install_failed"
+                | "server_failed"
+                | "pull_failed"
+                | "model_not_found"
+                | "model_check_failed"
+                | "process_start_failed"
+                | "process_status_failed",
+            ) => I::OperationFailed,
+            _ => I::Unknown,
+        },
+        _ => I::None,
+    };
+    ExportHistory { stage, issue }
+}
+
+/// This is history for *this* process, not a health check. No OS mutex or
+/// external state; contention or a poisoned lock yields unknown immediately.
+pub fn export_history() -> ExportHistory {
+    STATE
+        .try_lock()
+        .map(|p| project_history(*p))
+        .unwrap_or(ExportHistory {
+            stage: ExportStage::Unknown,
+            issue: ExportIssue::Unknown,
+        })
+}
+
 pub fn status() -> Value {
     let p = *STATE.lock().unwrap();
     let externally_busy = !p.active && matches!(SetupLock::try_take(), Err(f) if f.code == "busy");
@@ -906,6 +1020,89 @@ mod tests {
                 &host.encode_utf16().collect::<Vec<_>>()
             ));
         }
+    }
+
+    #[test]
+    fn report_history_maps_fixed_setup_classes() {
+        for (phase, failure, stage, issue) in [
+            ("idle", None, ExportStage::NotObserved, ExportIssue::None),
+            ("checking", None, ExportStage::Working, ExportIssue::None),
+            ("installing", None, ExportStage::Working, ExportIssue::None),
+            (
+                "starting_server",
+                None,
+                ExportStage::Working,
+                ExportIssue::None,
+            ),
+            (
+                "checking_model",
+                None,
+                ExportStage::Working,
+                ExportIssue::None,
+            ),
+            ("pulling", None, ExportStage::Working, ExportIssue::None),
+            ("ready", None, ExportStage::Ready, ExportIssue::None),
+            (
+                "cancelled",
+                Some(Failure::new("cancelled")),
+                ExportStage::Cancelled,
+                ExportIssue::None,
+            ),
+            (
+                "failed",
+                Some(Failure::new("port_conflict")),
+                ExportStage::Failed,
+                ExportIssue::ProviderConflict,
+            ),
+            (
+                "failed",
+                Some(Failure::new("pull_timeout")),
+                ExportStage::Failed,
+                ExportIssue::Timeout,
+            ),
+            (
+                "failed",
+                Some(Failure::new("winget_unavailable")),
+                ExportStage::Failed,
+                ExportIssue::Unavailable,
+            ),
+            (
+                "failed",
+                Some(Failure::exit("install_failed", 42)),
+                ExportStage::Failed,
+                ExportIssue::OperationFailed,
+            ),
+        ] {
+            let projected = project_history(Progress {
+                phase,
+                active: false,
+                owned: false,
+                started_server: false,
+                failure,
+            });
+            assert_eq!(projected.stage, stage);
+            assert_eq!(projected.issue, issue);
+        }
+    }
+
+    #[test]
+    fn report_history_never_exports_raw_failure_or_waits_for_lock() {
+        let mut raw = Progress {
+            phase: "failed",
+            active: false,
+            owned: false,
+            started_server: false,
+            failure: Some(Failure::exit("https://private.invalid/CANARY", u32::MAX)),
+        };
+        let history = project_history(raw);
+        assert_eq!(history.stage, ExportStage::Failed);
+        assert_eq!(history.issue, ExportIssue::Unknown);
+        raw.failure = Some(Failure::new("installer_host_override"));
+        assert_eq!(project_history(raw).issue, ExportIssue::BlockedPreflight);
+        raw.phase = "C:\\secret\\CANARY";
+        assert_eq!(project_history(raw).stage, ExportStage::Unknown);
+        let _held = STATE.lock().unwrap();
+        assert_eq!(export_history().stage, ExportStage::Unknown);
     }
 
     #[test]
