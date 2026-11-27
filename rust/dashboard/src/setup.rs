@@ -13,13 +13,24 @@ use std::{
     time::{Duration, Instant},
 };
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT},
+    Foundation::{
+        CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_NO_MORE_FILES, ERROR_PATH_NOT_FOUND,
+        HANDLE, INVALID_HANDLE_VALUE, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    },
     Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY},
     System::{
+        Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+            TH32CS_SNAPPROCESS,
+        },
         JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob,
             JobObjectExtendedLimitInformation, SetInformationJobObject,
             JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        },
+        Registry::{
+            RegGetValueW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_NOEXPAND,
+            RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ,
         },
         SystemInformation::GetSystemDirectoryW,
         Threading::{
@@ -333,7 +344,7 @@ impl Runner for WindowsSetup {
     fn install(&mut self) -> SetupResult<()> {
         check_cancel()?;
         let winget = trust::resolve_winget().map_err(|_| Failure::new("winget_unavailable"))?;
-        let installer = OwnedProcess::spawn(&winget, INSTALL_ARGS, false)?;
+        let installer = OwnedProcess::spawn(&winget, INSTALL_ARGS, LaunchKind::WinGet)?;
         installer.wait(
             Duration::from_secs(10 * 60),
             "install_timeout",
@@ -359,7 +370,11 @@ impl Runner for WindowsSetup {
             return Err(Failure::new("server_unavailable"));
         }
         let executable = self.executable()?;
-        self.server = Some(OwnedProcess::spawn(executable.path(), &["serve"], true)?);
+        self.server = Some(OwnedProcess::spawn(
+            executable.path(),
+            &["serve"],
+            LaunchKind::Ollama,
+        )?);
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             check_cancel()?;
@@ -401,11 +416,12 @@ impl Runner for WindowsSetup {
 
     fn pull(&mut self) -> SetupResult<()> {
         self.confirm_listener()?;
-        OwnedProcess::spawn(self.executable()?.path(), &["pull", PRESET], true)?.wait(
-            Duration::from_secs(20 * 60),
-            "pull_timeout",
-            "pull_failed",
-        )?;
+        OwnedProcess::spawn(
+            self.executable()?.path(),
+            &["pull", PRESET],
+            LaunchKind::Ollama,
+        )?
+        .wait(Duration::from_secs(20 * 60), "pull_timeout", "pull_failed")?;
         self.confirm_listener()
     }
 
@@ -433,13 +449,116 @@ impl Runner for WindowsSetup {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LaunchKind {
+    WinGet,
+    Ollama,
+}
+
+fn installer_targets_process(image: &[u16]) -> bool {
+    let image = image.split(|&unit| unit == 0).next().unwrap_or_default();
+    // Mirror the current upstream OllamaSetup image names, not paths or partial matches.
+    ["ollama.exe", "ollama app.exe", "llama-server.exe"]
+        .iter()
+        .any(|name| {
+            name.len() == image.len()
+                && name.bytes().zip(image).all(|(expected, &actual)| {
+                    u8::try_from(actual).is_ok_and(|actual| expected.eq_ignore_ascii_case(&actual))
+                })
+        })
+}
+
+fn installer_host_is_default(host: &[u16]) -> bool {
+    host.is_empty()
+        || ["127.0.0.1:11434", "http://127.0.0.1:11434"]
+            .iter()
+            .any(|allowed| host.iter().copied().eq(allowed.encode_utf16()))
+}
+
+fn check_installer_host_value(root: HKEY, subkey: &str) -> SetupResult<()> {
+    let key = wide(OsStr::new(subkey));
+    let name = wide(OsStr::new("OLLAMA_HOST"));
+    let mut value = [0u16; 512];
+    let mut bytes = std::mem::size_of_val(&value) as u32;
+    let result = unsafe {
+        RegGetValueW(
+            root,
+            key.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | RRF_NOEXPAND,
+            std::ptr::null_mut(),
+            value.as_mut_ptr().cast(),
+            &mut bytes,
+        )
+    };
+    match result {
+        ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND => Ok(()),
+        0 if bytes >= 2 && bytes % 2 == 0 && bytes as usize <= std::mem::size_of_val(&value) => {
+            let data = &value[..bytes as usize / 2];
+            if data
+                .strip_suffix(&[0])
+                .is_some_and(installer_host_is_default)
+            {
+                Ok(())
+            } else {
+                Err(Failure::new("installer_host_override"))
+            }
+        }
+        _ => Err(Failure::new("installer_host_unverified")),
+    }
+}
+
+fn ensure_safe_installer_host() -> SetupResult<()> {
+    if let Some(value) = std::env::var_os("OLLAMA_HOST") {
+        let value: Vec<u16> = value.encode_wide().collect();
+        if !installer_host_is_default(&value) {
+            return Err(Failure::new("installer_host_override"));
+        }
+    }
+    // Windows/package activation may construct a fresh environment unrelated to
+    // WinGet's child environment. Be conservative about persisted host overrides.
+    check_installer_host_value(HKEY_CURRENT_USER, "Environment")?;
+    check_installer_host_value(HKEY_CURRENT_USER, "Volatile Environment")?;
+    check_installer_host_value(
+        HKEY_LOCAL_MACHINE,
+        r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+    )
+}
+
+fn ensure_no_installer_targets() -> SetupResult<()> {
+    // A process snapshot is system-wide, not restricted to this session or to the
+    // default port. Never open a worker with terminate rights or call taskkill.
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE || snapshot.is_null() {
+        return Err(Failure::new("process_scan_failed"));
+    }
+    let snapshot = Handle(snapshot);
+    let mut entry: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+    entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+    if unsafe { Process32FirstW(snapshot.0, &mut entry) } == 0 {
+        return Err(Failure::new("process_scan_failed"));
+    }
+    loop {
+        if installer_targets_process(&entry.szExeFile) {
+            return Err(Failure::new("installer_processes_active"));
+        }
+        if unsafe { Process32NextW(snapshot.0, &mut entry) } == 0 {
+            return if unsafe { GetLastError() } == ERROR_NO_MORE_FILES {
+                Ok(())
+            } else {
+                Err(Failure::new("process_scan_failed"))
+            };
+        }
+    }
+}
+
 struct OwnedProcess {
     process: Handle,
     job: Handle,
     pid: u32,
 }
 impl OwnedProcess {
-    fn spawn(path: &Path, args: &[&str], ollama: bool) -> SetupResult<Self> {
+    fn spawn(path: &Path, args: &[&str], kind: LaunchKind) -> SetupResult<Self> {
         if !path.is_absolute() {
             return Err(Failure::new("untrusted_executable"));
         }
@@ -461,7 +580,7 @@ impl OwnedProcess {
         if len == 0 || len >= system_dir.len() {
             return Err(Failure::new("system_directory_unavailable"));
         }
-        let env = restricted_environment(&system_dir[..len], ollama);
+        let env = restricted_environment(&system_dir[..len]);
 
         let job = Handle::new(
             unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) },
@@ -500,6 +619,14 @@ impl OwnedProcess {
             }
             return Err(Failure::new("job_unavailable"));
         }
+        // With WinGet still suspended in our kill-on-close job, this is the last
+        // boundary before its vendor installer can run. It is a snapshot: we cannot
+        // prevent someone from starting a targeted worker after it passes.
+        if kind == LaunchKind::WinGet {
+            ensure_safe_installer_host()?;
+            ensure_no_installer_targets()?;
+        }
+        check_cancel()?;
         if unsafe { ResumeThread(thread.0) } == u32::MAX {
             return Err(Failure::new("process_start_failed"));
         }
@@ -580,7 +707,7 @@ fn set_job_limit(job: &Handle, flags: u32) -> SetupResult<()> {
     }
 }
 
-fn restricted_environment(system_dir: &[u16], ollama: bool) -> Vec<u16> {
+fn restricted_environment(system_dir: &[u16]) -> Vec<u16> {
     let mut env = BTreeMap::<Vec<u16>, Vec<u16>>::new();
     // Keys known to steer execution or network/config selection are explicitly replaced/removed.
     for (k, v) in std::env::vars_os() {
@@ -595,7 +722,9 @@ fn restricted_environment(system_dir: &[u16], ollama: bool) -> Vec<u16> {
         env.insert(key.encode_utf16().collect(), v.encode_wide().collect());
     }
     env.insert("PATH".encode_utf16().collect(), system_dir.to_vec());
-    if ollama {
+    {
+        // WinGet descendants can inherit these, but package activation may not.
+        // The UI only attests to the environment of our directly started daemon.
         env.insert(
             "OLLAMA_HOST".encode_utf16().collect(),
             "127.0.0.1:11434".encode_utf16().collect(),
@@ -733,6 +862,52 @@ mod tests {
             ["installed", "ensure_server", "model_available", "pull"]
         );
     }
+    #[test]
+    fn installer_preflight_matches_all_upstream_targets_without_false_prefixes() {
+        for image in ["ollama.exe", "OLLAMA APP.EXE", "Llama-Server.ExE"] {
+            let win_image: Vec<u16> = image.encode_utf16().chain([0, b'x' as u16]).collect();
+            assert!(
+                installer_targets_process(&win_image),
+                "should block {image}"
+            );
+        }
+        for image in [
+            "",
+            "winget.exe",
+            "ollama-runner.exe",
+            "ollama.exe.old",
+            "my-llama-server.exe",
+            "ollamá.exe",
+        ] {
+            let win_image: Vec<u16> = image.encode_utf16().chain([0]).collect();
+            assert!(
+                !installer_targets_process(&win_image),
+                "should not block {image}"
+            );
+        }
+    }
+
+    #[test]
+    fn installer_host_allows_only_unset_or_exact_loopback_default() {
+        for host in ["", "127.0.0.1:11434", "http://127.0.0.1:11434"] {
+            assert!(installer_host_is_default(
+                &host.encode_utf16().collect::<Vec<_>>()
+            ));
+        }
+        for host in [
+            "0.0.0.0:11434",
+            "127.0.0.1:12345",
+            "[::]:11434",
+            "localhost:11434",
+            "%MY_HOST%",
+            "127.0.0.1:11434\0other",
+        ] {
+            assert!(!installer_host_is_default(
+                &host.encode_utf16().collect::<Vec<_>>()
+            ));
+        }
+    }
+
     #[test]
     fn named_lock_excludes_other_workers_until_owner_drops_it() {
         // Test-specific kernel object: never holds the mutex used by real setup.

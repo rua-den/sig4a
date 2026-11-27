@@ -8,6 +8,7 @@ window.pywebview.api = new Proxy(original, { get(target, key) {
   starts++;
   status = starts === 1 ? {phase:'installing',active:true,can_cancel:true}
      : starts === 2 ? {phase:'failed',code:'install_failed',exit_code:12}
+     : starts === 5 ? {phase:'failed',code:'installer_processes_active'}
      : {phase:'pulling',active:true,can_cancel:true};
   return {accepted:true};
  };
@@ -54,6 +55,10 @@ try {
  await pollAiSetup();
  await applyAiSetup();
  check(get('ai-setup-apply').disabled&&get('ai-model').value==='unsaved-new-choice'&&saves===1,'setup overwrote a concurrent draft');
+ await startAiSetup();
+ await pollAiSetup();
+ check(get('ai-setup-status').textContent.includes('Hãy tự thoát')&&!get('ai-setup-start').disabled,
+   'active vendor-process guard did not tell the user to close manually and retry');
  return {local_ai_setup:true};
 } finally {
  clearTimeout(setupTimer);
