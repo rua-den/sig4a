@@ -70,6 +70,11 @@
           "case": "Sherpa 20M first word matched 0/48 in one-shot and paced replay and only 11/48 with +800 ms pre-roll using the same verified synthetic WAVs. This recipe is not a v1 candidate. Separate local translation diagnostic on clean references: official Marian EN→VI p95 342 ms vs LFM p95 1327 ms, not full pipeline latency. Accuracy and revised ASR candidate still being verified.",
           "evidence": "https://github.com/rua-den/sig4a/actions/runs/45981066971",
           "tested_revision": "fd303b48eceb403ed2e77d4ab19eec7d4c6c9c9e"
+        },
+        {
+          "status": "failed_exploratory_targets",
+          "case": "Identical clean English input independently translated and graded blind: current Marian preserved 61/122 facts and 2/7 critical negations clearly; current LFM preserved 25/122 and 1/7. Neither is selected. This clean-text diagnostic isolates translation errors independent of speech recognition. Next evaluate a stronger dedicated offline MT engine and alternative low-latency ASR; thresholds remain unchanged.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45981066971/artifacts/15188619626"
         }
       ]
     },
