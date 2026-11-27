@@ -1,0 +1,15 @@
+{
+  "title": "Tool Box shortcuts, selected-text popups, and OCR translation",
+  "status": "in_progress",
+  "baseline": "a848df7a218ab0bd95a060191e85387080621d2a",
+  "dependency": "OCR Popup Settings PR #18 when independently verified",
+  "acceptance": [
+    {"id":"TOOLS-AUTO-1","case":"Validate and persist customizable global shortcuts for opening the Tool Box, OCR, Grammar and Translate. Keep existing defaults, reject duplicate/unsupported chords, and surface shortcuts owned by other apps.","status":"pending"},
+    {"id":"TOOLS-WIN-1","case":"Open Tool Box immediately with a visible app control and the configurable shortcut, including when already open. Exercise rebinding, conflicts and persistence on Windows.","status":"pending"},
+    {"id":"TOOLS-WIN-2","case":"Physical selection then Translate shortcut opens a dedicated selected-text popup, prefills the selection, submits once and exposes copy. No selection opens a usable manual input. Dashboard Translate route also works.","status":"pending"},
+    {"id":"TOOLS-WIN-3","case":"OCR shortcut creates the existing anchored capture. Its Translate action translates detected text inline without opening a second popup. Copy source and translation independently.","status":"pending"},
+    {"id":"TOOLS-WIN-4","case":"Grammar shortcut and dashboard control open a usable tool. Grammar popup stays visibly above an overlapping regular app after external click without reclaiming focus; explicit Close and Escape still work.","status":"pending"}
+  ],
+  "advisor":{"status":"pending"},
+  "gate":{"status":"pending","rule":"Only mark passed and merge after exact product Advisor review, automated checks and independent real Windows UI evidence."}
+}
