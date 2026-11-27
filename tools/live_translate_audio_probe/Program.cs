@@ -5,7 +5,7 @@ using System.Text.Json;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
-static class AudioProbe
+static partial class AudioProbe
 {
     static void Output(object value) => Console.WriteLine(JsonSerializer.Serialize(value));
 
@@ -16,6 +16,7 @@ static class AudioProbe
         try
         {
             using var host = new MMDeviceEnumerator();
+            if (args is ["--operator"]) return OperatorMode(host);
             if (args is ["--list"])
             {
                 var endpoints = new List<object>();
@@ -52,8 +53,8 @@ static class AudioProbe
             var timer = Stopwatch.StartNew();
             foreach (var (source, id) in sources)
             {
-                Measure(host, source, id, seconds, "initial", timer);
-                Measure(host, source, id, 1, "reopen", timer);
+                Output(Measure(host, source, id, seconds, "initial", timer));
+                Output(Measure(host, source, id, 1, "reopen", timer));
             }
             Output(new { ok = true, persisted_audio = false, all_streams_disposed = true });
             return 0;
@@ -66,7 +67,12 @@ static class AudioProbe
         }
     }
 
-    static void Measure(MMDeviceEnumerator host, string source, string id, int seconds,
+    sealed record Signal(bool ok, string source, string endpoint_id, string endpoint_name,
+        string stage, int requested_seconds, long bytes_measured, long samples_measured,
+        double? rms_dbfs, double? peak_dbfs, bool signal_observed, long started_ms,
+        long stop_requested_ms, long disposed_ms, bool persisted_audio);
+
+    static Signal Measure(MMDeviceEnumerator host, string source, string id, int seconds,
         string stage, Stopwatch timer)
     {
         string name;
@@ -118,12 +124,9 @@ static class AudioProbe
             if (stopped.Task.Result is { } error)
                 throw new InvalidOperationException("Audio stopped with an error.", error);
         }
-        Output(new { ok = true, source, endpoint_id = id, endpoint_name = name, stage,
-            requested_seconds = seconds, bytes_measured = bytes, samples_measured = count,
-            rms_dbfs = sums > 0 ? (double?)Math.Round(10 * Math.Log10(sums / count), 2) : null,
-            peak_dbfs = peak > 0 ? (double?)Math.Round(20 * Math.Log10(peak), 2) : null,
-            signal_observed = peak > 0.001,
-            started_ms = started, stop_requested_ms = stopRequested,
-            disposed_ms = timer.ElapsedMilliseconds, persisted_audio = false });
+        return new Signal(true, source, id, name, stage, seconds, bytes, count,
+            sums > 0 ? Math.Round(10 * Math.Log10(sums / count), 2) : null,
+            peak > 0 ? Math.Round(20 * Math.Log10(peak), 2) : null, peak > 0.001,
+            started, stopRequested, timer.ElapsedMilliseconds, false);
     }
 }
