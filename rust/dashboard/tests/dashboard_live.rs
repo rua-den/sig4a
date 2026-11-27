@@ -26,6 +26,8 @@ fn dashboard_live_translate_protocol_and_windows_job() {
     let mut run = Run::start_from_visibility(&dash, &sb.local, &sb.home, sb.root.path(), "live_translate",
         include_str!("js/live_translate.js"), "", true);
     run.stage("install");
+    run.rust_check("the missing-helper audio check fails before launching anything",
+        !helper_dir.exists() && !pid.exists() && !protocol.exists(), "");
     fs::create_dir(&helper_dir).unwrap();
     assert!(Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
         .arg("--edition=2021")
@@ -51,8 +53,13 @@ fn dashboard_live_translate_protocol_and_windows_job() {
     run.stage("before-hard-kill");
     let second = fixture_handle(&pid);
     let commands = fs::read_to_string(&protocol).unwrap_or_default();
+    // The explicit missing-helper audio check above reserves generation 1 before
+    // failing closed. The fixture only sees the six later regular operations.
     run.rust_check("no extra start from refresh, duplicate start, tab visit, or device change",
-        commands.lines().filter(|l| l.starts_with("start ")).collect::<Vec<_>>() == ["start 1", "start 2", "start 3", "start 4", "start 5", "start 6"], commands);
+        commands.lines().filter(|l| l.starts_with("start ")).collect::<Vec<_>>() ==
+            ["start 2", "start 3", "start 4", "start 5", "start 6", "start 7"], &commands);
+    run.rust_check("no audio check reaches the installed helper on page visit or while paused",
+        !commands.lines().any(|line| line.starts_with("check_")), &commands);
     run.guard.0.kill().unwrap(); // deliberately bypass graceful exit to prove kill-on-close
     run.guard.0.wait().unwrap();
     run.rust_check("hard dashboard termination killed the helper Job", unsafe { WaitForSingleObject(second, 3000) } == 0, "");

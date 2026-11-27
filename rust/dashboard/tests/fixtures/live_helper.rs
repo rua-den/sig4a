@@ -50,6 +50,11 @@ fn main() {
                 state(id, "stopped");
                 caption(id, "LATE AFTER ACK");
             }
+        } else if s.contains(r#""type":"check_start""#) || s.contains(r#""type":"check_stop""#) {
+            // Record any breach of the fixture's regular-session-only boundary,
+            // never acknowledge a check or open any audio.
+            let kind = if s.contains(r#""type":"check_start""#) { "check_start" } else { "check_stop" };
+            marker(&format!("{kind} {id}"));
         } else if s.contains(r#""type":"quit""#) {
             marker("quit");
             break;
