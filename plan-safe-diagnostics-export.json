@@ -1,6 +1,6 @@
 {
   "title": "Xuất báo cáo chẩn đoán đã lọc dữ liệu riêng",
-  "status": "in_progress",
+  "status": "passed",
   "baseline": {
     "ref": "origin/main",
     "sha": "a20328f66046eb71c8708107330b62e21da2f336",
@@ -91,7 +91,7 @@
     },
     {
       "id": "native-allowlist",
-      "status": "in_progress",
+      "status": "passed",
       "acceptance": [
         "Rust unit tests assert exact serialized key set, deterministic order, strict version grammar and limit, and coarse enums for all or unknown setup stages. not_observed is scoped to this dashboard process.",
         "Adversarial synthetic fixtures inject private sentinels, fake/large settings/cache/log paths, hostile strings/types and malicious API results; no sentinels or unapproved keys are emitted/logged. Prove those sources are not called, rather than relying on removing dangerous fields after collection.",
@@ -101,7 +101,7 @@
     },
     {
       "id": "dashboard-preview-copy",
-      "status": "pending",
+      "status": "passed",
       "acceptance": [
         "Real native Windows WebView2 test opens Settings > Chung and exercises actual native preview. No generation occurs on navigation. Report is inert, contains exact keys and known values, and copy matches displayed bytes only after a click.",
         "JS fixture mocks clipboard and checks no automatic write/read, render/copy/clear, regeneration after clear, no promise that Clear undoes an already requested Copy, graceful clipboard denial, route changes, stale async reply, and malicious bridge payloads (HTML, unknown enums, extra/inherited/accessor keys, malformed/oversized values): no execution or copy.",
@@ -110,7 +110,7 @@
     },
     {
       "id": "review-release",
-      "status": "pending",
+      "status": "passed",
       "acceptance": [
         "Independent Advisor privacy review on exact candidate, including native and renderer allowlist checks with hostile fixture evidence.",
         "Pass Rust tests, hosted/native Windows WebView2 and full Windows regression plus extracted-package smoke when available. Record exact tested SHA, assertions and limits before expected-head merge.",
@@ -127,5 +127,20 @@
     "draft_sha256": "518f858a26e7ab6a2902397d72ebdb68f0bd804246df0d620e4c1906542ea6c7",
     "result": "Independent Advisor approved the exact draft without config, filesystem, registry or cross-process data.",
     "merged_main_sha": "a20328f66046eb71c8708107330b62e21da2f336"
+  },
+  "verification": {
+    "candidate": "a9bbdce5cbd606ad57a6e8bf2784f44b46d83fa3",
+    "reviewed_tree": "9dd61ed93ab45bc7e048267c4e88b86816c05603",
+    "advisor_product": "bcfac838b0fde43ad305559c9506e80d4f87111a",
+    "advisor_package": "ee1cad1faa724f67848db9f1af6e5277fcde94fe",
+    "windows_standard": "https://github.com/rua-den/sig4a/actions/runs/46061252312",
+    "windows_full": "https://github.com/rua-den/sig4a/actions/runs/46061252327",
+    "tests": {
+      "passed": 240,
+      "failed": 0,
+      "ignored": 1
+    },
+    "ordinary_zip": "https://github.com/rua-den/sig4a/actions/runs/46061252327/artifacts/15228313523",
+    "notes": "Native WebView2 verified real exported schema, explicit copy/clear/route and strict raw IPC; exact extracted ZIP showed expected ordinary navigation in the visible owned dashboard and no passive helper. Adversarial nested Proxy/get/toJSON, key ordering and race fixtures ran through the real UI code. Report includes compile-time release metadata and coarse historical process setup only; no file/config reads, network, or automatic sharing."
   }
 }
