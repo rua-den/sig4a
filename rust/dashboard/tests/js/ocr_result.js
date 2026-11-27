@@ -178,7 +178,9 @@ try {
   translate.click();
   await tick();
   check(requests.length === 9 && requests[8].data.task === 'translation' && requests[8].data.text === 'Open the window.' && requests[8].data.target === 'vi', 'inline translation request was incorrect');
-  check(node('tool-ocr').classList.contains('on') && !node('ocr-inline').hidden && !copy.disabled, 'inline translation hid the OCR result or Copy');
+  check(document.body.classList.contains('ocr-popup') && node('tool-ocr').classList.contains('on') &&
+    !node('tool-translation').classList.contains('on') && !node('ocr-inline').hidden && !copy.disabled,
+    'inline translation changed popup routes or hid the OCR result or Copy');
   showQuickCapture(first, null);
   requests[8].resolve({text:'stale translation'});
   await tick();
@@ -189,7 +191,9 @@ try {
   await tick();
   requests[10].resolve({text:'Đóng cửa.'});
   await tick();
-  check(node('ocr-out').textContent === 'Close the door.' && node('ocr-translation-out').textContent === 'Đóng cửa.' && !node('ocr-translation-copy').disabled, 'popup did not keep both results available');
+  check(node('tool-ocr').classList.contains('on') && !node('tool-translation').classList.contains('on') &&
+    node('ocr-out').textContent === 'Close the door.' && node('ocr-translation-out').textContent === 'Đóng cửa.' &&
+    !copy.disabled && !node('ocr-translation-copy').disabled, 'popup did not keep both results independently copyable');
   const popupCancel = captureOcr();
   await tick(); capture(null); await popupCancel;
   check(node('ocr-preview').getAttribute('src') === first && node('ocr-out').textContent === 'Close the door.' &&

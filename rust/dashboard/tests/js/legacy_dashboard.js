@@ -109,7 +109,8 @@ $('wstyle').value = 'rings'; await save(); await sleep(400);
 // appearance tab: hidden by default, auto-applies, per-account names + visibility
 tab('gen');await sleep(500);
 check('appearance tab is not shown by default (general tab is)', $('look').hidden === true && $('gen').hidden === false);
-check('settings has separate general, widget, alerts and hooks tabs', document.querySelectorAll('.tabs .tab').length === 4);
+const settingsTabs = [...document.querySelectorAll('#settings-box .tabs .tab')].map(button => button.id);
+check('settings retains its four legacy tabs and has dedicated OCR and shortcut tabs', JSON.stringify(settingsTabs) === JSON.stringify(['t-gen','t-look','t-alerts','t-hooks','t-ocrpopup','t-shortcuts']), JSON.stringify(settingsTabs));
 const hClosed = document.documentElement.scrollHeight;
 tab('look'); await sleep(1200);
 g = geo(); const rows = document.querySelectorAll('#acclabels .al').length;

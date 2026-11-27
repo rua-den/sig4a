@@ -78,8 +78,16 @@ fn run_script(local: &Path, home: &Path, dir: &Path, name: &str, body: &str) -> 
     let s = dir.join(format!("{name}.js"));
     let o = dir.join(format!("{name}.out"));
     fs::write(&s, body).unwrap();
-    let g = spawn(local, home, Some((&s, &o)));
-    wait_for("script result", 40, || o.exists());
+    let mut g = spawn(local, home, Some((&s, &o)));
+    let deadline = Instant::now() + Duration::from_secs(40);
+    while !o.exists() && Instant::now() < deadline {
+        if let Ok(Some(exit)) = g.0.try_wait() {
+            if o.exists() { break; }
+            panic!("{name} dashboard exited ({exit}); events: {}", fs::read_to_string(local.join("claude-usage/events.log")).unwrap_or_default());
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert!(o.exists(), "{name} script result missing; events: {}", fs::read_to_string(local.join("claude-usage/events.log")).unwrap_or_default());
     std::thread::sleep(Duration::from_millis(100)); // the file is written in one call; be safe
     let v = serde_json::from_str(&fs::read_to_string(&o).unwrap()).unwrap();
     (g, v)
@@ -110,6 +118,16 @@ $('ocr-popup-topmost').click();
 $('settings-save').click();
 await saving;
 out.ocr_topmost_saved = (await api.state()).cfg.ocr_popup_always_on_top;
+$('t-shortcuts').click();
+out.shortcut_tab = !$('shortcuts').hidden && $('ocrpopup').hidden && $('t-shortcuts').getAttribute('aria-pressed')==='true';
+out.shortcut_defaults = Object.fromEntries(['toolbox','grammar','translation','ocr'].map(k=>[k,$('shortcut-'+k).value]));
+$('shortcut-toolbox').value='alt + ctrl + g';
+await saveShortcuts();
+out.shortcut_duplicate = $('shortcuts-status').dataset.state;
+$('shortcut-toolbox').value='Win+Q';
+await saveShortcuts();
+out.shortcut_invalid = $('shortcuts-status').dataset.state;
+
 toolTab('ai'); document.querySelector('.toolnav button[data-tool="ai"]').focus(); document.querySelector('.toolnav button[data-tool="ai"]').dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}));
 out.keyboard_route = document.querySelector('.toolnav button.on').dataset.tool;
 toolTab('overview');
@@ -168,6 +186,7 @@ return out;
 const SCRIPT_QUICK: &str = r#"
 await new Promise(r => setTimeout(r, 700));
 const out = {
+  toolboxButton: $('quick-open-toolbox').textContent === 'Mở Tool Box' && getComputedStyle($('quick-open-toolbox')).display !== 'none',
   quick: !!window.__QUICK_MODE__ && document.body.classList.contains('quick'),
   grammar: $('tool-grammar').classList.contains('on'),
   payload: $('grammar-in').value,
@@ -228,6 +247,10 @@ fn dashboard_process_end_to_end() {
     assert_eq!(r["localai_settings"], true);
     assert_eq!(r["ocr_settings"], json!({"visible":true,"active":true,"enabled_by_default":true}));
     assert_eq!(r["ocr_topmost_saved"], false);
+    assert_eq!(r["shortcut_tab"], true);
+    assert_eq!(r["shortcut_defaults"], json!({"toolbox":"","grammar":"Ctrl+Alt+G","translation":"Ctrl+Alt+T","ocr":"Ctrl+Alt+O"}));
+    assert_eq!(r["shortcut_duplicate"], "duplicate");
+    assert_eq!(r["shortcut_invalid"], "invalid");
     assert_eq!(r["keyboard_route"], "usage");
     assert!(r["sub"].as_str().unwrap().contains("1 accounts"), "{r}");
     assert_eq!(r["state"]["cfg"]["warn_pct"], 80);
@@ -336,6 +359,7 @@ fn dashboard_process_end_to_end() {
     wait_for("quick script result", 40, || quick_out.exists());
     let quick_result: Value = serde_json::from_str(&fs::read_to_string(&quick_out).unwrap()).unwrap();
     assert_eq!(quick_result["quick"], true, "quick dashboard class");
+    assert_eq!(quick_result["toolboxButton"], true, "quick dashboard class");
     assert_eq!(quick_result["grammar"], true, "quick opens grammar panel");
     assert_eq!(quick_result["payload"], "sample grammar payload", "quick stdin payload");
     assert_eq!(quick_result["pickerHidden"], true, "quick hides picker only");

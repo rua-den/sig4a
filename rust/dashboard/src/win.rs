@@ -180,6 +180,38 @@ pub fn send_quick(hwnd: isize, payload: &[u8]) -> bool {
     }
 }
 
+/// Request a bounded IPC operation from our tray (which owns global hotkey registration).
+pub fn tray_call(message: u32, payload: Option<&[u8]>) -> Option<usize> {
+    let hwnd = h(find_existing(cu_core::hotkeys::TRAY_CLASS)?);
+    let mut packet = payload.map(|bytes| windows_sys::Win32::System::DataExchange::COPYDATASTRUCT {
+        dwData: cu_core::hotkeys::APPLY_MESSAGE,
+        cbData: bytes.len() as u32,
+        lpData: bytes.as_ptr() as *mut _,
+    });
+    let lp = packet.as_mut().map_or(0, |data| data as *mut _ as isize);
+    let mut result = 0usize;
+    // SAFETY: the optional COPYDATA payload remains alive for this synchronous system message.
+    let ok = unsafe {
+        SendMessageTimeoutW(hwnd, message, 0, lp, SMTO_ABORTIFHUNG, 1800, &mut result)
+    };
+    (ok != 0).then_some(result)
+}
+
+pub fn open_toolbox() -> bool {
+    if let Some(existing) = find_existing(CLASS) {
+        focus(existing);
+        return true;
+    }
+    let Some(hwnd) = find_existing(cu_core::hotkeys::TRAY_CLASS) else { return false; };
+    // SAFETY: valid HWND by class; permission is limited to this tray process.
+    unsafe {
+        let mut pid = 0;
+        GetWindowThreadProcessId(h(hwnd), &mut pid);
+        if pid != 0 { AllowSetForegroundWindow(pid); }
+        PostMessageW(h(hwnd), cu_core::hotkeys::OPEN_MESSAGE, 0, 0) != 0
+    }
+}
+
 pub fn message_box(text: &str) {
     // SAFETY: NUL-terminated strings.
     unsafe {

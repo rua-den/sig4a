@@ -106,18 +106,19 @@ textarea:focus{outline:0;border-color:var(--accent)}
 .localai-route #settings-box,.localai-route #tool-usage{display:none}
 .quick .toolnav,.quick .wb:not(.x),.quick footer,.quick #tool-overview,.quick #tool-usage,.quick #tool-localai{display:none}.quick main{padding:10px 12px}.quick .title{height:30px}.quick .toolpanel.on{display:block}.quick .box{padding:8px 10px}.quick .result{max-height:118px;overflow:auto}.quick textarea{min-height:58px}.quick #ocr-preview{max-height:82px}.quick .toolactions{margin-top:7px}
 .quick.localai-route #tool-localai.on{display:block}.quick #ocr-preview,.quick #ocr-in{display:none}.quick #ocr-status{display:block}.quick #tool-ocr .hint{display:none}.quick #tool-ocr .result{min-height:122px;max-height:156px}.quick .accent-picker{display:none}
+#quick-open-toolbox{display:none;margin-right:6px}.quick #quick-open-toolbox{display:block}.shortcut-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}.shortcut-fields input{width:100%}.shortcut-settings{grid-column:1/-1}.route-settings #settings-box:has(#shortcuts:not([hidden]))>.row{display:none}
 .ocr-popup .rz,.ocr-popup #ocr-remove{display:none}.ocr-popup #tool-ocr .result{min-height:44px;max-height:111px;overflow:auto;overflow-wrap:anywhere}.ocr-popup #ocr-out{margin-top:6px}.ocr-inline{margin-top:8px}.ocr-inline .toolactions{margin-top:5px}.ocr-popup #tool-ocr .toolactions{gap:5px}.ocr-popup #ocr-out:focus-visible,.ocr-popup #ocr-translation-out:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.quota-row{overflow-wrap:anywhere}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable]{cursor:text}.result[data-placeholder]:empty::before{content:attr(data-placeholder);color:var(--dim);pointer-events:none}.text-status{margin:7px 0 4px;overflow-wrap:anywhere}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
 </style></head><body>
 <div class="title"><div class="drag pywebview-drag-region" ondblclick="toggleMax()"><b>Kane's Tool Box</b><span id="sub"></span></div><label class="accent-picker" title="Màu giao diện">Màu giao diện<select id="accent" aria-label="Màu giao diện"><option value="orange">Cam</option><option value="blue">Xanh</option><option value="purple">Tím</option></select></label>
-<button class="wb" title="thu nhỏ" onclick="api.minimize()">–</button><button class="wb" id="maxb" title="phóng to / khôi phục (nhấp đúp thanh tiêu đề)" onclick="toggleMax()">▢</button><button class="wb x" title="đóng" onclick="closeDash()">✕</button></div>
+<button class="b" id="quick-open-toolbox" onclick="openToolBox()">Mở Tool Box</button><button class="wb" title="thu nhỏ" onclick="api.minimize()">–</button><button class="wb" id="maxb" title="phóng to / khôi phục (nhấp đúp thanh tiêu đề)" onclick="toggleMax()">▢</button><button class="wb x" id="window-close" aria-label="Đóng" title="đóng" onclick="closeDash()">✕</button></div>
 <main>
 <div id="wrap">
  <nav class="toolnav" aria-label="Các khu vực chính"><button class="on" data-tool="overview" aria-current="page" onclick="toolTab('overview')">Tổng quan</button><button data-tool="ai" onclick="toolTab('ai')">Trợ lý AI</button><button data-tool="usage" onclick="toolTab('usage')">Claude Usage</button><button data-tool="cleaner" onclick="toolTab('cleaner')">Dọn ổ</button><button data-tool="settings" onclick="toolTab('settings')">Cài đặt</button></nav>
  <section class="toolpanel on" id="tool-overview"><div class="box"><div class="lbl">QUOTA ƯU TIÊN</div><div id="overview-quota"><div class="hdr">đang poll lần đầu...</div></div></div><div class="box"><div class="lbl">KANE'S TOOL BOX</div><div class="overview">
-  <button class="tile" onclick="toolTab('grammar')"><b>Grammar</b><span class="tile-hotkey">Ctrl+Alt+G</span><span>Kiểm tra ngữ pháp tiếng Anh, chỉnh sửa và sao chép kết quả.</span></button>
-  <button class="tile" onclick="toolTab('translation')"><b>Translation</b><span class="tile-hotkey">Ctrl+Alt+T</span><span>Dịch nhanh, mặc định sang tiếng Việt; có thể chọn English.</span></button>
-  <button class="tile" onclick="toolTab('ocr')"><b>OCR</b><span class="tile-hotkey">Ctrl+Alt+O</span><span>Dán ảnh để nhận chữ. Dùng Win+Shift+S để chụp vùng màn hình.</span></button>
+  <button class="tile" onclick="toolTab('grammar')"><b>Grammar</b><span class="tile-hotkey" data-shortcut-hint="grammar">Ctrl+Alt+G</span><span>Kiểm tra ngữ pháp tiếng Anh, chỉnh sửa và sao chép kết quả.</span></button>
+  <button class="tile" onclick="toolTab('translation')"><b>Translation</b><span class="tile-hotkey" data-shortcut-hint="translation">Ctrl+Alt+T</span><span>Dịch nhanh, mặc định sang tiếng Việt; có thể chọn English.</span></button>
+  <button class="tile" onclick="toolTab('ocr')"><b>OCR</b><span class="tile-hotkey" data-shortcut-hint="ocr">Ctrl+Alt+O</span><span>Dán ảnh để nhận chữ. Dùng Win+Shift+S để chụp vùng màn hình.</span></button>
   <button class="tile" onclick="toolTab('usage')"><b>Claude Usage</b><span>Theo dõi quota, tài khoản và thông báo hiện có.</span></button>
   <button class="tile" onclick="toolTab('cleaner')"><b>Dọn ổ</b><span>Quét artefact và file trùng, với xác nhận trước khi xoá.</span></button>
   <button class="tile" onclick="toolTab('settings')"><b>Cài đặt</b><span>Điều chỉnh refresh, widget và hook.</span></button>
@@ -131,7 +132,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
  <section class="toolpanel" id="tool-usage">
  <div class="box" id="usage-accounts"><div class="lbl">CLAUDE USAGE</div><div class="usage-actions"><button class="b" id="rbtn" onclick="refresh()">refresh</button> <span id="usage-policy-status" class="hint" role="status" hidden></span></div><div id="accs"></div></div>
  <div class="box" id="settings-box"><div class="lbl" id="settings-label">SETTINGS</div><div class="lbl" id="clean-label">DỌN Ổ</div>
-  <div class="tabs"><button class="tab on" id="t-gen" onclick="tab('gen')">Chung</button><button class="tab" id="t-look" onclick="tab('look')">Widget</button><button class="tab" id="t-alerts" onclick="tab('alerts')">Cảnh báo</button><button class="tab" id="t-hooks" onclick="tab('hooks')">Hook CLI</button><button class="tab" id="t-ocrpopup" onclick="tab('ocrpopup')">OCR Popup</button><button class="b" id="settings-ai" onclick="toolTab('localai')">Local AI readiness</button></div>
+  <div class="tabs"><button class="tab on" id="t-gen" onclick="tab('gen')">Chung</button><button class="tab" id="t-look" onclick="tab('look')">Widget</button><button class="tab" id="t-alerts" onclick="tab('alerts')">Cảnh báo</button><button class="tab" id="t-hooks" onclick="tab('hooks')">Hook CLI</button><button class="tab" id="t-ocrpopup" onclick="tab('ocrpopup')">OCR Popup</button><button class="tab" id="t-shortcuts" onclick="tab('shortcuts')">Phím tắt</button><button class="b" id="settings-ai" onclick="toolTab('localai')">Local AI readiness</button></div>
   <div class="set" id="gen">
    <label>Refresh (giây, tối thiểu 90)<input type="number" id="interval" min="90"></label>
    <label class="chk"><input type="checkbox" id="autosw">Chạy cùng Windows (ẩn ở tray)</label>
@@ -149,6 +150,19 @@ textarea:focus{outline:0;border-color:var(--accent)}
    <label class="chk"><input type="checkbox" id="blocksw">Bật chính sách chặn prompt CLI</label>
    <div class="grp">Chạm ngưỡng không đồng nghĩa với đang chặn. Chính sách cần hook dùng được và cache còn hiệu lực.</div>
    <div class="grp"><button class="b" onclick="hook('install')">Cài hook vào các profile</button><button class="b" onclick="hook('uninstall')">Gỡ hook</button><span id="hookst" role="status"></span></div><div class="grp" id="settings-hook-policy-status" role="status" hidden></div>
+  </div>
+  <div class="set" id="shortcuts" hidden>
+   <div class="shortcut-settings">
+    <p class="hint" id="shortcuts-hint">Nhập Ctrl hoặc Alt, tùy chọn thêm Shift, và một phím A–Z, 0–9 hoặc F1–F11. Ví dụ: Ctrl+Alt+O. Để trống để tắt.</p>
+    <div class="shortcut-fields">
+     <label>Mở Tool Box<input type="text" id="shortcut-toolbox" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
+     <label>Grammar<input type="text" id="shortcut-grammar" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
+     <label>Translate<input type="text" id="shortcut-translation" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
+     <label>OCR<input type="text" id="shortcut-ocr" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
+    </div>
+    <button class="b p" id="shortcuts-save" onclick="saveShortcuts()">Lưu phím tắt</button>
+    <p class="hint" id="shortcuts-status" role="status"></p>
+   </div>
   </div>
   <div class="set" id="ocrpopup" hidden>
    <label class="chk"><input type="checkbox" id="ocr-popup-topmost">Giữ popup OCR nổi khi bấm ra ngoài</label>
@@ -352,7 +366,7 @@ function usageAccount(row){
   <div class="usage-meta">${usageState(row)} · ${usageHook(row)} · lần tải gần nhất: ${usageValue('ago',p.fetched_at)}${err}${retry}</div></div>`;
 }
 function apply(s){if(!s)return 2000;
- if(!loaded){cfg=s.cfg;applyAccent(cfg.dashboard_accent);const backend=cfg.local_ai_backend||'ollama';lastBackend=backend;$('ai-backend').value=backend;$('ai-endpoint').value=cfg.local_ai_endpoint||endpointDefaults[backend];$('ai-model').value=cfg.local_ai_model||'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0';aiManual={endpoint:$('ai-endpoint').value,backend,model:$('ai-model').value};$('ai-managed').checked=aiManagedSaved=cfg.local_ai_managed===true;renderAiMode();$('interval').value=cfg.interval_sec;$('warn').value=cfg.warn_pct;$('block').value=cfg.block_pct;
+ if(!loaded){cfg=s.cfg;if(s.shortcuts)applyShortcuts(s.shortcuts);applyAccent(cfg.dashboard_accent);const backend=cfg.local_ai_backend||'ollama';lastBackend=backend;$('ai-backend').value=backend;$('ai-endpoint').value=cfg.local_ai_endpoint||endpointDefaults[backend];$('ai-model').value=cfg.local_ai_model||'hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0';aiManual={endpoint:$('ai-endpoint').value,backend,model:$('ai-model').value};$('ai-managed').checked=aiManagedSaved=cfg.local_ai_managed===true;renderAiMode();$('interval').value=cfg.interval_sec;$('warn').value=cfg.warn_pct;$('block').value=cfg.block_pct;
   $('blocksw').checked=cfg.block_enabled;$('wsize').value=cfg.widget_size;$('wstyle').value=cfg.widget_style||'rings';$('wen').checked=cfg.widget_enabled;$('autosw').checked=cfg.autostart;$('trefsw').checked=cfg.token_refresh!==false;
   $('ocr-popup-topmost').checked=cfg.ocr_popup_always_on_top!==false;$('wlabel').value=cfg.widget_label||'alias';$('wfont').value=cfg.widget_font||100;$('wopac').value=cfg.widget_opacity||100;$('wtheme').value=cfg.widget_theme||'auto';$('wplate').checked=!!cfg.widget_plate;const on=(k,d)=>cfg[k]===undefined?d:!!cfg[k];$('sl').checked=on('widget_show_label',true);$('s5').checked=on('widget_show_5h',true);$('s7').checked=on('widget_show_7d',true);const rm=on('widget_reset',true);$('r5').checked=rm&&on('widget_show_reset5',true);$('r7').checked=rm&&on('widget_show_reset7',true);$('wtip').checked=on('widget_tooltip',true);$('wsort').value=cfg.widget_sort||'config';$('wmax').value=cfg.widget_max_cells||0;$('nen').checked=cfg.notify_enabled;$('nwarn').checked=cfg.notify_warn;$('nblock').checked=cfg.notify_block;loaded=true;loadCleanConfig(cfg);settingsBaseline=collectSettings()}
  $('ver').textContent='Version '+(s.version||'');
@@ -913,8 +927,59 @@ $('ai-endpoint').addEventListener('input',()=>{endpointTouched=true;if(!$('ai-ma
 $('ai-backend').addEventListener('change',()=>{const next=$('ai-backend').value;if(!endpointTouched&&$('ai-endpoint').value===endpointDefaults[lastBackend])$('ai-endpoint').value=endpointDefaults[next];lastBackend=next;if(!$('ai-managed').checked){aiManual.backend=next;aiManual.endpoint=$('ai-endpoint').value}resetAiCheck(true)});
 $('ai-model').addEventListener('input',()=>{if(!$('ai-managed').checked)aiManual.model=$('ai-model').value;resetAiCheck(false)});
 $('ai-managed').addEventListener('change',()=>{if($('ai-managed').checked){aiManual={endpoint:$('ai-endpoint').value,backend:$('ai-backend').value,model:$('ai-model').value}}renderAiMode();resetAiCheck(true)});
+const shortcutNames={toolbox:'Mở Tool Box',grammar:'Grammar',translation:'Translate',ocr:'OCR'};
+function applyShortcuts(bindings){
+ for(const [key,label] of Object.entries(bindings)){
+  const input=$('shortcut-'+key);if(input)input.value=label;
+  const hint=document.querySelector('[data-shortcut-hint="'+key+'"]');
+  if(hint){hint.textContent=label;hint.hidden=!label;}
+ }
+}
+function shortcutStatus(code,message){
+ const el=$('shortcuts-status');el.dataset.state=code;el.textContent=message;fit();
+}
+async function loadShortcutStatus(){
+ const el=$('shortcuts-status');
+ if(el.dataset.state&&el.dataset.state!=='loading'&&el.dataset.state!=='unavailable'&&el.dataset.state!=='tray')return;
+ try{
+  const state=await api.shortcut_status();
+  if(el.dataset.state&&el.dataset.state!=='loading'&&el.dataset.state!=='unavailable'&&el.dataset.state!=='tray')return;
+  if(state.code==='ok'&&state.unavailable){
+   const names=Object.values(shortcutNames).filter((_,i)=>state.unavailable&(1<<i)).join(', ');
+   shortcutStatus('unavailable','Windows chưa đăng ký được: '+names+'. Tổ hợp có thể đang được ứng dụng khác sử dụng.');
+  }else if(state.code==='disabled'||state.code==='tray')shortcutStatus('tray','Hãy mở SIG4A trong khay hệ thống để quản lý phím tắt.');
+  else shortcutStatus('','');
+ }catch(e){shortcutStatus('tray','Hãy mở SIG4A trong khay hệ thống để quản lý phím tắt.')}
+}
+async function saveShortcuts(){
+ const button=$('shortcuts-save');
+ if(button.disabled)return;
+ button.disabled=true;
+ const fields=Object.keys(shortcutNames).map(key=>[key,$('shortcut-'+key)]);
+ const bindings=Object.fromEntries(fields.map(([key,input])=>[key,input.value]));
+ for(const [,input] of fields)input.disabled=true;
+ try{
+  await Promise.allSettled([saving,accentSaving]);
+  const result=await api.shortcut_save(bindings);
+  const action=shortcutNames[result.action];
+  switch(result.code){
+   case 'ok':applyShortcuts(result.bindings);shortcutStatus('saved','Đã lưu và áp dụng phím tắt.');break;
+   case 'duplicate':shortcutStatus('duplicate','Phím tắt bị trùng: '+action+'.');break;
+   case 'invalid':shortcutStatus('invalid','Tổ hợp phím không hợp lệ: '+action+'.');break;
+   case 'conflict':shortcutStatus('conflict','Windows không đăng ký được phím tắt cho '+action+'. Có thể tổ hợp này đang được ứng dụng khác sử dụng.');break;
+   case 'io':shortcutStatus('io','Không lưu được phím tắt. Các phím tắt cũ vẫn được giữ.');break;
+   default:shortcutStatus('tray','Hãy mở SIG4A trong khay hệ thống và kiểm tra lại.');
+  }
+ }catch(e){shortcutStatus('tray','Không nhận được phản hồi từ khay hệ thống. Kiểm tra lại trước khi thử lưu.')}
+ finally{button.disabled=false;for(const [,input] of fields)input.disabled=false;}
+}
+async function openToolBox(){
+ try{if(await api.open_toolbox())return;}catch(e){}
+ toast('Không mở được Tool Box. Kiểm tra SIG4A trong khay hệ thống.');
+}
 function tab(t){
- for(const key of ['gen','look','alerts','hooks','ocrpopup','clean']){ $(key).hidden=key!==t;const button=$('t-'+key);if(button){button.classList.toggle('on',key===t);button.setAttribute('aria-pressed',String(key===t))} }
+ for(const key of ['gen','look','alerts','hooks','ocrpopup','shortcuts','clean']){ $(key).hidden=key!==t;const button=$('t-'+key);if(button){button.classList.toggle('on',key===t);button.setAttribute('aria-pressed',String(key===t))} }
+ if(t==='shortcuts')void loadShortcutStatus();
  if(t==='hooks')void hookStatus().catch(()=>{});
  if(t==='clean'){const epoch=cleanEpoch;api.cleaner_status().then(s=>{if(epoch!==cleanEpoch)return;applyClean(s);if(s&&(s.phase==='scanning'||s.phase==='cleaning'))startCleanPoll()}).catch(()=>{});api.cleaner_dups_status().then(s=>{applyDups(s);if(s&&s.phase==='scanning')startDupsPoll()}).catch(()=>{})}
  else {cancelCleanReview();stopCleanPoll();stopDupsPoll()}

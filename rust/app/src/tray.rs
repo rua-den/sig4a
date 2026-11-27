@@ -10,6 +10,7 @@ use crate::transport::Ureq;
 use cu_core::config;
 use cu_core::daemon::{Toast, TrayView};
 use cu_core::hookinstall::{self, HookProfile};
+use cu_core::hotkeys::{self, Bindings, Chord};
 use cu_core::log::log;
 use cu_core::paths::{home_dir, Paths};
 use serde_json::Value;
@@ -25,8 +26,9 @@ use windows_sys::Win32::Graphics::Gdi::{
     BI_RGB, DIB_RGB_COLORS,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    RegisterHotKey, UnregisterHotKey, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
+    RegisterHotKey, UnregisterHotKey, MOD_NOREPEAT,
 };
 use windows_sys::Win32::UI::Shell::{
     Shell_NotifyIconW, NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE,
@@ -34,18 +36,15 @@ use windows_sys::Win32::UI::Shell::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
-pub const CLASS: &str = "ClaudeUsageTray";
+pub const CLASS: &str = hotkeys::TRAY_CLASS;
 pub const TITLE: &str = "claude-usage-tray";
 
 const WM_TRAY: u32 = WM_APP + 10;
 const WM_ICON: u32 = WM_APP + 1;
 const WM_TOAST: u32 = WM_APP + 2;
-const WM_SHOW: u32 = WM_APP + 3;
-
-const HOTKEY_GRAMMAR: i32 = 1;
-const HOTKEY_TRANSLATION: i32 = 2;
-const HOTKEY_OCR: i32 = 3;
-const MOD_CTRL_ALT: u32 = MOD_CONTROL | MOD_ALT | MOD_NOREPEAT;
+const WM_SHOW: u32 = hotkeys::OPEN_MESSAGE;
+const HOTKEY_ID_FIRST: i32 = 100;
+const HOTKEY_ID_END: i32 = HOTKEY_ID_FIRST + 8;
 const MAX_SELECTION_BYTES: usize = 12 * 1024;
 
 pub const ID_OPEN: usize = 1;
@@ -79,6 +78,36 @@ struct Shared {
     view: Mutex<Option<TrayView>>,
     toasts: Mutex<VecDeque<Toast>>,
     quick_busy: AtomicBool,
+    // Do not start another UIA call while a provider is still blocked.
+    quick_selection_busy: Arc<AtomicBool>,
+}
+
+fn selection_before_deadline(
+    busy: &Arc<AtomicBool>,
+    timeout: Duration,
+    lookup: impl FnOnce() -> Option<String> + Send + 'static,
+) -> Option<String> {
+    if busy.swap(true, Ordering::AcqRel) {
+        return None;
+    }
+    struct Guard(Arc<AtomicBool>);
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::Release);
+        }
+    }
+    let guard = Guard(busy.clone());
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    // Guard is dropped even if OS thread creation fails or the lookup panics.
+    std::thread::Builder::new()
+        .name("quick-selection".into())
+        .spawn(move || {
+            let result = lookup();
+            drop(guard);
+            let _ = tx.send(result);
+        })
+        .ok()?;
+    rx.recv_timeout(timeout).ok().flatten()
 }
 
 struct State {
@@ -86,6 +115,7 @@ struct State {
     shared: Arc<Shared>,
     hicon: isize,
     taskbar_created: u32,
+    hotkeys: [Option<Registered>; 4],
     /// WinRT toast with our own AUMID (release only); false = tray balloon.
     winrt: bool,
 }
@@ -376,7 +406,11 @@ fn open_dashboard(paths: &Paths) {
         .creation_flags(CREATE_NO_WINDOW)
         .spawn();
     match spawned {
-        Ok(child) => bind_to_job(&child),
+        Ok(child) => {
+            // SAFETY: grant only the child a chance to activate its dashboard.
+            unsafe { AllowSetForegroundWindow(child.id()); }
+            bind_to_job(&child);
+        }
         Err(e) => {
             log(paths, &format!("dashboard spawn failed: {e}"));
             message_box("Không mở được dashboard.");
@@ -427,12 +461,75 @@ fn message_box(text: &str) {
     });
 }
 
-fn quick_tool_name(id: i32) -> Option<&'static str> {
-    match id {
-        HOTKEY_GRAMMAR => Some("grammar"),
-        HOTKEY_TRANSLATION => Some("translation"),
-        HOTKEY_OCR => Some("ocr"),
-        _ => None,
+#[derive(Clone, Copy)]
+struct Registered {
+    id: i32,
+    chord: Chord,
+}
+
+fn register(hwnd: HWND, id: i32, chord: Chord) -> Option<Registered> {
+    // SAFETY: invoked by the owning tray thread with a valid HWND and supported combination.
+    (unsafe { RegisterHotKey(hwnd, id, chord.mods | MOD_NOREPEAT, chord.vk) } != 0)
+        .then_some(Registered { id, chord })
+}
+
+fn unregister(hwnd: HWND, slots: impl IntoIterator<Item = Registered>) {
+    for slot in slots {
+        // SAFETY: IDs originate from successful registrations on this tray thread.
+        unsafe { UnregisterHotKey(hwnd, slot.id); }
+    }
+}
+
+impl State {
+    fn shortcut_status(&self) -> usize {
+        if std::env::var_os("CU_NO_HOTKEYS").is_some() {
+            return hotkeys::DISABLED;
+        }
+        let settings = hotkeys::configured(&config::load_config(&self.paths, &home_dir()));
+        hotkeys::STATUS + settings.iter().enumerate().fold(0, |mask, (i, chord)| {
+            if *chord != self.hotkeys[i].map(|s| s.chord) { mask | (1 << i) } else { mask }
+        })
+    }
+
+    fn apply_shortcuts(&mut self, hwnd: HWND, bindings: Bindings) -> usize {
+        if std::env::var_os("CU_NO_HOTKEYS").is_some() {
+            return hotkeys::DISABLED;
+        }
+
+        // Acquire all new chords before relinquishing any old ones. A chord we already own
+        // can move to a different action without registering it, so swaps are atomic too.
+        let mut next = [None; 4];
+        let mut acquired: Vec<Registered> = Vec::new();
+        for (i, chord) in bindings.into_iter().enumerate() {
+            let Some(chord) = chord else { continue; };
+            if let Some(existing) = self.hotkeys.iter().flatten().find(|s| s.chord == chord) {
+                next[i] = Some(*existing);
+                continue;
+            }
+            let id = (HOTKEY_ID_FIRST..HOTKEY_ID_END).find(|id| {
+                !self.hotkeys.iter().flatten().chain(acquired.iter()).any(|slot| slot.id == *id)
+            });
+            let Some(slot) = id.and_then(|id| register(hwnd, id, chord)) else {
+                unregister(hwnd, acquired);
+                return hotkeys::CONFLICT + i;
+            };
+            acquired.push(slot);
+            next[i] = Some(slot);
+        }
+        let mut cfg = config::load_config(&self.paths, &home_dir());
+        let value = hotkeys::value(bindings);
+        if cfg.get(hotkeys::CONFIG) != Some(&value) {
+            cfg.insert(hotkeys::CONFIG.into(), value);
+            if config::save_config(&self.paths, &cfg).is_err() {
+                unregister(hwnd, acquired);
+                return hotkeys::IO_ERROR;
+            }
+        }
+        unregister(hwnd, self.hotkeys.iter().flatten().copied().filter(|s| {
+            !next.iter().flatten().any(|n| n.id == s.id)
+        }));
+        self.hotkeys = next;
+        hotkeys::OK
     }
 }
 
@@ -493,10 +590,23 @@ fn launch_quick_tool(paths: &Paths, tool: &'static str, hwnd: usize, shared: Arc
     }
     let paths = paths.clone();
     std::thread::spawn(move || {
-        let text = if tool == "ocr" {
+        // UIA providers are third-party COM servers and a focused element can
+        // block indefinitely (notably Chromium/Office while a document is
+        // busy). Do not hold the quick popup behind that call. The popup is
+        // launched with an empty draft after a short deadline, where the user
+        // can paste or type, while a responsive provider still contributes its
+        // selection automatically.
+        let text = if tool == "ocr" || hwnd == 0 {
             String::new()
         } else {
-            selected_text(hwnd as HWND).unwrap_or_default()
+            selection_before_deadline(
+                &shared.quick_selection_busy,
+                Duration::from_millis(350),
+                move || selected_text(hwnd as HWND),
+            )
+            // Foreground may change after the worker read the selection.
+            .filter(|_| unsafe { GetForegroundWindow() == hwnd as HWND })
+            .unwrap_or_default()
         };
         let exe = std::env::current_exe()
             .unwrap_or_default()
@@ -607,21 +717,33 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             open_dashboard(&st.paths);
             Some(0)
         }
+        hotkeys::STATUS_MESSAGE => Some(st.shortcut_status() as isize),
+        WM_COPYDATA if lp != 0 => {
+            let packet = &*(lp as *const COPYDATASTRUCT);
+            if packet.dwData != hotkeys::APPLY_MESSAGE || packet.lpData.is_null() || !(1..=1024).contains(&packet.cbData) {
+                return None;
+            }
+            let bytes = std::slice::from_raw_parts(packet.lpData as *const u8, packet.cbData as usize);
+            let result = serde_json::from_slice::<Value>(bytes).ok()
+                .and_then(|value| hotkeys::parse(&value).ok())
+                .map_or(hotkeys::INVALID, |bindings| st.apply_shortcuts(hwnd, bindings));
+            Some(result as isize)
+        }
         WM_HOTKEY => {
-            if let Some(tool) = quick_tool_name(wp as i32) {
-                let foreground = GetForegroundWindow();
-                if !foreground.is_null() {
-                    launch_quick_tool(&st.paths, tool, foreground as usize, st.shared.clone());
+            let matches = |s: &Registered| s.id == wp as i32 && s.chord.mods == (lp as u32 & 7)
+                && s.chord.vk == ((lp as u32 >> 16) & 0xffff);
+            if let Some(i) = st.hotkeys.iter().position(|s| s.as_ref().is_some_and(matches)) {
+                if i == 0 {
+                    open_dashboard(&st.paths);
+                } else {
+                    let foreground = GetForegroundWindow();
+                    launch_quick_tool(&st.paths, hotkeys::KEYS[i], foreground as usize, st.shared.clone());
                 }
             }
             Some(0)
         }
         WM_DESTROY => {
-            if std::env::var_os("CU_NO_HOTKEYS").is_none() {
-                UnregisterHotKey(hwnd, HOTKEY_GRAMMAR);
-                UnregisterHotKey(hwnd, HOTKEY_TRANSLATION);
-                UnregisterHotKey(hwnd, HOTKEY_OCR);
-            }
+            unregister(hwnd, st.hotkeys.iter().flatten().copied());
             let n = nid(hwnd);
             Shell_NotifyIconW(NIM_DELETE, &n);
             if st.hicon != 0 {
@@ -752,19 +874,20 @@ pub fn run(paths: Paths) -> i32 {
             shared: shared.clone(),
             hicon: 0,
             taskbar_created: RegisterWindowMessageW(wide("TaskbarCreated").as_ptr()),
+            hotkeys: [None; 4],
             winrt: daemon::autostart_allowed()
                 && std::env::current_exe().is_ok_and(|e| crate::toast::register(&e)),
         }));
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, st as isize);
         add_or_update(hwnd, &mut *st, true);
         if std::env::var_os("CU_NO_HOTKEYS").is_none() {
-            for (id, vk, name) in [
-                (HOTKEY_GRAMMAR, 0x47, "grammar"),
-                (HOTKEY_TRANSLATION, 0x54, "translation"),
-                (HOTKEY_OCR, 0x4f, "ocr"),
-            ] {
-                if RegisterHotKey(hwnd, id, MOD_CTRL_ALT, vk) == 0 {
-                    log(&paths, &format!("hotkey unavailable: Ctrl+Alt+{name}"));
+            let cfg = config::load_config(&paths, &home_dir());
+            for (i, chord) in hotkeys::configured(&cfg).into_iter().enumerate() {
+                if let Some(chord) = chord {
+                    (*st).hotkeys[i] = register(hwnd, HOTKEY_ID_FIRST + i as i32, chord);
+                    if (*st).hotkeys[i].is_none() {
+                        log(&paths, &format!("hotkey unavailable: {}", chord.label()));
+                    }
                 }
             }
         }
@@ -790,6 +913,38 @@ pub fn run(paths: Paths) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selection_timeout_keeps_only_one_lookup_and_ignores_late_results() {
+        use std::sync::mpsc::channel;
+        use std::time::Instant;
+        let busy = Arc::new(AtomicBool::new(false));
+        let (release, blocked) = channel();
+        let result = selection_before_deadline(&busy, Duration::from_millis(20), move || {
+            let _ = blocked.recv();
+            Some("stale".into())
+        });
+        assert_eq!(result, None, "timed-out UIA must allow an empty draft");
+        assert!(busy.load(Ordering::Acquire));
+        let starts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let other = starts.clone();
+        let result = selection_before_deadline(&busy, Duration::from_secs(1), move || {
+            other.fetch_add(1, Ordering::Relaxed);
+            Some("unexpected".into())
+        });
+        assert_eq!(result, None);
+        assert_eq!(starts.load(Ordering::Relaxed), 0);
+        release.send(()).unwrap();
+        let until = Instant::now() + Duration::from_secs(2);
+        while busy.load(Ordering::Acquire) && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(!busy.load(Ordering::Acquire), "lookup did not release slot");
+        assert_eq!(
+            selection_before_deadline(&busy, Duration::from_secs(2), || Some("current".into())),
+            Some("current".into())
+        );
+    }
 
     #[test]
     fn fill_truncates_and_terminates() {

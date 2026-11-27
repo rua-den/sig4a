@@ -17,7 +17,11 @@ const input=(id,value,event='input')=>{
 };
 const phase=kind=>node(kind+'-status').dataset.state;
 try{
- toolTab('grammar');
+ const overview=document.querySelector('.toolnav button[data-tool="overview"]');
+ const tile=title=>[...document.querySelectorAll('#tool-overview .tile')].find(b=>b.querySelector('b')?.textContent===title);
+ overview.click();
+ tile('Grammar').click();
+ check(node('tool-grammar').classList.contains('on')&&node('grammar-in').getClientRects().length>0,'overview Grammar button did not open a usable panel');
  check(node('grammar-run').disabled&&node('grammar-copy').disabled,'empty grammar controls');
  input('grammar-in','She walk.');
  node('grammar-run').click();await sleep(0);
@@ -40,7 +44,13 @@ try{
  requests[3].resolve({code:'timeout'});await sleep(0);
  check(phase('grammar')==='stale'&&node('grammar-in').value==='A newer draft.'&&node('grammar-out').textContent==='New user edit','stale failure overwrote status, input or output');
 
- toolTab('translation');
+ overview.click();
+ tile('Translation').click();
+ check(node('tool-translation').classList.contains('on')&&node('translation-in').getClientRects().length>0,'overview Translation button did not open a usable panel');
+ document.querySelector('.ai-subnav [data-ai="grammar"]').click();
+ check(node('tool-grammar').classList.contains('on'),'AI subnav Grammar button did not route');
+ document.querySelector('.ai-subnav [data-ai="translation"]').click();
+ check(node('tool-translation').classList.contains('on'),'AI subnav Translation button did not route');
  check(node('translation-lang').value==='vi','Vietnamese must default');
  openQuickTool('translation','  ');
  check(phase('translation')==='paste'&&document.activeElement===node('translation-in')&&requests.length===4,'blank selection must focus paste with no inference');
@@ -52,7 +62,7 @@ try{
  check(!node('translation-out').textContent&&phase('translation')==='draft','stale result from former target');
  openQuickTool('translation','Xin chào.');
  await sleep(0);
- check(requests[5].arg.target==='en','English option not sent');
+ check(requests.length===6&&requests[5].arg.target==='en'&&requests[5].arg.text==='Xin chào.'&&node('translation-in').value==='Xin chào.'&&document.activeElement===node('translation-in'),'selected text was not prefilled and auto-submitted exactly once');
  openQuickTool('translation','Chào buổi sáng.');
  await sleep(0);
  check(requests.length===6&&phase('translation')==='queued','latest selected text must wait behind native single-flight');

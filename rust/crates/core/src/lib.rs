@@ -16,6 +16,7 @@ pub mod daemon;
 pub mod fmt;
 pub mod hook;
 pub mod hookinstall;
+pub mod hotkeys;
 pub mod iso;
 pub mod log;
 pub mod net;
