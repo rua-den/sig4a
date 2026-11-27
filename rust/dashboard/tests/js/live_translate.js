@@ -30,6 +30,9 @@ check('unexpected Vietnamese stays suppressed by default', $('live-vi').hidden);
 await api.live_start({source:'mic',device_id:'mic',translate:false,consent:false},liveNonce);
 $('live-pause').click();
 check('pause clears immediately and waits for disposed ACK', await waitFor(() => $('live-start').textContent === 'Tiếp tục', 2500) && $('live-readout').textContent === '');
+const pausedCheck = await api.live_check_start({source:'playback',device_id:null},liveNonce);
+check('audio check cannot replace paused regular Resume', $('live-check-start').disabled &&
+ pausedCheck.phase==='paused' && !pausedCheck.checking && pausedCheck.check===null && $('live-start').textContent==='Tiếp tục');
 await sleep(300);
 check('in-flight captions cannot refill paused view', $('live-readout').textContent === '' && $('live-lamp').dataset.listening === 'false');
 tick($('live-translate'), true);

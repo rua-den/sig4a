@@ -18,6 +18,10 @@ const LINE_MAX: usize = 16_384;
 const SESSION_MAX: u64 = (1 << 53) - 1;
 const STOP_TIMEOUT: Duration = Duration::from_secs(2);
 const START_TIMEOUT: Duration = Duration::from_secs(35);
+const CHECK_START_TIMEOUT: Duration = Duration::from_secs(6);
+const CHECK_WINDOW: Duration = Duration::from_secs(5);
+const CHECK_CLEANUP: Duration = Duration::from_millis(500);
+const CHECK_SAMPLE_MAX_UTF16: usize = 512;
 const LIST_TIMEOUT: Duration = Duration::from_secs(6);
 const QUEUE: usize = 8;
 
@@ -39,6 +43,11 @@ enum Message {
     Status(u64, bool),
     Caption(u64, String, Option<String>, Option<u64>),
     Error(u64, &'static str),
+    CheckStarted(u64),
+    CheckStopped(u64, bool),
+    CheckMeter(u64, u8, bool),
+    CheckSample(u64, String),
+    CheckModel(u64, bool),
 }
 fn bounded(value: &Value, max: usize) -> Option<&str> {
     let s = value.as_str()?;
@@ -88,6 +97,28 @@ fn parse(bytes: &[u8]) -> Option<Message> {
             let vi = if v["vi"].is_null() { None } else { Some(bounded(&v["vi"], 2048)?.into()) };
             let seq = if let Some(seq) = v.get("seq") { Some(session(seq, false)?) } else { None };
             Some(Message::Caption(n, en, vi, seq))
+        }
+        "check_status" => match v["state"].as_str()? {
+            "started" if keys(&v, &["v","type","session","state"], &[]) =>
+                Some(Message::CheckStarted(session(&v["session"], false)?)),
+            "stopped" if keys(&v, &["v","type","session","state","completed"], &[]) =>
+                Some(Message::CheckStopped(session(&v["session"], false)?, v["completed"].as_bool()?)),
+            _ => None,
+        },
+        "check_meter" if keys(&v, &["v","type","session","level","signal"], &[]) => {
+            let level = v["level"].as_u64().filter(|n| *n <= 100)? as u8;
+            Some(Message::CheckMeter(session(&v["session"], false)?, level, v["signal"].as_bool()?))
+        }
+        "check_sample" if keys(&v, &["v","type","session","en"], &[]) => {
+            let en = bounded(&v["en"], CHECK_SAMPLE_MAX_UTF16)?;
+            if en.encode_utf16().take(CHECK_SAMPLE_MAX_UTF16 + 1).count() > CHECK_SAMPLE_MAX_UTF16 {
+                return None;
+            }
+            Some(Message::CheckSample(session(&v["session"], false)?, en.into()))
+        }
+        "check_model" if keys(&v, &["v","type","session","state"], &[]) => {
+            let ready = match v["state"].as_str()? { "ready" => true, "unavailable" => false, _ => return None };
+            Some(Message::CheckModel(session(&v["session"], false)?, ready))
         }
         "error" if keys(&v, &["v","type","session","code"], &[]) =>
             Some(Message::Error(session(&v["session"], true)?, safe_code(&v["code"])?)),
@@ -171,9 +202,37 @@ fn assign_and_resume(child: &Child, job: &OwnedHandle) -> io::Result<()> {
 #[derive(Default)]
 struct Watch {
     deadline: Option<(Instant, &'static str)>,
+    check: Option<CheckWatch>,
     exit: bool,
     tripped: Option<&'static str>,
 }
+#[derive(Clone, Copy)]
+struct CheckWatch {
+    generation: u64,
+    started: bool,
+    hard_deadline: Instant,
+}
+impl Watch {
+    fn expiry(&self) -> Option<(Instant, &'static str)> {
+        match (self.check, self.deadline) {
+            (Some(check), Some(soft)) if soft.0 < check.hard_deadline => Some(soft),
+            (Some(check), _) => Some((check.hard_deadline, "timeout")),
+            (None, soft) => soft,
+        }
+    }
+
+    /// Timestamp the first matching native Started on the protocol reader, even
+    /// if WebView/Tao is blocked. Duplicates, stopped checks and expired setup
+    /// cannot add time to the hard deadline.
+    fn check_started(&mut self, generation: u64, now: Instant) {
+        let Some(check) = &mut self.check else { return; };
+        if self.tripped.is_none() && check.generation == generation && !check.started && now < check.hard_deadline {
+            check.started = true;
+            check.hard_deadline = now + CHECK_WINDOW + CHECK_CLEANUP;
+        }
+    }
+}
+
 type WatchState = Arc<(Mutex<Watch>, Condvar)>;
 
 fn monitor(job: OwnedHandle, state: WatchState) {
@@ -181,7 +240,7 @@ fn monitor(job: OwnedHandle, state: WatchState) {
     let mut guard = lock.lock().unwrap();
     loop {
         if guard.exit { return; }
-        match guard.deadline {
+        match guard.expiry() {
             None => guard = wake.wait(guard).unwrap(),
             Some((end, code)) if Instant::now() >= end => {
                 guard.tripped = Some(code);
@@ -204,7 +263,7 @@ struct Helper {
     job: Option<OwnedHandle>,
     child: Child,
     send: SyncSender<Value>,
-    receive: Receiver<Message>,
+    receive: Receiver<(Message, Instant)>,
     broken: Arc<AtomicBool>,
     watch: WatchState,
 }
@@ -239,6 +298,8 @@ impl Helper {
         let broken = Arc::new(AtomicBool::new(false));
         let write_failed = broken.clone();
         let read_failed = broken.clone();
+        let watch = Arc::new((Mutex::new(Watch::default()), Condvar::new()));
+        let read_watch = watch.clone();
         std::thread::spawn(move || {
             while let Ok(value) = commands.recv() {
                 let data = value.to_string();
@@ -252,12 +313,16 @@ impl Helper {
             let mut reader = BufReader::new(stdout);
             while let Ok(Some(line)) = read_line(&mut reader) {
                 let Some(message) = parse(&line) else { break; };
+                let now = Instant::now();
+                if let Message::CheckStarted(id) = &message {
+                    read_watch.0.lock().unwrap().check_started(*id, now);
+                    read_watch.1.notify_one();
+                }
                 // Fail on a flooding helper instead of accumulating unbounded events.
-                if events.try_send(message).is_err() { break; }
+                if events.try_send((message, now)).is_err() { break; }
             }
             read_failed.store(true, Ordering::Release);
         });
-        let watch = Arc::new((Mutex::new(Watch::default()), Condvar::new()));
         let watcher = watch.clone();
         std::thread::spawn(move || monitor(monitor_job, watcher));
         Ok(Self {_singleton:singleton, job:Some(job), child, send, receive, broken, watch})
@@ -267,6 +332,18 @@ impl Helper {
         let (lock, wake) = &*self.watch;
         lock.lock().unwrap().deadline = deadline;
         wake.notify_one();
+    }
+
+    fn begin_check(&self, generation: u64, hard_deadline: Instant) {
+        let mut watch = self.watch.0.lock().unwrap();
+        watch.check = Some(CheckWatch {generation, started:false, hard_deadline});
+        drop(watch);
+        self.watch.1.notify_one();
+    }
+
+    fn end_check(&self) {
+        self.watch.0.lock().unwrap().check = None;
+        self.watch.1.notify_one();
     }
 
     fn tripped(&self) -> Option<&'static str> {
@@ -313,6 +390,33 @@ struct Caption {
     vi: Option<String>,
     seq: Option<u64>,
 }
+#[derive(Default)]
+struct AudioCheck {
+    level: u8,
+    signal: bool,
+    model: Option<bool>,
+    sample: Option<String>,
+    outcome: Option<&'static str>,
+}
+impl AudioCheck {
+    fn value(&self, phase: Phase) -> Value {
+        json!({"phase": phase.label(), "level":self.level,"signal":self.signal,
+            "model":self.model,"sample":self.sample,"outcome":self.outcome})
+    }
+
+    fn finish(&mut self) {
+        self.level = 0;
+        if !self.signal { self.sample = None; }
+        self.outcome = Some(if !self.signal { "silent" }
+            else if self.sample.is_some() { "sample" }
+            else { match self.model {
+                Some(false) => "model_unavailable",
+                None => "model_not_ready",
+                Some(true) => "audible_no_sample",
+            } });
+    }
+}
+
 pub struct Live {
     helper: Option<Helper>,
     devices: Vec<Device>,
@@ -324,13 +428,15 @@ pub struct Live {
     generation: u64,
     translate: bool,
     caption: Caption,
+    checking: bool,
+    check: Option<AudioCheck>,
     code: Option<&'static str>,
 }
 
 impl Default for Live {
     fn default() -> Self {
         Self {helper:None,devices:Vec::new(),listing:None,phase:Phase::Idle,pause:false,deadline:None,
-            renderer_deadline:None,generation:0,translate:false,caption:Caption::default(),code:None}
+            renderer_deadline:None,generation:0,translate:false,caption:Caption::default(),checking:false,check:None,code:None}
     }
 }
 
@@ -350,6 +456,9 @@ impl Live {
             Phase::Starting => {
                 // Arm before the first Start byte can reach the suspended/Job-bound helper.
                 let Some(lease) = self.renderer_deadline else { self.fail("view_lost"); return; };
+                if self.checking {
+                    helper.begin_check(self.generation, self.deadline.expect("bounded check setup"));
+                }
                 helper.arm(Some((lease, "view_lost")));
             }
             Phase::Stopping => {
@@ -369,7 +478,22 @@ impl Live {
         self.phase = Phase::Idle;
         self.deadline = None;
         self.caption = Caption::default();
-        self.code = Some(code);
+        if self.checking {
+            // Stop/dismiss has already cleared the only presentable check. Still reap
+            // the helper, but don't resurrect a result for the formerly selected source.
+            if self.check.is_some() && code != "view_lost" {
+                self.check = Some(AudioCheck {outcome:Some(match code {
+                    "device_missing" | "device_lost" | "permission_denied" | "backend_missing" => "unavailable",
+                    _ => "failed",
+                }),..AudioCheck::default()});
+            } else {
+                self.check = None;
+            }
+            self.checking = false;
+            self.code = None;
+        } else {
+            self.code = Some(code);
+        }
     }
 
     pub fn renew_view(&mut self, deadline: Instant) {
@@ -381,6 +505,7 @@ impl Live {
 
     pub fn view_lost(&mut self) {
         self.renderer_deadline = None;
+        self.check = None;
         if matches!(self.phase, Phase::Starting | Phase::Listening) {
             let code = self.helper.as_ref().and_then(Helper::tripped).unwrap_or("view_lost");
             self.fail(code);
@@ -390,6 +515,7 @@ impl Live {
     pub fn close(&mut self) {
         if let Some(mut helper) = self.helper.take() { helper.shutdown(Duration::from_millis(300)); }
         self.caption = Caption::default();
+        self.check = None;
     }
 
     fn refresh(&mut self) {
@@ -400,8 +526,39 @@ impl Live {
         self.send(json!({"v":1,"type":"list"}), true);
     }
 
+    fn check_start(&mut self, value: &Value) {
+        // A check is a separate operation. Never consume a paused regular session.
+        if self.phase != Phase::Idle || self.listing.is_some() { return; }
+        self.caption = Caption::default();
+        self.check = None;
+        self.code = None;
+        let selection = (|| {
+            if !keys(value, &["source","device_id"], &[]) { return None; }
+            let source = source(&value["source"])?;
+            Some((source, self.selected_device(source, &value["device_id"])?))
+        })();
+        let Some((source, device_id)) = selection else {
+            self.check = Some(AudioCheck {outcome:Some("unavailable"),..AudioCheck::default()});
+            return;
+        };
+        if self.generation >= SESSION_MAX { self.fail("protocol_error"); return; }
+        self.generation += 1;
+        self.translate = false;
+        self.checking = true;
+        self.check = Some(AudioCheck::default());
+        self.phase = Phase::Starting;
+        self.deadline = Some(Instant::now() + CHECK_START_TIMEOUT);
+        self.send(json!({"v":1,"type":"check_start","session":self.generation,"source":source,"device_id":device_id}), true);
+    }
+
+    fn check_clear(&mut self) {
+        self.check = None;
+        if self.checking { self.stop(false); }
+    }
+
     fn start(&mut self, value: &Value) {
         if self.phase.busy() || self.listing.is_some() { return; }
+        self.check = None;
         self.caption = Caption::default();
         self.code = None;
         if value["translate"].as_bool() == Some(true) && value["consent"].as_bool() != Some(true) {
@@ -425,25 +582,31 @@ impl Live {
         let source = source(&value["source"])?;
         let translate = value["translate"].as_bool()?;
         if translate && value["consent"].as_bool() != Some(true) { return None; }
-        let device = if value["device_id"].is_null() {
-            if source != "playback" { return None; }
-            None
-        } else {
-            let id = bounded(&value["device_id"], 512)?;
-            if !self.devices.iter().any(|d| d.id == id && d.source == source) { return None; }
-            Some(id.to_owned())
-        };
+        let device = self.selected_device(source, &value["device_id"])?;
         Some((source.to_owned(), device, translate))
+    }
+
+    fn selected_device(&self, source: &str, value: &Value) -> Option<Option<String>> {
+        if value.is_null() {
+            if source != "playback" { return None; }
+            Some(None)
+        } else {
+            let id = bounded(value, 512)?;
+            if !self.devices.iter().any(|d| d.id == id && d.source == source) { return None; }
+            Some(Some(id.to_owned()))
+        }
     }
 
     pub fn stop(&mut self, pause: bool) {
         self.caption = Caption::default();
+        self.check = None;
         match self.phase {
             Phase::Starting | Phase::Listening => {
                 self.phase = Phase::Stopping;
-                self.pause = pause;
+                self.pause = pause && !self.checking;
                 self.deadline = Some(Instant::now() + STOP_TIMEOUT);
-                self.send(json!({"v":1,"type":"stop","session":self.generation}), false);
+                let method = if self.checking {"check_stop"} else {"stop"};
+                self.send(json!({"v":1,"type":method,"session":self.generation}), false);
             }
             Phase::Stopping => {
                 if !pause { self.pause = false; }
@@ -453,11 +616,58 @@ impl Live {
         }
     }
 
+    #[cfg(test)]
     fn event(&mut self, msg: Message) -> Result<(), &'static str> {
+        self.event_at(msg, Instant::now())
+    }
+
+    fn event_at(&mut self, msg: Message, received: Instant) -> Result<(), &'static str> {
         match msg {
+            Message::CheckStarted(n) if self.checking && n == self.generation => {
+                match self.phase {
+                    Phase::Starting => {
+                        self.phase = Phase::Listening;
+                        self.deadline = Some(received + CHECK_WINDOW + CHECK_CLEANUP);
+                    }
+                    Phase::Stopping => {}
+                    _ => return Err("protocol_error"),
+                }
+            }
+            Message::CheckStopped(n, completed) if self.checking && n == self.generation => {
+                match self.phase {
+                    Phase::Listening if completed => {
+                        if let Some(check) = &mut self.check { check.finish(); }
+                    }
+                    Phase::Starting | Phase::Listening | Phase::Stopping if !completed || self.phase == Phase::Stopping => {
+                        self.check = None;
+                    }
+                    _ => return Err("protocol_error"),
+                }
+                self.checking = false;
+                self.phase = Phase::Idle;
+                self.deadline = None;
+                if let Some(helper) = &self.helper { helper.end_check(); helper.arm(None); }
+            }
+            Message::CheckMeter(n, level, signal)
+                if self.checking && n == self.generation && self.phase == Phase::Listening =>
+            {
+                let check = self.check.as_mut().ok_or("protocol_error")?;
+                check.level = level;
+                check.signal |= signal;
+            }
+            Message::CheckSample(n, sample)
+                if self.checking && n == self.generation && self.phase == Phase::Listening =>
+            {
+                let check = self.check.as_mut().ok_or("protocol_error")?;
+                if check.sample.is_none() { check.sample = Some(sample); }
+            }
+            Message::CheckModel(n, ready) if self.checking && n == self.generation && self.phase == Phase::Listening => {
+                let check = self.check.as_mut().ok_or("protocol_error")?;
+                check.model = Some(ready);
+            }
             Message::Devices(devices) if self.listing.take().is_some() => self.devices = devices,
             Message::Devices(_) => return Err("protocol_error"),
-            Message::Status(n, started) if n == self.generation => {
+            Message::Status(n, started) if n == self.generation && !self.checking => {
                 match (self.phase, started) {
                     (Phase::Starting, true) => { self.phase = Phase::Listening; self.deadline = None; }
                     (Phase::Stopping, false) => {
@@ -470,7 +680,7 @@ impl Live {
                     _ => return Err("protocol_error"),
                 }
             }
-            Message::Caption(n, en, vi, seq) if n == self.generation && self.phase == Phase::Listening => {
+            Message::Caption(n, en, vi, seq) if n == self.generation && self.phase == Phase::Listening && !self.checking => {
                 match (seq, vi) {
                     // Translations never create a new line or change its English text.
                     // A delayed translation is rendered only for the exact current row.
@@ -492,16 +702,18 @@ impl Live {
             }
             Message::Error(n, code) if n == 0 && self.listing.take().is_some() => self.code = Some(code),
             Message::Error(n, code) if n == self.generation && n > 0 && self.phase.busy() => {
-                if code == "translation_unavailable" && self.phase != Phase::Stopping {
+                if code == "translation_unavailable" && !self.checking && self.phase != Phase::Stopping {
                     self.translate = false;
                     self.caption.vi = None;
                     self.code = Some(code);
-                } else if code != "translation_unavailable" {
+                } else if code != "translation_unavailable" || self.checking {
                     // The contract releases first; terminate defensively and never reopen.
                     return Err(code);
                 }
             }
-            Message::Status(..) | Message::Caption(..) | Message::Error(..) => {}
+            Message::Status(..) | Message::Caption(..) | Message::Error(..) |
+            Message::CheckStarted(..) | Message::CheckStopped(..) | Message::CheckMeter(..) |
+            Message::CheckSample(..) | Message::CheckModel(..) => {}
         }
         Ok(())
     }
@@ -516,8 +728,8 @@ impl Live {
             if let Some(code) = helper.tripped() { self.fail(code); break; }
             if helper.broken.load(Ordering::Acquire) { self.fail("protocol_error"); break; }
             match helper.receive.try_recv() {
-                Ok(message) => {
-                    if let Err(code) = self.event(message) { self.fail(code); break; }
+                Ok((message, received)) => {
+                    if let Err(code) = self.event_at(message, received) { self.fail(code); break; }
                 }
                 Err(TryRecvError::Disconnected) => { self.fail("protocol_error"); break; }
                 Err(TryRecvError::Empty) => break,
@@ -530,10 +742,13 @@ impl Live {
             "live_list" => self.refresh(),
             "live_start" => self.start(arg),
             "live_stop" => self.stop(false),
-            "live_pause" => self.stop(true),
+            "live_pause" if !self.checking => self.stop(true),
+            "live_check_start" => self.check_start(arg),
+            "live_check_clear" | "live_check_stop" => self.check_clear(),
             _ => {}
         }
         json!({"phase":self.phase.label(),"listing":self.listing.is_some(),"code":self.code,
+            "checking":self.checking,"check":self.check.as_ref().map(|c| c.value(self.phase)),
             "devices":self.devices.iter().map(Device::value).collect::<Vec<_>>(),
             "en":self.caption.en,"vi":self.caption.vi})
     }
@@ -598,6 +813,116 @@ mod tests {
         live.event(Message::Caption(3,"second".into(),Some("old session".into()),Some(2))).unwrap();
         assert_eq!(live.caption.en, "second");
         assert_eq!(live.caption.vi, None);
+    }
+
+    #[test]
+    fn audio_check_wire_is_separate_strict_and_bounded() {
+        assert!(matches!(parse(br#"{"v":1,"type":"check_status","session":2,"state":"started"}"#), Some(Message::CheckStarted(2))));
+        assert!(matches!(parse(br#"{"v":1,"type":"check_status","session":2,"state":"stopped","completed":true}"#), Some(Message::CheckStopped(2, true))));
+        assert!(matches!(parse(br#"{"v":1,"type":"check_meter","session":2,"level":100,"signal":true}"#), Some(Message::CheckMeter(2,100,true))));
+        assert!(matches!(parse(br#"{"v":1,"type":"check_model","session":2,"state":"unavailable"}"#), Some(Message::CheckModel(2,false))));
+        for line in [
+            r#"{"v":1,"type":"check_status","session":2,"state":"stopped"}"#,
+            r#"{"v":1,"type":"check_status","session":2,"state":"started","completed":true}"#,
+            r#"{"v":1,"type":"check_meter","session":2,"level":101,"signal":false}"#,
+            r#"{"v":1,"type":"check_meter","session":2,"level":3,"signal":0}"#,
+            r#"{"v":1,"type":"check_sample","session":0,"en":"text"}"#,
+            r#"{"v":1,"type":"check_sample","session":2,"en":"text","vi":"test"}"#,
+            r#"{"v":1,"type":"check_model","session":2,"state":"running"}"#,
+        ] { assert!(parse(line.as_bytes()).is_none(), "{line}"); }
+        for (en, accepted) in [("x".repeat(512), true), ("x".repeat(513), false),
+                              ("𐐀".repeat(256), true), (format!("{}x", "𐐀".repeat(256)), false)] {
+            let line = json!({"v":1,"type":"check_sample","session":2,"en":en});
+            assert_eq!(parse(line.to_string().as_bytes()).is_some(), accepted);
+        }
+    }
+
+    #[test]
+    fn check_watchdog_never_renews_hard_bound_from_heartbeat_or_repeat_started() {
+        let now = Instant::now();
+        let mut watch = Watch {
+            deadline:Some((now + Duration::from_secs(3),"view_lost")),
+            check:Some(CheckWatch{generation:7,started:false,hard_deadline:now + CHECK_START_TIMEOUT}),
+            ..Watch::default()
+        };
+        watch.check_started(6, now + Duration::from_secs(1));
+        assert_eq!(watch.check.unwrap().hard_deadline, now + CHECK_START_TIMEOUT);
+        watch.check_started(7, now + Duration::from_secs(1));
+        let hard = now + Duration::from_secs(1) + CHECK_WINDOW + CHECK_CLEANUP;
+        assert_eq!(watch.check.unwrap().hard_deadline, hard);
+        watch.check_started(7, now + Duration::from_secs(2));
+        watch.deadline = Some((now + Duration::from_secs(12),"view_lost"));
+        assert_eq!(watch.expiry(), Some((hard,"timeout")));
+        watch.deadline = Some((now + Duration::from_secs(4),"view_lost"));
+        assert_eq!(watch.expiry(), Some((now + Duration::from_secs(4),"view_lost")));
+    }
+
+    #[test]
+    fn check_and_regular_events_never_cross_or_refill_stopped_test() {
+        let mut live = Live {generation:10,checking:true,check:Some(AudioCheck::default()),phase:Phase::Starting,..Live::default()};
+        live.event(Message::Status(10,true)).unwrap();
+        assert_eq!(live.phase, Phase::Starting);
+        live.event(Message::CheckStarted(10)).unwrap();
+        live.event(Message::CheckModel(10,true)).unwrap();
+        live.event(Message::CheckMeter(9,99,true)).unwrap();
+        assert_eq!(live.check.as_ref().unwrap().level, 0);
+        live.event(Message::CheckMeter(10,55,true)).unwrap();
+        live.event(Message::CheckMeter(10,0,false)).unwrap();
+        live.event(Message::CheckSample(10,"first".into())).unwrap();
+        live.event(Message::CheckSample(10,"second".into())).unwrap();
+        live.event(Message::Caption(10,"regular".into(),Some("VI".into()),None)).unwrap();
+        assert!(live.caption.en.is_empty());
+        live.start(&json!({"source":"playback","device_id":null,"translate":false,"consent":false}));
+        assert_eq!(live.generation,10);
+        live.event(Message::CheckStopped(10,true)).unwrap();
+        assert_eq!(live.check.as_ref().unwrap().outcome, Some("sample"));
+        assert_eq!(live.check.as_ref().unwrap().sample.as_deref(), Some("first"));
+        live.check_clear();
+        live.event(Message::CheckSample(10,"late check result".into())).unwrap();
+        assert!(live.check.is_none());
+    }
+
+    #[test]
+    fn audible_no_sample_distinguishes_ready_missing_and_startup_pending() {
+        for (model, outcome) in [(None, "model_not_ready"), (Some(false), "model_unavailable"),
+                                 (Some(true), "audible_no_sample")] {
+            let mut check = AudioCheck {signal:true,model,..AudioCheck::default()};
+            check.finish();
+            assert_eq!(check.outcome, Some(outcome));
+        }
+    }
+
+    #[test]
+    fn audio_check_cannot_replace_paused_regular_session() {
+        let mut live = Live {generation:11,phase:Phase::Paused,translate:true,..Live::default()};
+        let state = live.call("live_check_start", &json!({"source":"playback","device_id":null}));
+        live.call("live_check_stop", &Value::Null);
+        assert_eq!(state["phase"], "paused");
+        assert_eq!(live.phase, Phase::Paused);
+        assert_eq!(live.generation, 11);
+        assert!(live.translate && !live.checking && live.check.is_none() && !live.active_worker());
+    }
+
+    #[test]
+    fn cancelled_audio_check_never_publishes_stale_timeout_or_hidden_results() {
+        for dismiss in ["live_check_clear", "live_check_stop", "live_stop"] {
+            let mut live = Live {generation:3,checking:true,phase:Phase::Stopping,
+                check:Some(AudioCheck {signal:true,sample:Some("formerly selected".into()),..AudioCheck::default()}),
+                deadline:Some(Instant::now()),..Live::default()};
+            live.call(dismiss, &Value::Null);
+            live.tick(Instant::now()); // Failed ACK still closes the Job, but cannot publish stale feedback.
+            let state = live.call("live_state", &Value::Null);
+            assert_eq!(state["phase"], "idle");
+            assert!(state["code"].is_null() && state["check"].is_null());
+            assert!(!live.checking);
+        }
+
+        let mut live = Live {generation:4,checking:true,phase:Phase::Listening,
+            check:Some(AudioCheck::default()),..Live::default()};
+        live.view_lost();
+        live.event(Message::CheckSample(4,"late hidden sample".into())).unwrap();
+        assert_eq!(live.phase, Phase::Idle);
+        assert!(live.check.is_none() && live.code.is_none());
     }
 
 }

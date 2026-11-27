@@ -16,3 +16,34 @@ Events:
 - `{"v":1,"type":"error","session":0|1,"code":"..."}` with safe fixed tokens only (e.g. `backend_missing`, `model_missing`, `translation_unavailable`, `device_missing`, `device_lost`, `permission_denied`, `busy`, `timeout`, `protocol_error`, `internal`). Session zero only for out-of-session lookup/setup. Terminal error paths release before returning and never fall back to mic; translation_unavailable is nonterminal if English still works.
  
 Build baseline with helper disabled/missing must keep OCR/Grammar/Translate/Usage intact, and clearly explain manual model/setup requirements. Tests may use controlled synthetic helpers only under test-only build/code, never shipped as real capture. Documentation must name what was not tested: physical devices, numerical accuracy/quality and long meeting soak remain separate.
+
+## Audio check (no normal session)
+
+* `{"v":1,"type":"check_start","session":12,"source":"playback","device_id":null}` starts
+  a dedicated test after the operator clicks **Kiểm tra âm thanh**. The same
+  source/selection rules apply as for Start, but `translate` is invalid. A
+  normal session and a test session cannot share the device or supersede one
+  another. `check_stop` has only v/type/session. A wrong mode or stale generation
+  cannot stop the active mode.
+* The helper reports `check_status` with v/type/session/state `started` or
+  `stopped`. The stopped event also has boolean `completed` (true only for a
+  normal full window, false for explicit stop or failure). Status stopped is
+  sent only after the tested endpoint has been released.
+* While listening, `check_meter` has v/type/session, integer `level` in 0..100
+  and boolean cumulative `signal` (within this check only). Live meters are
+  at most five per second, apart from a final zero-level aggregate on natural
+  stop. `check_model` adds a `state` of `ready` or `unavailable`; such a result
+  need not arrive before auto-stop. `check_sample` has a single `en` string
+  at most 512 UTF-16 code units. There is no VI event in this mode.
+* Native device acquisition has a separate startup limit. A native owner
+  thread caps capture at five seconds measured conservatively from native start invocation, independently
+  of reading stdout, renderer liveness and ASR; the dashboard Job is a
+  second hard-stop boundary. The optional worker may be absent/slow and
+  never delays capture or endpoint release. The helper retains at most one
+  short in-memory EN sample buffer, uses no network/disk audio sinks, and
+  suppresses decoder results after stop, source change or mode termination.
+
+The check does not start a second five-second period if the native start
+invocation takes time. Once the device is released, an unfinished optional
+decoder gets only a short cleanup grace; a wedged worker forces process exit
+without an ACK so the dashboard can release/reap rather than reuse that helper.

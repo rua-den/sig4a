@@ -6,16 +6,20 @@
   "phases": [
     {
       "id": "design",
-      "status": "in_progress",
+      "status": "passed",
       "acceptance": [
         "One independent plan review before code.",
         "Distinguish source unavailable, no audio, audio present but no English caption, missing/offline English model, and working transcription.",
         "The test captures only the explicitly selected source, displays a live level and the latest English sample if available, and never starts, replaces or extends a regular Live Translate session."
-      ]
+      ],
+      "review": {
+        "plan_commit": "022793be529afcf814da6e83a1ac6d8e875c2e0f",
+        "outcome": "Independent approval before implementation. Five seconds begins when capture opens. Startup bound and hard stop do not depend on the UI or recognizer. Silence gives a routing hint, not a claim the device is wrong. Test and regular sessions cannot implicitly replace one another."
+      }
     },
     {
       "id": "runtime-and-ui",
-      "status": "pending",
+      "status": "in_progress",
       "acceptance": [
         "No capture until explicit Test Audio click. Test-only bounded native helper command/events; both native helper and dashboard/watchdog enforce bounded stop, including hung startup/inference. Shape, session identity, and measurement limits are validated.",
         "Five-second window once capture starts; user Stop, source change, page exit, and process exit stop capture earlier. No fallback source, passive capture, persistent recording or transcript, cloud use or automatic model download. No Vietnamese inference.",

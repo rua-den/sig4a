@@ -83,3 +83,27 @@ configuration and validates loopback peer acceptance/rejection. With
 `-Vietnamese` (only on a runner confirmed legally eligible for Tencent terms), it also checks the actual authenticated publisher-pinned local
 MT process and cancellation of an in-flight translation. No physical capture,
 accuracy score, live UI, or long soak evidence is implied.
+
+## Audio-check-specific smoke
+
+`dotnet run -c Release --project tools/live_translate_runtime/tests/ProtocolSmoke.csproj`
+covers exact test command allowlists, finite level math and independent five-second
+window/early-Stop timing with a deliberately unfinished optional sampler. A
+test-only subprocess also runs the production stuck-sampler retirement decision
+after a simulated owner release; it must exit without acknowledging the check.
+It opens no endpoint.
+
+On an isolated Windows host with a default render output and no actual meeting,
+the ordinary packaged helper can consume a synthetic sound through WASAPI:
+
+```powershell
+& ./tools/live_translate_runtime/AudioCheck-Smoke.ps1 -Published $helper -Scratch "$env:RUNNER_TEMP/check-meter"
+# After explicit English provisioning, no VI setup required:
+& ./tools/live_translate_runtime/AudioCheck-Smoke.ps1 -Published $helper -Scratch "$env:RUNNER_TEMP/check-en" -ExpectSample
+```
+
+Use `-RequirePlayback` only on a runner where the route is expected. Otherwise
+unavailable hardware is explicitly logged as a skip, never a capture pass. The
+script measures started-ACK to stopped-ACK with runner slack, not the exact
+PCM cutoff. It is not in the distributable and neither opens a microphone nor logs
+device names or captions. A hosted virtual endpoint is not physical proof.

@@ -133,6 +133,9 @@ textarea:focus{outline:0;border-color:var(--accent)}
 #quick-open-toolbox{display:none;margin-right:6px}.quick #quick-open-toolbox{display:block}.shortcut-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}.shortcut-fields input{width:100%}.shortcut-settings{grid-column:1/-1}.route-settings #settings-box:has(#shortcuts:not([hidden]))>.row{display:none}
 .ocr-popup .rz,.ocr-popup #ocr-remove{display:none}.ocr-popup #tool-ocr .result{min-height:44px;max-height:111px;overflow:auto;overflow-wrap:anywhere}.ocr-popup #ocr-out{margin-top:6px}.ocr-inline{margin-top:8px}.ocr-inline .toolactions{margin-top:5px}.ocr-popup #tool-ocr .toolactions{gap:5px}.ocr-popup #ocr-out:focus-visible,.ocr-popup #ocr-translation-out:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .toolpanel{display:none}.toolpanel.on{display:block}.overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.tile{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px;color:var(--fg);font:inherit;cursor:pointer}.tile:hover,.tile:focus-visible{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent)}.tile b{display:block;color:var(--accent);font-size:14px}.tile .tile-hotkey{display:block;color:var(--fg);margin-bottom:3px}.tile span,.hint{color:var(--dim);font-size:12px}.toolgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.toolgrid label{grid-column:1/-1}.toolgrid textarea{min-height:90px}.ai-prompts{margin-top:12px}.ai-prompts textarea{min-height:75px}.toolactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.result{white-space:pre-wrap;user-select:text;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:9px;margin-top:10px;min-height:42px}.result[contenteditable]{cursor:text}.result[data-placeholder]:empty::before{content:attr(data-placeholder);color:var(--dim);pointer-events:none}.text-status{margin:7px 0 4px;overflow-wrap:anywhere}.modelcard{border:1px solid var(--line);padding:10px;border-radius:6px;margin-top:8px}.modelcard code{color:var(--accent);user-select:text}.ocr-preview{display:none;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:5px}.ocr-preview.on{display:block}@media (max-width:640px){.toolgrid{grid-template-columns:1fr}}
+#live-check-result{margin-top:8px}
+#live-check-meter{display:block;width:100%;height:16px;accent-color:var(--accent)}
+#live-check-sample{font-size:16px;white-space:pre-wrap;overflow-wrap:anywhere}
 #live-readout{min-height:78px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:17px}
 #live-vi{font-size:14px;border-left:2px solid var(--acc);padding-left:8px;white-space:pre-wrap;overflow-wrap:anywhere}
 #live-lamp[data-listening="true"]{color:#72d69b;font-weight:700}
@@ -165,6 +168,16 @@ textarea:focus{outline:0;border-color:var(--accent)}
    <label class="live-field">Thiết bị<select id="live-device"></select></label>
    <p class="hint" id="live-source-hint">Tiếng máy nghe mọi ứng dụng phát âm thanh qua thiết bị đã chọn, gồm cả thông báo.</p>
    <button class="b" id="live-refresh" type="button">Làm mới thiết bị</button>
+   <div class="toolactions" aria-label="Thử nguồn âm thanh">
+    <button class="b" id="live-check-start" type="button">Thử âm thanh (5 giây)</button>
+    <button class="b" id="live-check-stop" type="button" disabled>Dừng thử</button>
+   </div>
+   <div id="live-check-result" hidden>
+    <meter id="live-check-meter" min="0" max="100" value="0" aria-label="Mức âm thanh trong lần thử"></meter>
+    <p class="hint" id="live-check-status" role="status"></p>
+    <p class="hint" id="live-check-model" hidden></p>
+    <div id="live-check-sample" class="result" aria-label="Mẫu tiếng Anh trong lần thử" hidden></div>
+   </div>
    <div class="toolactions"><label><input type="checkbox" id="live-translate"> Bản dịch tiếng Việt thử nghiệm</label><label><input type="checkbox" id="live-pin"> Ghim cửa sổ trên cùng</label></div>
    <p class="hint" id="live-vi-warning" hidden>Bản dịch có thể sai tên, số hoặc đảo nghĩa. Đối chiếu dòng tiếng Anh; không dùng bản dịch để chốt quyết định quan trọng. Model Tencent HY-MT cài riêng theo điều khoản của nhà phát hành. SIG4A là dự án độc lập của rua-den, không liên kết với Tencent và không được Tencent tài trợ hay bảo trợ.</p>
    <label id="live-consent-row" hidden><input type="checkbox" id="live-consent"> Tôi hiểu và bật bản dịch thử nghiệm cho phiên này.</label>
@@ -743,18 +756,26 @@ const liveErrors={
  protocol_error:'Helper không tương thích hoặc đã ngắt. Phiên đã dừng.',
  internal:'Không thể khởi động hoặc giám sát helper. Cài lại gói helper.'
 };
-let liveState={phase:'idle',listing:false,devices:[],en:'',vi:null},liveLoop=null,liveEpoch=0,liveRequest=false,livePollPending=false,liveDevicesKey=null,liveNonce=null,liveHeartbeatLoop=null;
+let liveState={phase:'idle',listing:false,devices:[],en:'',vi:null,checking:false,check:null},liveLoop=null,liveEpoch=0,liveRequest=false,livePollPending=false,liveDevicesKey=null,liveNonce=null,liveHeartbeatLoop=null;
 function syncLiveControls(){
  const active=['starting','listening','stopping'].includes(liveState.phase);
  const work=active||liveState.listing||liveRequest;
- $('live-source').disabled=work;$('live-device').disabled=work;
+ const noMic=$('live-source').value==='mic'&&!$('live-device').value;
+ const checkActive=liveState.checking===true;
+ // A source/device change may cancel a check; regular capture still locks these selectors.
+ const sourceLocked=(active&&!checkActive)||liveState.listing||liveRequest;
+ $('live-source').disabled=sourceLocked;$('live-device').disabled=sourceLocked;
  $('live-translate').disabled=work;$('live-consent').disabled=work;
  const vi=$('live-translate').checked;
  $('live-vi-warning').hidden=!vi;$('live-consent-row').hidden=!vi;
- $('live-start').disabled=work||(vi&&!$('live-consent').checked)||($('live-source').value==='mic'&&!$('live-device').value);
+ $('live-start').disabled=work||(vi&&!$('live-consent').checked)||noMic;
+ const paused=liveState.phase==='paused';
+ $('live-check-start').disabled=work||noMic||paused;
+ $('live-check-start').title=paused?'Dừng phiên đang tạm dừng trước khi thử âm thanh.':'';
+ $('live-check-stop').disabled=!checkActive||liveState.phase==='stopping';
  $('live-start').textContent=liveState.phase==='paused'?'Tiếp tục':'Bắt đầu';
- $('live-pause').disabled=liveState.phase!=='listening'||liveRequest;
- $('live-stop').disabled=(!active&&liveState.phase!=='paused')||liveState.phase==='stopping';
+ $('live-pause').disabled=liveState.phase!=='listening'||liveRequest||checkActive;
+ $('live-stop').disabled=checkActive||(!active&&liveState.phase!=='paused')||liveState.phase==='stopping';
  $('live-refresh').disabled=work;
 }
 function liveDevices(){
@@ -771,17 +792,45 @@ function liveDevices(){
  }
  $('live-source-hint').textContent=src==='playback'?'Tiếng máy nghe mọi ứng dụng phát âm thanh qua thiết bị đã chọn, gồm cả thông báo.':'Chọn đúng micro cần dùng. Ứng dụng không tự chuyển nguồn.';
 }
+const checkLabels={
+ silent:'Không thấy tín hiệu. Phát tiếng hoặc nói vào micro đã chọn rồi thử lại.',
+ audible_no_sample:'Có tín hiệu âm thanh, nhưng chưa nhận được mẫu tiếng Anh.',
+ model_unavailable:'Có tín hiệu âm thanh, nhưng không mở được model tiếng Anh.',
+ model_not_ready:'Có tín hiệu âm thanh, nhưng model tiếng Anh chưa khởi động xong trong thời gian thử.',
+ sample:'Có tín hiệu và nhận được mẫu tiếng Anh.',
+ unavailable:'Không mở được nguồn đã chọn. Kiểm tra thiết bị và quyền, rồi thử lại.',
+ failed:'Lần thử dừng vì helper không phản hồi hoặc gặp lỗi.'
+};
+function renderAudioCheck(check){
+ const wrapper=$('live-check-result'),meter=$('live-check-meter'),status=$('live-check-status');
+ const model=$('live-check-model'),sample=$('live-check-sample');
+ wrapper.hidden=!check;
+ meter.value=check?.level||0;
+ meter.hidden=check?.phase!=='listening';
+ const msg=check?.outcome?checkLabels[check.outcome]||'Lần thử đã dừng.':
+           check?.phase==='listening'?'● Đang thử nguồn âm thanh (tối đa 5 giây)…':
+           check?.phase==='starting'?'Đang mở thiết bị đã chọn…':'';
+ if(status.textContent!==msg)status.textContent=msg;
+ const modelText=check?.model===false&&check?.outcome!=='model_unavailable'?
+  'Model nhận dạng tiếng Anh chưa sẵn sàng; lần thử vẫn đo mức âm thanh.':'';
+ model.hidden=!modelText;if(model.textContent!==modelText)model.textContent=modelText;
+ const phrase=check?.signal?check.sample||'':'';
+ sample.hidden=!phrase;if(sample.textContent!==phrase)sample.textContent=phrase;
+}
 function renderLive(state){
  if(!state||!Array.isArray(state.devices)||!liveLabels[state.phase])return;
  liveState=state;
  liveDevices();
  const lamp=$('live-lamp');lamp.dataset.listening=String(state.phase==='listening');
- if(lamp.textContent!==liveLabels[state.phase])lamp.textContent=liveLabels[state.phase];
+ const lampText=state.checking&&state.phase==='listening'?'● Đang nghe thử':liveLabels[state.phase];
+ if(lamp.textContent!==lampText)lamp.textContent=lampText;
+ renderAudioCheck(state.check);
  const status=state.code?(liveErrors[state.code]||'Phiên đã dừng. Kiểm tra helper rồi thử lại.'):
-  state.listing?'Đang đọc danh sách thiết bị…':state.phase==='idle'?'Bấm Bắt đầu để nghe nguồn đã chọn.':'';
+  state.listing?'Đang đọc danh sách thiết bị…':state.phase==='idle'?'Bấm Bắt đầu để nghe nguồn đã chọn.':
+  state.phase==='paused'?'Bấm Tiếp tục để nghe lại, hoặc Dừng trước khi thử âm thanh.':'';
  if($('live-status').textContent!==status)$('live-status').textContent=status;
- const en=state.phase==='listening'?state.en||'':'';
- const vi=state.phase==='listening'?state.vi||'':'';
+ const en=state.phase==='listening'&&!state.checking?state.en||'':'';
+ const vi=state.phase==='listening'&&!state.checking?state.vi||'':'';
  if($('live-readout').textContent!==en)$('live-readout').textContent=en;
  $('live-vi').hidden=!vi;
  const viLine=vi?'VI · Thử nghiệm: '+vi:'';
@@ -798,9 +847,10 @@ async function livePoll(){
  finally{livePollPending=false}
 }
 async function liveCommand(method,payload){
- if(activeRoute!=='live'||(liveRequest&&method!=='live_stop')||!api)return;
+ if(activeRoute!=='live'||(liveRequest&&!['live_stop','live_check_stop','live_check_clear'].includes(method))||!api)return;
  const token=++liveEpoch;
- if(method==='live_stop'||method==='live_pause'){
+ if(method.startsWith('live_check_'))renderAudioCheck(null);
+ if(['live_stop','live_pause'].includes(method)||(['live_check_stop','live_check_clear'].includes(method)&&liveState.checking)){
   clearLiveCaption();
   $('live-lamp').dataset.listening='false';
   $('live-lamp').textContent='Đang nhả thiết bị…';
@@ -830,15 +880,24 @@ function leaveLiveView(){
  const past=liveNonce;liveNonce=null;
  liveEpoch++;liveRequest=false;clearInterval(liveLoop);liveLoop=null;
  clearInterval(liveHeartbeatLoop);liveHeartbeatLoop=null;
- clearLiveCaption();$('live-pin').checked=false;$('live-translate').checked=false;$('live-consent').checked=false;
+ clearLiveCaption();renderAudioCheck(null);$('live-pin').checked=false;$('live-translate').checked=false;$('live-consent').checked=false;
  if(api&&past)void api.live_view(false,past).catch(()=>{});
 }
-$('live-source').addEventListener('change',()=>{liveDevicesKey=null;liveDevices();syncLiveControls()});
-$('live-device').addEventListener('change',syncLiveControls);
+function clearCheckOnSelection(){
+ if(liveState.checking||liveState.check)void liveCommand('live_check_clear');
+ renderAudioCheck(null);
+}
+$('live-source').addEventListener('change',()=>{clearCheckOnSelection();liveDevicesKey=null;liveDevices();syncLiveControls()});
+$('live-device').addEventListener('change',()=>{clearCheckOnSelection();syncLiveControls()});
 $('live-translate').addEventListener('change',()=>{$('live-consent').checked=false;syncLiveControls()});
 $('live-consent').addEventListener('change',syncLiveControls);
 $('live-pin').addEventListener('change',()=>{if(api)void api.live_pin($('live-pin').checked,liveNonce).catch(()=>{})});
 $('live-refresh').addEventListener('click',()=>void liveCommand('live_list'));
+$('live-check-start').addEventListener('click',()=>{
+ const payload={source:$('live-source').value,device_id:$('live-device').value||null};
+ void liveCommand('live_check_start',payload);
+});
+$('live-check-stop').addEventListener('click',()=>void liveCommand('live_check_stop'));
 $('live-start').addEventListener('click',()=>{
  const payload={source:$('live-source').value,device_id:$('live-device').value||null,
                 translate:$('live-translate').checked,consent:$('live-consent').checked};

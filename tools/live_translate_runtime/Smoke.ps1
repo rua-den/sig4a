@@ -19,7 +19,8 @@ function Probe([string]$wire,[int]$expected) {
         $p.StandardInput.Close()
         if (!$p.WaitForExit(6000) -or $p.ExitCode -ne $expected) { throw 'Helper smoke failed to exit as expected.' }
         if ($err.Result) { throw 'Unexpected helper stderr.' }
-        return @($out.Result -split '?
+        return @($out.Result -split '
+?
 ' | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
     } finally { if (!$p.HasExited) { $p.Kill($true) }; $p.Dispose() }
 }
@@ -49,3 +50,9 @@ try {
     if (!$p.WaitForExit(6000) -or $p.ExitCode -ne 0) { throw 'Helper did not exit gracefully on EOF.' }
 } finally { if (!$p.HasExited) { $p.Kill($true) }; $p.Dispose() }
 'Windows companion smoke passed without capture or models.'
+
+# A stale check_stop is inert; a model path, provider or translation option is not
+# valid in the test-only mode. No real device access in this smoke.
+if (@(Probe "{`"v`":1,`"type`":`"check_stop`",`"session`":99}`n" 0).Count -ne 0) { throw 'Stale audio-check stop emitted an event.' }
+if (@(Probe "{`"v`":1,`"type`":`"check_start`",`"session`":1,`"source`":`"mic`",`"device_id`":`"test`",`"translate`":true}`n" 2)[0].code -ne 'protocol_error') { throw 'Audio check rejected-field refusal missing.' }
+'Windows companion audio-check command shape passed without capture.'

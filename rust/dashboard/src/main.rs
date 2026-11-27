@@ -300,11 +300,12 @@ impl App {
                 win::set_topmost(self.hwnd, a.first().and_then(Value::as_bool).unwrap_or(false));
                 Value::Bool(true)
             }
-            "live_list" | "live_start" | "live_stop" | "live_pause" | "live_state"
+            "live_list" | "live_start" | "live_stop" | "live_pause" | "live_state" |
+            "live_check_start" | "live_check_stop" | "live_check_clear"
                 if !self.quick_mode && self.live_page_matches(a.get(1)) =>
             {
                 self.check_live_lease(Instant::now());
-                if m == "live_start" && self.live_heartbeat.is_none() {
+                if matches!(m, "live_start" | "live_check_start") && self.live_heartbeat.is_none() {
                     return Ok(self.live.call("live_state", &Value::Null));
                 }
                 self.live.call(m, a.first().unwrap_or(&Value::Null))
