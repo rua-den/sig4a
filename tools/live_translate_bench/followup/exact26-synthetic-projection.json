@@ -1,0 +1,694 @@
+{
+  "benchmark_revision": "a6fba24529a8af9923306a57346d0a34996d226e",
+  "fixture_lf_sha256": "31f7b6f106a435ba657f61ebf45d8ba18b8c4474bc5862dd2acfb8bb917e89ca",
+  "provenance": {
+    "whisper": {
+      "sha256": "329164a200032af2ff3960620924142848249ef030d4d9d22cbdbd9308e2407c",
+      "fixture_sha256_raw": "24f5e71d5e975a5f1621724f2ae70539cc894428f268905fb608e6f574f86a9b",
+      "frozen_sha256": "68fd06d26e24e8f0e25f93e068261e01c67436c7c5dc6da256e2521a7a42f288",
+      "translation_backend": "llama.cpp",
+      "translation_version": "b12776"
+    },
+    "sherpa": {
+      "sha256": "f5728675d04b2eb645f3abafb2d34ebf55c4d141fdaeed9e5f829bb4618bf549",
+      "fixture_sha256_raw": "24f5e71d5e975a5f1621724f2ae70539cc894428f268905fb608e6f574f86a9b",
+      "frozen_sha256": "68fd06d26e24e8f0e25f93e068261e01c67436c7c5dc6da256e2521a7a42f288",
+      "translation_backend": "llama.cpp",
+      "translation_version": "b12776"
+    }
+  },
+  "rows": [
+    {
+      "id": "U001",
+      "source": "whisper",
+      "asr_text": "Move the release to Friday at 3pm.",
+      "lfm_cached": "Thời gian phát hành được chuyển đổi thành ngày giờ giờ 3 giờ.",
+      "prior_mt_span_ms": 797
+    },
+    {
+      "id": "U002",
+      "source": "whisper",
+      "asr_text": "The invoice total is $4,200.",
+      "lfm_cached": "Tổng sản phẩm là $4,200.",
+      "prior_mt_span_ms": 453
+    },
+    {
+      "id": "U003",
+      "source": "whisper",
+      "asr_text": "Please do not restart the production server.",
+      "lfm_cached": "Đừng nhận được nhà sản xuất.",
+      "prior_mt_span_ms": 578
+    },
+    {
+      "id": "U004",
+      "source": "whisper",
+      "asr_text": "Myra will review the API contract after lunch.",
+      "lfm_cached": "Myra sẽ kiểm tra đồng đồng API sau khi ăn.",
+      "prior_mt_span_ms": 563
+    },
+    {
+      "id": "U005",
+      "source": "whisper",
+      "asr_text": "The deadline changed from Tuesday to Thursday.",
+      "lfm_cached": "Đây là thời gian đã thay đổi từ ngày Tối đến ngày Nhật Bản.",
+      "prior_mt_span_ms": 797
+    },
+    {
+      "id": "U006",
+      "source": "whisper",
+      "asr_text": "Keep ticket 714 open.",
+      "lfm_cached": "Ticket 714 đang được chỉ định để được sử dụng.",
+      "prior_mt_span_ms": 703
+    },
+    {
+      "id": "U007",
+      "source": "whisper",
+      "asr_text": "We need 12 seats for the workshop.",
+      "lfm_cached": "Chúng ta cần 12 ghế cho cuộc họp.",
+      "prior_mt_span_ms": 516
+    },
+    {
+      "id": "U008",
+      "source": "whisper",
+      "asr_text": "The check sum ends with 9802.",
+      "lfm_cached": "Thời gian để số đồng đổi kết thúc là 9802.",
+      "prior_mt_span_ms": 656
+    },
+    {
+      "id": "U009",
+      "source": "whisper",
+      "asr_text": "No customer data belongs in this test fixture.",
+      "lfm_cached": "Không có dữ liệu khách hàng nào được ghi lại trong phần không khí này.",
+      "prior_mt_span_ms": 813
+    },
+    {
+      "id": "U010",
+      "source": "whisper",
+      "asr_text": "The blue button opens the settings panel.",
+      "lfm_cached": "Đối với các bảng thiết bị, đối với các nút màu xanh lam, đối với các bảng thiết bị này, đối với các nút màu xanh lam, đối với các bảng thiết bị này, đ",
+      "prior_mt_span_ms": 1750
+    },
+    {
+      "id": "U011",
+      "source": "whisper",
+      "asr_text": "I can hear a slight echo in the room.",
+      "lfm_cached": "Tôi có thể nhận một điểm nhấn nhỏ trong phòng.",
+      "prior_mt_span_ms": 734
+    },
+    {
+      "id": "U012",
+      "source": "whisper",
+      "asr_text": "Send the signed agreement before noon tomorrow.",
+      "lfm_cached": "Đừng đưa đồng đồng được trước 12 giờ ngày nay.",
+      "prior_mt_span_ms": 718
+    },
+    {
+      "id": "U013",
+      "source": "whisper",
+      "asr_text": "The retry limit is 5 attempts per minute.",
+      "lfm_cached": "Thời gian lập trình là 5 lần mỗi phút.",
+      "prior_mt_span_ms": 579
+    },
+    {
+      "id": "U014",
+      "source": "whisper",
+      "asr_text": "Our meeting starts at 10.30 in the morning.",
+      "lfm_cached": "Trải nghiệm bắt đầu tại 10:30 sáng.",
+      "prior_mt_span_ms": 594
+    },
+    {
+      "id": "U015",
+      "source": "whisper",
+      "asr_text": "The database backup completed without errors.",
+      "lfm_cached": "Bảng bảo trợ đã hoàn thành không có thể thấy lỗi.",
+      "prior_mt_span_ms": 641
+    },
+    {
+      "id": "U016",
+      "source": "whisper",
+      "asr_text": "Do not merge this branch until the tests finish.",
+      "lfm_cached": "Không phải hợp nhập như vậy trước khi kết thúc các đội đó.",
+      "prior_mt_span_ms": 844
+    },
+    {
+      "id": "U017",
+      "source": "whisper",
+      "asr_text": "Jonas owns the mobile dashboard migration.",
+      "lfm_cached": "Jonas đối với phần mềm điều hành điện thoại.",
+      "prior_mt_span_ms": 687
+    },
+    {
+      "id": "U018",
+      "source": "whisper",
+      "asr_text": "The package weighs 1.8 kg.",
+      "lfm_cached": "Thiết bị có độ dài 1.8 kg.",
+      "prior_mt_span_ms": 485
+    },
+    {
+      "id": "U019",
+      "source": "whisper",
+      "asr_text": "We will ship version 2.3 next week.",
+      "lfm_cached": "Chúng ta sẽ đưa hàng phần 2.3 đầu tiên vào tuần đầu tiên.",
+      "prior_mt_span_ms": 781
+    },
+    {
+      "id": "U020",
+      "source": "whisper",
+      "asr_text": "The room code is alpha74 bravo.",
+      "lfm_cached": "Đây là địa chỉ của phòng là alpha74 bravo.",
+      "prior_mt_span_ms": 531
+    },
+    {
+      "id": "U021",
+      "source": "whisper",
+      "asr_text": "Turn captions off during the recording.",
+      "lfm_cached": "Cảnh báo được đóng cửa khi được thu âm.",
+      "prior_mt_span_ms": 641
+    },
+    {
+      "id": "U022",
+      "source": "whisper",
+      "asr_text": "The warning is informational, not a failure.",
+      "lfm_cached": "Đây là một biểu chỉ thông tin, không là một thất bại.",
+      "prior_mt_span_ms": 703
+    },
+    {
+      "id": "U023",
+      "source": "whisper",
+      "asr_text": "Use the east entrance on Pine Street.",
+      "lfm_cached": "Đầu tiên trên đường Pine Street.",
+      "prior_mt_span_ms": 469
+    },
+    {
+      "id": "U024",
+      "source": "whisper",
+      "asr_text": "The experiment ran for 48 minutes.",
+      "lfm_cached": "Đây là một kỹ thuật được thực hiện cho 48 phút.",
+      "prior_mt_span_ms": 672
+    },
+    {
+      "id": "U025",
+      "source": "whisper",
+      "asr_text": "We have a hard limit of 64 MB.",
+      "lfm_cached": "Chúng ta có một điều kiện rất khó khăn là 64 MB.",
+      "prior_mt_span_ms": 656
+    },
+    {
+      "id": "U026",
+      "source": "whisper",
+      "asr_text": "The green status means the end point is healthy.",
+      "lfm_cached": "Độ xanh là điểm đầu tiên có thể là sức khỏe.",
+      "prior_mt_span_ms": 656
+    },
+    {
+      "id": "U027",
+      "source": "whisper",
+      "asr_text": "Please compare the old and new latency numbers.",
+      "lfm_cached": "Để tương đối các số lượng lỗi thời gian, chúng ta sẽ đề cập đến số lượng lỗi thời gian đã được đổi từ lỗi thời gian đầu tiên.\n\nĐể tư",
+      "prior_mt_span_ms": 1657
+    },
+    {
+      "id": "U028",
+      "source": "whisper",
+      "asr_text": "The test microphone is on channel 2.",
+      "lfm_cached": "Mic động ở phần 2.",
+      "prior_mt_span_ms": 453
+    },
+    {
+      "id": "U029",
+      "source": "whisper",
+      "asr_text": "Do not translate names inside code blocks.",
+      "lfm_cached": "Không phải phải định nghĩa tên trong các bộ phận được đặt trong các bộ phận đó.",
+      "prior_mt_span_ms": 1078
+    },
+    {
+      "id": "U030",
+      "source": "whisper",
+      "asr_text": "The handoff is scheduled for Wednesday morning.",
+      "lfm_cached": "Đây là thời gian để chuyển đổi.",
+      "prior_mt_span_ms": 562
+    },
+    {
+      "id": "U031",
+      "source": "whisper",
+      "asr_text": "Set the timeout to 100 milliseconds.",
+      "lfm_cached": "Để đặt thời gian tối đa là 100 millisecond đến, bạn cần thêm thời gian tối đa đến 100 millisecond.",
+      "prior_mt_span_ms": 1078
+    },
+    {
+      "id": "U032",
+      "source": "whisper",
+      "asr_text": "A quiet pause should produce no caption.",
+      "lfm_cached": "Một ngừng ngắn cảm nhận có thể không tạo ra một bản ghi chú.",
+      "prior_mt_span_ms": 813
+    },
+    {
+      "id": "U033",
+      "source": "whisper",
+      "asr_text": "The technical term is cash, spelled C-A-C-H-E, not cash as in money.",
+      "lfm_cached": "Đây là từ tiếng Anh, được viết là C-A-C-H-E, không là tiếng ngữ.",
+      "prior_mt_span_ms": 843
+    },
+    {
+      "id": "U034",
+      "source": "whisper",
+      "asr_text": "We need a second review from Priya.",
+      "lfm_cached": "Chúng ta cần một phần tham khảo thứ hai từ Priya.",
+      "prior_mt_span_ms": 672
+    },
+    {
+      "id": "U035",
+      "source": "whisper",
+      "asr_text": "The build artifact is in folder delta5.",
+      "lfm_cached": "Bộ phận tạo đang đặt trong bộ phận delta5.",
+      "prior_mt_span_ms": 625
+    },
+    {
+      "id": "U036",
+      "source": "whisper",
+      "asr_text": "The Blue Team owns Incident 42.",
+      "lfm_cached": "Bạn đã chứng minh tài liệu 42.",
+      "prior_mt_span_ms": 531
+    },
+    {
+      "id": "U037",
+      "source": "whisper",
+      "asr_text": "Keep the microphone muted while idle.",
+      "lfm_cached": "Đừng ngừng nhạc nhạc.",
+      "prior_mt_span_ms": 485
+    },
+    {
+      "id": "U038",
+      "source": "whisper",
+      "asr_text": "The service recovered after a three-second pause.",
+      "lfm_cached": "Dịch vụ đã được tái phát.",
+      "prior_mt_span_ms": 500
+    },
+    {
+      "id": "U039",
+      "source": "whisper",
+      "asr_text": "The target language is Vietnamese.",
+      "lfm_cached": "Dự án tiêu chuẩn là tiếng Việt.",
+      "prior_mt_span_ms": 500
+    },
+    {
+      "id": "U040",
+      "source": "whisper",
+      "asr_text": "This is a dry run with invented meeting content.",
+      "lfm_cached": "Đây là một sự kiện được thực hiện với chủ đề được tạo ra.",
+      "prior_mt_span_ms": 938
+    },
+    {
+      "id": "U041",
+      "source": "whisper",
+      "asr_text": "The window should remain above the meeting app.",
+      "lfm_cached": "Để cửa sổ trở lại ở phía cửa hội, cần đảm bảo nó đến trên cửa hội.",
+      "prior_mt_span_ms": 1000
+    },
+    {
+      "id": "U042",
+      "source": "whisper",
+      "asr_text": "Press Start only after choosing one source.",
+      "lfm_cached": "Bạn chọn một nguồn để bắt đầu.",
+      "prior_mt_span_ms": 609
+    },
+    {
+      "id": "U043",
+      "source": "whisper",
+      "asr_text": "The old stream must not publish a late result.",
+      "lfm_cached": "Động cơ động lớn của động cơ không phải phát hành một kết quả đời sống đầy đủ.",
+      "prior_mt_span_ms": 1094
+    },
+    {
+      "id": "U044",
+      "source": "whisper",
+      "asr_text": "We will measure memory before and after an hour.",
+      "lfm_cached": "Chúng ta sẽ đọc lại một giờ trước và sau.",
+      "prior_mt_span_ms": 656
+    },
+    {
+      "id": "U045",
+      "source": "whisper",
+      "asr_text": "The input device changed to the USB headset.",
+      "lfm_cached": "Đây là một thiết bị điện tử đã được thay thế bằng điện thoại USB.",
+      "prior_mt_span_ms": 969
+    },
+    {
+      "id": "U046",
+      "source": "whisper",
+      "asr_text": "The output device is the wired headphones.",
+      "lfm_cached": "Đây là thiết bị đồng hồ điện thoại được gọi là đồng hồ điện thoại được đặt trên tay.",
+      "prior_mt_span_ms": 1281
+    },
+    {
+      "id": "U047",
+      "source": "whisper",
+      "asr_text": "The model loaded in under 6 seconds.",
+      "lfm_cached": "Máy tính đã được điều chỉnh trong khoảng 6 giây.",
+      "prior_mt_span_ms": 718
+    },
+    {
+      "id": "U048",
+      "source": "whisper",
+      "asr_text": "End the session when the stop button is pressed.",
+      "lfm_cached": "Đây là khả năng kết thúc học hỏi khi bàn phím được nhấn.",
+      "prior_mt_span_ms": 829
+    },
+    {
+      "id": "U001",
+      "source": "sherpa",
+      "asr_text": "Y AT THREE P M",
+      "lfm_cached": "Y AT THREE P M",
+      "prior_mt_span_ms": 313
+    },
+    {
+      "id": "U002",
+      "source": "sherpa",
+      "asr_text": "'S TOTAL IS FOUR THOUSAND TWO HUNDRED DOLLARS",
+      "lfm_cached": "TOTAL là bản đồ bảy tỷ lệ hai đồng đồng.",
+      "prior_mt_span_ms": 891
+    },
+    {
+      "id": "U003",
+      "source": "sherpa",
+      "asr_text": "'S DO NOT RESTORT THE PRODUCTION SERVER",
+      "lfm_cached": "\"Đừng Tạo Rạt Số Trải Nghiệm Để Để Tạo Rạt Số Trải Nghiệm\"",
+      "prior_mt_span_ms": 1203
+    },
+    {
+      "id": "U004",
+      "source": "sherpa",
+      "asr_text": "WILL REVIEW THE A P I CONTRACT AFTER LUNCH",
+      "lfm_cached": "Tôi sẽ kiểm tra đầu tiên của đấu trường A I sau khi ăn.",
+      "prior_mt_span_ms": 969
+    },
+    {
+      "id": "U005",
+      "source": "sherpa",
+      "asr_text": "'D FROM TUESDAY TO THURSDAY",
+      "lfm_cached": "'Từ ngày Tối đến ngày Thứ Năm'",
+      "prior_mt_span_ms": 640
+    },
+    {
+      "id": "U006",
+      "source": "sherpa",
+      "asr_text": "TS SEVEN HUNDRED AND FOURTEEN OPEN",
+      "lfm_cached": "TS SEVEN HUNDRED AND FOURTEEN OPEN",
+      "prior_mt_span_ms": 438
+    },
+    {
+      "id": "U007",
+      "source": "sherpa",
+      "asr_text": "ATS FOR THE WORKSHOP",
+      "lfm_cached": "Địa chỉ thực hiện: ATS\n\nTên thư viện: WORKSHOP\n\nTài liệu: Tạp chí thực hiện\n\nTừ: Tạp chí thực hiện\n\nTừ: Tạp chí thực hiện\n\nTừ: Tạp chí thực hiện\n\nTừ: T",
+      "prior_mt_span_ms": 2063
+    },
+    {
+      "id": "U008",
+      "source": "sherpa",
+      "asr_text": "S WITH NINE EIGHT ZERO TWO",
+      "lfm_cached": "Những người với năm bảy và một trăm đồng hồ thứ hai",
+      "prior_mt_span_ms": 984
+    },
+    {
+      "id": "U009",
+      "source": "sherpa",
+      "asr_text": "ER DATA BELONGS IN THIS TEST FIXTURE",
+      "lfm_cached": "Đây là thông tin được đặt trong đội ngũ này.",
+      "prior_mt_span_ms": 796
+    },
+    {
+      "id": "U010",
+      "source": "sherpa",
+      "asr_text": "UE BUTTON OPENS THE SETTINGS PANEL",
+      "lfm_cached": "Đây là tiếng Việt tiếp tục:\n\nUE BUTTON OPENS THE SETTINGS PANEL",
+      "prior_mt_span_ms": 906
+    },
+    {
+      "id": "U011",
+      "source": "sherpa",
+      "asr_text": "O IN THE ROOM",
+      "lfm_cached": "O IN THE ROOM",
+      "prior_mt_span_ms": 282
+    },
+    {
+      "id": "U012",
+      "source": "sherpa",
+      "asr_text": "INE AGREEMENT BEFORE NOON TO MORROW",
+      "lfm_cached": "Định luật định hướng đến 1:00 sáng trước đêm",
+      "prior_mt_span_ms": 938
+    },
+    {
+      "id": "U013",
+      "source": "sherpa",
+      "asr_text": "VE ATTEMPTS PERMITTED",
+      "lfm_cached": "VE ATTEMPTS PERMITTED",
+      "prior_mt_span_ms": 407
+    },
+    {
+      "id": "U014",
+      "source": "sherpa",
+      "asr_text": "'RE MEETING STARTS AT TEN THIRTY IN THE MORNING",
+      "lfm_cached": "\"Tại đêm đầu giờ, đầu tiên đến từ 10 giờ\"",
+      "prior_mt_span_ms": 938
+    },
+    {
+      "id": "U015",
+      "source": "sherpa",
+      "asr_text": "UC COMPLETED WITHOUT ERRORS",
+      "lfm_cached": "UC COMPLETED Với Khảo Sát Không Thực Hiện",
+      "prior_mt_span_ms": 656
+    },
+    {
+      "id": "U016",
+      "source": "sherpa",
+      "asr_text": "THIS BRANCH UNTIL THE TESTS FINISH",
+      "lfm_cached": "THIS BRANCH UNTIL THE TESTS FINISH",
+      "prior_mt_span_ms": 453
+    },
+    {
+      "id": "U017",
+      "source": "sherpa",
+      "asr_text": "NS THE MOBILE DASH BOARD MIGRATION",
+      "lfm_cached": "Người đọc đã được chuyển đổi thành một bảng điện thoại điện tử và chuyển đổi thành một hệ thống chuyển đổi thành một hệ thống chuyển đ",
+      "prior_mt_span_ms": 2297
+    },
+    {
+      "id": "U018",
+      "source": "sherpa",
+      "asr_text": "'S WAYS ONE POINT EIGHT KILOGRAMS",
+      "lfm_cached": "\"WAYS ONE POINT EIGHT KILOGRAMS\"",
+      "prior_mt_span_ms": 468
+    },
+    {
+      "id": "U019",
+      "source": "sherpa",
+      "asr_text": "ULSION TWO POINT THREE NEXT WEEK",
+      "lfm_cached": "Đội thể thao hai đội, tiếp theo ngày 3 tháng 7",
+      "prior_mt_span_ms": 891
+    },
+    {
+      "id": "U020",
+      "source": "sherpa",
+      "asr_text": "AT IS ALPHAS SEVEN FOUR BRAVO",
+      "lfm_cached": "AT IS ALPHAS SEVEN FOUR BRAVO",
+      "prior_mt_span_ms": 437
+    },
+    {
+      "id": "U021",
+      "source": "sherpa",
+      "asr_text": "URNCAPTIONS OFF DURING THE RECORDING",
+      "lfm_cached": "Đội nhạc được thu thập trong quá trình đoạn khắc phục.",
+      "prior_mt_span_ms": 1047
+    },
+    {
+      "id": "U022",
+      "source": "sherpa",
+      "asr_text": "'S INFORMATIONAL NOT A FAILURE",
+      "lfm_cached": "\"INFORMATIONAL NOT A FAILURE\"",
+      "prior_mt_span_ms": 375
+    },
+    {
+      "id": "U023",
+      "source": "sherpa",
+      "asr_text": "T ON PINE STREET",
+      "lfm_cached": "T ON PINE STREET",
+      "prior_mt_span_ms": 328
+    },
+    {
+      "id": "U024",
+      "source": "sherpa",
+      "asr_text": "UD RAN FOR FORTY EIGHT MINUTES",
+      "lfm_cached": "U D R A N F O R F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T E E F O R T",
+      "prior_mt_span_ms": 2015
+    },
+    {
+      "id": "U025",
+      "source": "sherpa",
+      "asr_text": "OR MEGABITES",
+      "lfm_cached": "Mắt MEGABITES",
+      "prior_mt_span_ms": 344
+    },
+    {
+      "id": "U026",
+      "source": "sherpa",
+      "asr_text": "S MEANS THE END POINT IS HEALTHY",
+      "lfm_cached": "S MEANS THAT THE END POINT IS HEALTHY",
+      "prior_mt_span_ms": 422
+    },
+    {
+      "id": "U027",
+      "source": "sherpa",
+      "asr_text": "'S COMPARE THE OLD AND NEW LADENCY NUMBERS",
+      "lfm_cached": "\"Để định đường đồng đội đầu tiên và đầu tiên thứ hai, chúng ta sẽ định đường đồng đội đầu tiên và đầu tiên thứ hai.\"",
+      "prior_mt_span_ms": 1984
+    },
+    {
+      "id": "U028",
+      "source": "sherpa",
+      "asr_text": "ONE IS ON CHANNEL TOO",
+      "lfm_cached": "Một điện thoại được đặt trên cửa hàng đó",
+      "prior_mt_span_ms": 750
+    },
+    {
+      "id": "U029",
+      "source": "sherpa",
+      "asr_text": "ULS INSIDE CODE BLOCKS",
+      "lfm_cached": "Đây là một bảng định dạng định dạng của các định dạng định dạng của các định dạng định dạng của các định dạng định dạng của các đ",
+      "prior_mt_span_ms": 2093
+    },
+    {
+      "id": "U030",
+      "source": "sherpa",
+      "asr_text": "'S SEDULED FOR WEDNESDAY MORNING",
+      "lfm_cached": "Sắc được đặt cho ngày thứ nhất trong ngày hôm nay",
+      "prior_mt_span_ms": 906
+    },
+    {
+      "id": "U031",
+      "source": "sherpa",
+      "asr_text": "UD TO ONE HUNDRED MILL A SECONDS",
+      "lfm_cached": "U D TO ONE HUNDRED MILL A SECONDS",
+      "prior_mt_span_ms": 438
+    },
+    {
+      "id": "U032",
+      "source": "sherpa",
+      "asr_text": "SHOULD PRODUCE NO CAPTION",
+      "lfm_cached": "Không phải tạo bản đồ",
+      "prior_mt_span_ms": 578
+    },
+    {
+      "id": "U033",
+      "source": "sherpa",
+      "asr_text": "AL TERM IS CASH SPELLED C A NOT CASH AS IN MONEY",
+      "lfm_cached": "AL TERM ĐƯỢC CASH SPELLED C A NOT CASH Từ MONEY",
+      "prior_mt_span_ms": 703
+    },
+    {
+      "id": "U034",
+      "source": "sherpa",
+      "asr_text": "D REVIEW FROM PRIA",
+      "lfm_cached": "D REVIEW Từ PRIA",
+      "prior_mt_span_ms": 375
+    },
+    {
+      "id": "U035",
+      "source": "sherpa",
+      "asr_text": "T IS INFOLDER DELTA OF FIVE",
+      "lfm_cached": "T IS INFOLDER DELTA OF FIVE",
+      "prior_mt_span_ms": 391
+    },
+    {
+      "id": "U036",
+      "source": "sherpa",
+      "asr_text": "ON'S INCIDENT FORTY TWO",
+      "lfm_cached": "ON'S INCIDENT FORTY TWO",
+      "prior_mt_span_ms": 391
+    },
+    {
+      "id": "U037",
+      "source": "sherpa",
+      "asr_text": "UTED WHILE IDLE",
+      "lfm_cached": "UTED WHILE IDLE",
+      "prior_mt_span_ms": 328
+    },
+    {
+      "id": "U038",
+      "source": "sherpa",
+      "asr_text": "'D AFTER A THREE SECOND PAUSE",
+      "lfm_cached": "'Để Bắt Đầu Một Cột Để Đặt Một Cột'",
+      "prior_mt_span_ms": 735
+    },
+    {
+      "id": "U039",
+      "source": "sherpa",
+      "asr_text": "T LANGUAGE IS VIA'S",
+      "lfm_cached": "T LANGUAGE ĐIỆU HỘI",
+      "prior_mt_span_ms": 515
+    },
+    {
+      "id": "U040",
+      "source": "sherpa",
+      "asr_text": "WITH INVENTED MEETING CONTENT",
+      "lfm_cached": "Với Thông điệp Đặt lại Thông tin",
+      "prior_mt_span_ms": 672
+    },
+    {
+      "id": "U041",
+      "source": "sherpa",
+      "asr_text": "O SHOULD REMAIN ABOVE THE MEETING AP",
+      "lfm_cached": "O SHOULD REMAIN ABOVE THE MEETING AP",
+      "prior_mt_span_ms": 438
+    },
+    {
+      "id": "U042",
+      "source": "sherpa",
+      "asr_text": "T ONLY AFTER CHOOSING ONE SOURCE",
+      "lfm_cached": "T ONLY AFTER CHOOSING ONE SOURCE",
+      "prior_mt_span_ms": 422
+    },
+    {
+      "id": "U043",
+      "source": "sherpa",
+      "asr_text": "ULD STREAM MUST NOT PUBLISH A LATE RESULT",
+      "lfm_cached": "ULD STREAM MUST KHÔNG MỘT TƯƠNG LẢI TỪI",
+      "prior_mt_span_ms": 750
+    },
+    {
+      "id": "U044",
+      "source": "sherpa",
+      "asr_text": "Y BEFORE AND AFTER AN HOUR",
+      "lfm_cached": "Y BEFORE AN HOUR",
+      "prior_mt_span_ms": 343
+    },
+    {
+      "id": "U045",
+      "source": "sherpa",
+      "asr_text": "DEVICE CHANGED TO THE U S B HAD SAID",
+      "lfm_cached": "Đối tượng đã được thay đổi sang U.S.",
+      "prior_mt_span_ms": 829
+    },
+    {
+      "id": "U046",
+      "source": "sherpa",
+      "asr_text": "S THE WIRED HEAD PHONES",
+      "lfm_cached": "SỐ THỦNG HỘI CỦA PHÔN ĐIỆN",
+      "prior_mt_span_ms": 625
+    },
+    {
+      "id": "U047",
+      "source": "sherpa",
+      "asr_text": "ATED IN UNDER SIX SECONDS",
+      "lfm_cached": "AIDT được đặt trong sáu thời gian.",
+      "prior_mt_span_ms": 703
+    },
+    {
+      "id": "U048",
+      "source": "sherpa",
+      "asr_text": "IN WHEN THE STOP BUTTON IS PRESSED",
+      "lfm_cached": "Khi đối chỗ được nhấn mạnh",
+      "prior_mt_span_ms": 625
+    }
+  ]
+}

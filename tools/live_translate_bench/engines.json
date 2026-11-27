@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "purpose": "Phase 1 comparison; adapters must record exact versions and hashes before results",
+  "engines": [
+    {"id":"whisper.cpp-base.en", "role":"asr", "model":"ggml-base.en.bin", "expected_model_size_note":"official base.en is approximately 142 MiB; record actual file hash/size", "streaming_window_ms":10000},
+    {"id":"sherpa-onnx-zipformer-en-20m-int8", "role":"asr", "model":"sherpa-onnx-streaming-zipformer-en-20M-2023-02-17", "expected_model_size_note":"record all ONNX files and runtime footprint; official recipe may use an fp32 decoder", "streaming_window_ms":1000},
+    {"id":"ollama-lfm2.5-vl-450m", "role":"translation", "endpoint":"http://127.0.0.1:11434", "model":"hf.co/LiquidAI/LFM2.5-VL-450M-GGUF:Q8_0", "network_policy":"loopback-only"}
+  ],
+  "required_result_fields": ["id", "engine", "visible_final_caption_ms", "translation", "facts_matched", "critical_negation_ok", "queue_depth"],
+  "required_metadata": ["machine", "os_build", "commit", "engine_version", "model_sha256", "model_bytes", "runtime_rss_bytes", "cpu_percent", "fixture_manifest_sha256"]
+}
