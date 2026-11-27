@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(AudioProofOperatorOnly)' == 'true'">
+    <DefineConstants>$(DefineConstants);SIG4A_OPERATOR_ONLY</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="[2.2.1]" />
   </ItemGroup>

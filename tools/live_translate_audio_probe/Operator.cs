@@ -14,8 +14,9 @@ static partial class AudioProbe
             return 2;
         }
         Console.OutputEncoding = new UTF8Encoding(false);
-        Console.WriteLine("Kiểm tra tai nghe và mic • Chỉ thu tín hiệu trong 5 giây mỗi lần bấm bắt đầu.");
-        Console.WriteLine("Tắt cuộc họp, thông báo và các app phát tiếng. Không gửi gì tự động.");
+        Console.WriteLine("Kiểm tra tai nghe và mic • Mỗi lượt đo 5 giây, rồi tự mở lại đúng nguồn cũ 1 giây để kiểm tra nhả nguồn.");
+        Console.WriteLine("Chỉ đọc tạm tín hiệu từ thiết bị mày chọn trong bộ nhớ. Tiếng máy gồm mọi âm thanh phát qua thiết bị đó.");
+        Console.WriteLine("Không tạo bản ghi, không lưu hay truyền âm thanh. Tắt cuộc họp, thông báo và các app phát tiếng.");
         Console.WriteLine("Nhập mã thử do milo gửi (6–16 ký tự A–Z, 0–9):");
         string? token = Console.ReadLine()?.Trim();
         if (token is null || token.Length is < 6 or > 16 ||
@@ -72,7 +73,8 @@ static partial class AudioProbe
     static bool OperatorPair(MMDeviceEnumerator host, string source, string id, string condition,
         Stopwatch clock, List<object> evidence, string instruction)
     {
-        if (!Confirm(instruction)) return false;
+        if (!Confirm(instruction + " Đồng ý đo 5 giây rồi tự mở lại đúng nguồn này 1 giây?"))
+            return false;
         Console.WriteLine("Đang đo. Ctrl+C để dừng công cụ.");
         // If the audio driver stalls even inside Dispose, kill this isolated, audio-only process.
         // Nothing can restart the session or launch another capture automatically after a timeout.

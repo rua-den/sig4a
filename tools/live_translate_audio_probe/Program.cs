@@ -15,6 +15,19 @@ static partial class AudioProbe
         if (!OperatingSystem.IsWindows()) return 2;
         try
         {
+#if SIG4A_OPERATOR_ONLY
+            if (args is ["--self-check"])
+            {
+                // Prove entrypoint and packaging without enumerating or opening endpoints.
+                Output(new { ok = true, schema = "sig4a-audio-proof-v1",
+                    mode = "operator-only", opened_endpoints = 0 });
+                return 0;
+            }
+            if (args is not ["--operator"] || Console.IsOutputRedirected || Console.IsInputRedirected)
+                return 2;
+            using var host = new MMDeviceEnumerator();
+            return OperatorMode(host);
+#else
             using var host = new MMDeviceEnumerator();
             if (args is ["--operator"]) return OperatorMode(host);
             if (args is ["--list"])
@@ -58,6 +71,7 @@ static partial class AudioProbe
             }
             Output(new { ok = true, persisted_audio = false, all_streams_disposed = true });
             return 0;
+#endif
         }
         catch (Exception error)
         {
@@ -80,9 +94,12 @@ static partial class AudioProbe
         double sums = 0, peak = 0;
         long started, stopRequested;
         using (var endpoint = host.GetDevice(id))
-        using (WasapiCapture capture = source == "playback"
-                ? new WasapiLoopbackCapture(endpoint) : new WasapiCapture(endpoint))
         {
+            if (endpoint.State != DeviceState.Active ||
+                endpoint.DataFlow != (source == "playback" ? DataFlow.Render : DataFlow.Capture))
+                throw new InvalidOperationException("Selected endpoint is unavailable.");
+            using WasapiCapture capture = source == "playback"
+                ? new WasapiLoopbackCapture(endpoint) : new WasapiCapture(endpoint);
             name = endpoint.FriendlyName;
             var format = capture.WaveFormat;
             var floating = format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32;

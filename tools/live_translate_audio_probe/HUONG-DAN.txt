@@ -1,7 +1,9 @@
 THỬ TAI NGHE + MIC SIG4A (1–2 phút, Windows x64)
 
 Đây là công cụ đo tín hiệu, KHÔNG phải SIG4A/Live Translate, không cần admin,
-không cần cài thêm .NET và không cần mạng. Không ghi âm, chép lời hay tự gửi.
+không cần cài thêm .NET và không cần mạng. Công cụ chỉ đọc tạm tín hiệu trong
+bộ nhớ. Tiếng máy gồm mọi âm thanh đi qua thiết bị phát mà mày chọn. Không tạo
+bản ghi, không lưu, chép lời hay truyền âm thanh.
 Chỉ chạy gói do milo gửi cùng mã thử. Công cụ chưa ký; nếu Windows chặn,
 dừng và báo lại, không tắt bảo vệ.
 
