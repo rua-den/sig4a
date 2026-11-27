@@ -180,6 +180,81 @@ pub fn local_models(endpoint: &str, backend: &str) -> Value {
     json!({"models":models})
 }
 
+/// Diagnostics never submit prompt, text, or image. Resolve the exact installed alias
+/// from the filtered inventory before asking Ollama to show metadata for that alias.
+pub fn local_ai_diagnostics(endpoint: &str, backend: &str, model: &str) -> Value {
+    let inventory = local_models(endpoint, backend);
+    let Some(models) = inventory["models"].as_array() else {
+        let code = inventory["code"].as_str().unwrap_or("invalid_response");
+        let server = match code {
+            "unreachable" => "unreachable",
+            "server_error" | "not_ready" | "invalid_response" => "responded",
+            _ => "unknown",
+        };
+        return json!({"code":code,"server":server,"model_status":"unknown","ocr":"unknown"});
+    };
+
+    let selected = models.iter().filter_map(Value::as_str).find(|name| {
+        valid_local_model(name)
+            && (*name == model
+                || (backend == "ollama" && !model.contains(':')
+                    && name.strip_suffix(":latest") == Some(model)))
+    });
+    let Some(selected) = selected else {
+        let status = if model.is_empty() { "not_selected" } else { "missing" };
+        return json!({"server":"reachable","models":models,"model_status":status,"ocr":"unknown"});
+    };
+    let mut result = json!({
+        "server":"reachable","models":models,"model_status":"listed","ocr":"unknown",
+        "resolved_model":selected,
+    });
+    if backend != "ollama" {
+        return result; // llama.cpp's /v1/models doesn't reliably advertise image input.
+    }
+
+    let Ok(base) = local_endpoint(endpoint) else { return result };
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(5)))
+        .proxy(None)
+        .max_redirects(0)
+        .build()
+        .new_agent();
+    match agent.post(format!("{base}/api/show")).send_json(json!({"model":selected})) {
+        Ok(response) => match read_ai_response(response) {
+            Ok(details) => result["ocr"] = json!(ollama_vision_capability(&details)),
+            Err(error) => result["metadata_code"] = error["code"].clone(),
+        },
+        Err(error) => result["metadata_code"] = request_error(error, false)["code"].clone(),
+    }
+    result
+}
+
+fn ollama_vision_capability(details: &Value) -> &'static str {
+    if !details["remote_model"].is_null() || !details["remote_host"].is_null() {
+        return "unknown";
+    }
+    let Some(capabilities) = details["capabilities"].as_array() else { return "unknown" };
+    if capabilities.is_empty() || capabilities.iter().any(|capability| !capability.is_string()) {
+        "unknown"
+    } else if capabilities.iter().any(|capability| capability.as_str() == Some("vision")) {
+        "supported"
+    } else {
+        "unsupported"
+    }
+}
+
+fn valid_local_model(model: &str) -> bool {
+    if model.is_empty()
+        || model.len() > 256
+        || model.chars().any(|c| c.is_control() || c.is_whitespace())
+        || model.contains("//")
+    {
+        return false;
+    }
+    let lower = model.to_ascii_lowercase();
+    !lower.ends_with(":cloud") && !lower.ends_with("-cloud")
+}
+
 fn expand_custom_prompt(template: &str, text: &str, target: &str) -> Result<String, ()> {
     let max_rendered = MAX_CUSTOM_PROMPT_BYTES + MAX_INPUT_BYTES;
     let mut rendered = String::with_capacity(template.len().min(max_rendered));
@@ -1161,6 +1236,7 @@ mod tests {
                     Err(e) => panic!("fixture accept: {e}"),
                 }
             };
+            stream.set_nonblocking(false).unwrap();
             stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
             let mut reader = BufReader::new(&mut stream);
             let mut line = String::new();
@@ -1184,6 +1260,35 @@ mod tests {
             (request, body)
         });
         (format!("http://{addr}"), worker)
+    }
+
+    #[test]
+    fn ollama_metadata_is_tristate_and_never_infers_from_model_name() {
+        assert_eq!(ollama_vision_capability(&json!({"capabilities":["completion","vision"]})), "supported");
+        assert_eq!(ollama_vision_capability(&json!({"capabilities":["completion"]})), "unsupported");
+        assert_eq!(ollama_vision_capability(&json!({"name":"imaginary-vision-model"})), "unknown");
+        assert_eq!(ollama_vision_capability(&json!({"capabilities":["vision",false]})), "unknown");
+        assert_eq!(ollama_vision_capability(&json!({"capabilities":["vision"],"remote_host":"https://example.invalid"})), "unknown");
+    }
+
+    #[test]
+    fn diagnostics_does_not_request_metadata_for_an_unlisted_alias() {
+        let (endpoint, worker) = fixture_request(json!({"models": [
+            {"name":"gemma4:e2b","remote_model":"remote-only-model"}
+        ]}));
+        let result = local_ai_diagnostics(&endpoint, "ollama", "gemma4:e2b");
+        assert_eq!(worker.join().unwrap().0, "GET /api/tags HTTP/1.1");
+        assert_eq!(result["model_status"], "missing");
+        assert_eq!(result["ocr"], "unknown");
+    }
+
+    #[test]
+    fn diagnostics_cannot_infer_llama_cpp_vision_from_its_inventory() {
+        let (endpoint, worker) = fixture_request(json!({"data": [{"id":"vision-fixture"}]}));
+        let result = local_ai_diagnostics(&endpoint, "llama_cpp", "vision-fixture");
+        assert_eq!(worker.join().unwrap().0, "GET /v1/models HTTP/1.1");
+        assert_eq!(result["model_status"], "listed");
+        assert_eq!(result["ocr"], "unknown");
     }
 
     #[test]

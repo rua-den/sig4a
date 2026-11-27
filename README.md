@@ -123,3 +123,15 @@ Các lệnh kiểm tra định dạng và lint bổ sung:
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
 ```
+
+### Kiểm tra Local AI
+
+Trong **Cài đặt → Local AI**, chọn **Kiểm tra thành phần** để xem đúng backend,
+endpoint và model đang chọn, trạng thái kết nối, model local đã có hay chưa, và
+khả năng nhận ảnh. Kiểm tra chỉ đọc danh sách và metadata model qua loopback,
+không gửi đoạn văn hay ảnh của bạn. Ollama dùng trường `capabilities` trả về
+từ [API Show model details](https://docs.ollama.com/api-reference/show-model-details);
+llama.cpp có thể hiện “chưa xác định” vì danh sách model không xác nhận vision.
+Chọn **Thử model với ảnh mẫu** để gửi riêng một ảnh do ứng dụng tạo sẵn và kiểm
+tra model đọc đúng câu mẫu; báo có hỗ trợ từ metadata không có nghĩa là ảnh đã
+được thử thành công.
