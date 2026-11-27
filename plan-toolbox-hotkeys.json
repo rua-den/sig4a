@@ -1,15 +1,54 @@
 {
   "title": "Tool Box shortcuts, selected-text popups, and OCR translation",
-  "status": "in_progress",
+  "status": "passed",
   "baseline": "a848df7a218ab0bd95a060191e85387080621d2a",
   "dependency": "OCR Popup Settings PR #18 when independently verified",
   "acceptance": [
-    {"id":"TOOLS-AUTO-1","case":"Validate and persist customizable global shortcuts for opening the Tool Box, OCR, Grammar and Translate. Keep existing defaults, reject duplicate/unsupported chords, and surface shortcuts owned by other apps.","status":"pending"},
-    {"id":"TOOLS-WIN-1","case":"Open Tool Box immediately with a visible app control and the configurable shortcut, including when already open. Exercise rebinding, conflicts and persistence on Windows.","status":"pending"},
-    {"id":"TOOLS-WIN-2","case":"Physical selection then Translate shortcut opens a dedicated selected-text popup, prefills the selection, submits once and exposes copy. No selection opens a usable manual input. Dashboard Translate route also works.","status":"pending"},
-    {"id":"TOOLS-WIN-3","case":"OCR shortcut creates the existing anchored capture. Its Translate action translates detected text inline without opening a second popup. Copy source and translation independently.","status":"pending"},
-    {"id":"TOOLS-WIN-4","case":"Grammar shortcut and dashboard control open a usable tool. Grammar popup stays visibly above an overlapping regular app after external click without reclaiming focus; explicit Close and Escape still work.","status":"pending"}
+    {
+      "id": "TOOLS-AUTO-1",
+      "case": "Validate and persist customizable global shortcuts for opening the Tool Box, OCR, Grammar and Translate. Keep existing defaults, reject duplicate/unsupported chords, and surface shortcuts owned by other apps.",
+      "status": "passed",
+      "evidence": "Locked workspace covers legacy config parity with unchanged goldens, stricter OCR fallback defaults and persisted false, parser defaults, invalid and duplicate inputs, bounded selection workers, shortcut settings, and actual WebView2 routes: https://github.com/rua-den/sig4a/actions/runs/45942129714/job/140318581863; standard Windows validation: https://github.com/rua-den/sig4a/actions/runs/45942110602/job/140318517636"
+    },
+    {
+      "id": "TOOLS-WIN-1",
+      "case": "Open Tool Box immediately with a visible app control and the configurable shortcut, including when already open. Exercise rebinding, conflicts and persistence on Windows.",
+      "status": "passed",
+      "evidence": "Physical Explorer tray, saved custom chord, existing dashboard HWND focus before/after restart, live/persistent rejection of duplicate and an OS-owned chord, plus visible popup launcher action: https://github.com/rua-den/sig4a/actions/runs/45942129714/job/140318581504"
+    },
+    {
+      "id": "TOOLS-WIN-2",
+      "case": "Physical selection then Translate shortcut opens a dedicated selected-text popup, prefills the selection, submits once and exposes copy. No selection opens a usable manual input. Dashboard Translate route also works.",
+      "status": "passed",
+      "evidence": "Physical WPF selection through UI Automation prefilled and sent exactly once without writing clipboard; native result Copy, manual no-selection input, and dashboard Translate each worked: https://github.com/rua-den/sig4a/actions/runs/45942129714/job/140318581504"
+    },
+    {
+      "id": "TOOLS-WIN-3",
+      "case": "OCR shortcut creates the existing anchored capture. Its Translate action translates detected text inline without opening a second popup. Copy source and translation independently.",
+      "status": "passed",
+      "evidence": "Physical OCR hotkey and picker produced anchored real PNG; inline Translate ran within the same popup HWND and real clipboard copied each result: https://github.com/rua-den/sig4a/actions/runs/45942129714/job/140318581504"
+    },
+    {
+      "id": "TOOLS-WIN-4",
+      "case": "Grammar shortcut and dashboard control open a usable tool. Grammar popup stays visibly above an overlapping regular app after external click without reclaiming focus; explicit Close and Escape still work.",
+      "status": "passed",
+      "evidence": "Native dashboard and global Grammar worked; overlapping regular app actually held focus while popup remained exposed; explicit Close and Escape both dismissed: https://github.com/rua-den/sig4a/actions/runs/45942129714/job/140318581504"
+    }
   ],
-  "advisor":{"status":"pending"},
-  "gate":{"status":"pending","rule":"Only mark passed and merge after exact product Advisor review, automated checks and independent real Windows UI evidence."}
+  "advisor": {
+    "status": "approved",
+    "evidence": "Independent GPT-6.2 Astra approved the exact product tree e69a3390023773fa6d91ed41332f6aa6b7fbbc0e; the conditional locked and native Windows gates passed."
+  },
+  "gate": {
+    "status": "passed",
+    "rule": "Only mark passed and merge after exact product Advisor review, automated checks and independent real Windows UI evidence.",
+    "closed_at": "2026-11-27T04:56:08.925Z"
+  },
+  "tested_product": "75c05b811eb68335e2a2b5aa48ee911f414fc86a",
+  "tested_main_base": "76db0546ad85f4b498f9b320727c67f3a86efedd",
+  "limitations": [
+    "Verified on hosted Windows Server 2025, not on Huy's computer.",
+    "Native proof uses loopback deterministic outputs with a validated physical screenshot and does not assess OCR/translation model accuracy.",
+    "Automatic text selection requires a responsive source UI Automation provider. Otherwise the popup opens for manual paste or input."
+  ]
 }
