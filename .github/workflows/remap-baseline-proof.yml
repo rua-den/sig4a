@@ -1,0 +1,30 @@
+name: Exact current-main native remapped tool shortcuts
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/remap-baseline-proof.yml', '.github/remap-baseline-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: 92f96bfcec8146fe224ae2e26923cea1a052a4e9
+jobs:
+  native-remap:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - working-directory: product/rust
+        name: Build exact ordinary Windows release
+        run: cargo build --locked --release --workspace
+      - name: Physically exercise three remapped tools and tray restart
+        shell: pwsh
+        run: ./proof/.github/remap-baseline-proof/native.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA -Scenario remap
