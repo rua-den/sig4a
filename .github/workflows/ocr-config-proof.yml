@@ -1,0 +1,52 @@
+name: SIG4A exact native OCR popup configuration
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/ocr-config-proof.yml', '.github/ocr-config-proof/**']
+permissions:
+  contents: read
+env:
+  PRODUCT_SHA: 3082d491ad359b78a12071f6f5cf883f6e371fda
+jobs:
+  native-config:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: proof
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          path: product
+          persist-credentials: false
+      - working-directory: product/rust
+        name: Build ordinary release, no test flags
+        run: cargo build --locked --release --workspace
+      - name: Global OCR hotkey, external focus and visible overlap, settings and restart
+        shell: pwsh
+        run: ./proof/.github/ocr-config-proof/native.ps1 -ProductRoot ./product -ExpectedSha $env:PRODUCT_SHA
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ocr-popup-config-native-screenshots
+          path: evidence/*.png
+          if-no-files-found: ignore
+  config-regression:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          persist-credentials: false
+      - working-directory: rust
+        name: Locked configuration policy and dashboard WebView2 integration
+        run: |
+          if ((git rev-parse HEAD).Trim() -cne $env:PRODUCT_SHA) { throw "Incorrect SHA" }
+          cargo test --locked -p cu-core --lib -- --test-threads=1 --show-output
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1
+          exit $LASTEXITCODE
