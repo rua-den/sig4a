@@ -7,6 +7,8 @@ mod api;
 mod diagnostics_export;
 mod geom;
 mod live;
+mod model_setup;
+mod model_setup_path;
 mod quick_check;
 mod quick_check_transport;
 mod region;
@@ -198,6 +200,7 @@ struct App {
     geo: Geo,
     ready: bool,
     live: live::Live,
+    model_setup: model_setup::ModelSetup,
     qc: quick_check::View,
     live_page: Option<String>,
     live_heartbeat: Option<Instant>,
@@ -233,6 +236,7 @@ impl App {
     fn close(&mut self) -> ! {
         win::hide(self.hwnd);
         self.live.close();
+        self.model_setup.view_lost();
         self.qc.invalidate();
         if !self.quick_mode { self.persist_now(); }
         win::terminate()
@@ -247,11 +251,12 @@ impl App {
     }
 
     fn check_live_lease(&mut self, now: Instant) {
-        if !win::visible_live_window(self.hwnd)
-            || self.live_heartbeat.is_none_or(|seen| now.saturating_duration_since(seen) >= LIVE_LEASE)
-        {
+        let visible = win::visible_live_window(self.hwnd);
+        let waiting_for_post_modal = self.live_page.as_deref().is_some_and(|page| self.model_setup.awaiting_heartbeat(page, now));
+        if !visible || (self.live_heartbeat.is_none_or(|seen| now.saturating_duration_since(seen) >= LIVE_LEASE) && !waiting_for_post_modal) {
             self.live_heartbeat = None;
             self.live.view_lost();
+            self.model_setup.view_lost();
         }
     }
 
@@ -259,6 +264,7 @@ impl App {
         if win::visible_live_window(self.hwnd) {
             self.live_heartbeat = Some(now);
             self.live.renew_view(now + LIVE_LEASE);
+            self.model_setup.renew_view(now + LIVE_LEASE);
         }
     }
 
@@ -302,6 +308,7 @@ impl App {
                 if a.first().and_then(Value::as_bool) == Some(true) {
                     if self.live_page.as_deref() != Some(token) {
                         self.live.view_lost();
+                    self.model_setup.view_lost();
                         self.live_page = Some(token.to_owned());
                     }
                     self.record_live_heartbeat(Instant::now());
@@ -309,6 +316,7 @@ impl App {
                     self.live_page = None;
                     self.live_heartbeat = None;
                     self.live.stop(false);
+                    self.model_setup.view_lost();
                     win::set_topmost(self.hwnd, false);
                 }
                 self.live.call("live_state", &Value::Null)
@@ -331,7 +339,60 @@ impl App {
                 if matches!(m, "live_start" | "live_check_start") && self.live_heartbeat.is_none() {
                     return Ok(self.live.call("live_state", &Value::Null));
                 }
+                let install_pending = self.live_page.as_deref().is_some_and(|page| self.model_setup.awaiting_heartbeat(page, Instant::now()));
+                if matches!(m, "live_list" | "live_start" | "live_check_start") && (self.model_setup.busy() || install_pending) {
+                    return Ok(json!({"phase":"idle","code":"busy","devices":[],"checking":false,"check":null,"en":"","vi":null}));
+                }
                 self.live.call(m, a.first().unwrap_or(&Value::Null))
+            }
+            "live_model_state" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==1 => {
+                self.check_live_lease(Instant::now());
+                if self.live_heartbeat.is_none() { return Ok(json!({"active":false,"state":"unchecked"})); }
+                self.model_setup.state()
+            }
+            "live_model_install" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==1 => {
+                self.check_live_lease(Instant::now());
+                let now=Instant::now();
+                let state=self.live.call("live_state",&Value::Null);
+                if !win::visible_live_window(self.hwnd) || self.live_heartbeat.is_none_or(|seen|now.saturating_duration_since(seen)>=LIVE_LEASE)
+                    || state["phase"].as_str()!=Some("idle") || state["listing"].as_bool()==Some(true) || state["checking"].as_bool()==Some(true) || self.model_setup.busy() {
+                    return Ok(json!({"active":false,"state":"failed","code":"busy"}));
+                }
+                let accepted=win::confirm_model_install(self.hwnd);
+                if let Some((session,challenge))=self.model_setup.confirm_install(self.live_page.as_deref().unwrap_or(""),accepted,Instant::now()) {
+                    json!({"active":false,"state":"awaiting_heartbeat","session":session,"challenge":challenge})
+                } else if accepted { json!({"active":false,"state":"failed","code":"installer_internal"}) }
+                else { json!({"active":false,"state":"declined"}) }
+            }
+            "live_model_heartbeat" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==2 => {
+                // Only this fresh, post-dialog challenge heartbeat can resume the grant.
+                // Capture its absolute lease deadline before launch; slow startup cannot extend it.
+                let challenge=a.get(1).and_then(Value::as_str).unwrap_or("");
+                let now=Instant::now();
+                if win::visible_live_window(self.hwnd) {
+                    let page=self.live_page.as_deref().unwrap_or("");
+                    let live_state=self.live.call("live_state",&Value::Null);
+                    let view_deadline=now+LIVE_LEASE;
+                    if live_state["phase"].as_str()==Some("idle") && live_state["listing"].as_bool()!=Some(true)
+                        && live_state["checking"].as_bool()!=Some(true) && !self.model_setup.busy()
+                        && self.model_setup.heartbeat(page,challenge,now,view_deadline,self.hwnd) { self.record_live_heartbeat(now); }
+                    else { self.model_setup.reject_pending(page,challenge,now); }
+                }
+                self.model_setup.state()
+            }
+            "live_model_verify" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==1 => {
+                self.check_live_lease(Instant::now());
+                let state=self.live.call("live_state",&Value::Null); let now=Instant::now();
+                if !win::visible_live_window(self.hwnd) || self.live_heartbeat.is_none_or(|seen|now.saturating_duration_since(seen)>=LIVE_LEASE)
+                    || state["phase"].as_str()!=Some("idle") || state["listing"].as_bool()==Some(true) || state["checking"].as_bool()==Some(true) || self.model_setup.busy() {
+                    return Ok(json!({"active":false,"state":"failed","code":"busy"}));
+                }
+                let view_deadline=self.live_heartbeat.map(|seen|seen+LIVE_LEASE).unwrap_or(now);
+                if self.model_setup.verify(view_deadline,self.hwnd).is_some() { self.model_setup.state() }
+                else { json!({"active":false,"state":"failed","code":"busy"}) }
+            }
+            "live_model_cancel" if !self.quick_mode && self.live_page_matches(a.first()) && a.len()==2 => {
+                let session=a.get(1).and_then(Value::as_u64).unwrap_or(0); self.model_setup.cancel(session); self.model_setup.state()
             }
             "open_toolbox" => Value::Bool(win::open_toolbox()),
             "state" => c.state(),
@@ -701,6 +762,7 @@ fn main() {
         },
         ready: false,
         live: live::Live::default(),
+        model_setup: model_setup::ModelSetup::default(),
         qc: quick_check::View::default(),
         live_page: None,
         live_heartbeat: None,
@@ -786,6 +848,7 @@ fn main() {
             Event::UserEvent(Ev::LiveNavigation { replaces_document }) => {
                 app.qc.invalidate();
                 app.live.view_lost();
+                app.model_setup.view_lost();
                 // An accepted replacement forgets the old renderer nonce, even for
                 // a same-URI reload. A blocked attempt leaves the current document
                 // in place; it can acquire a fresh lease but never restart on its own.
@@ -980,6 +1043,7 @@ fn main() {
         // hidden during capture, even if WebView initialization exceeds the timeout.
         let capturing = OCR_BUSY.load(Ordering::Acquire);
         app.live.tick(Instant::now());
+        app.model_setup.state();
         if app.ready && app.live_pending && !capturing {
             app.live_pending = false;
             let _ = webview.evaluate_script("toolTab('live')");

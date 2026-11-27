@@ -45,7 +45,7 @@ jobs:
         run: |
           $files = @(Get-ChildItem dist -File -Filter 'sig4a-*-windows.zip')
           if ($files.Count -ne 1) { throw 'Expected one app ZIP.' }
-          .\.github\live-translate\smoke-package.ps1 -Archive $files[0].FullName
+          .\.github\live-translate\smoke-package.ps1 -Archive $files[0].FullName -InstallEnglishFromUI
           git rev-parse HEAD | Set-Content dist/REVISION.txt
           $hash = Get-FileHash -LiteralPath $files[0].FullName -Algorithm SHA256
           "$($hash.Hash)  $($files[0].Name)" | Set-Content dist/SHA256.txt
@@ -65,6 +65,8 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify bounded model setup and live NTFS publication races
+        run: dotnet run -c Release --project tools/live_translate_runtime/tests/setup/SetupSmoke.csproj
       - name: Verify native Audio Check protocol and five-second deadline
         run: dotnet run -c Release --project tools/live_translate_runtime/tests/ProtocolSmoke.csproj
       - name: Publish helper and verify Audio Check without the English model

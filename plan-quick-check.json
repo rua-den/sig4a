@@ -5,10 +5,10 @@
     "start": "After Audio Check PR #35 merges, rebase/cut the implementation branch from exact latest main containing both #34 and #35; record that SHA in the repo plan. Draft review only before then.",
     "inspected_audio_check": "efec55d4d132881491038a6395de64136c4ce3e3",
     "inspected_local_ai_setup": "fcd82b1de383ab74fbed0bca990a3828193ca616",
-    "sha": "59e12b6815d57c8051597b0c47613986d4159a5d",
+    "sha": "2032859753dd33399488a7722f117a529f13c89f",
     "ref": "origin/main",
     "implementation_started_at_sha": "a20328f66046eb71c8708107330b62e21da2f336",
-    "sync": "Normal two-parent merge of the exact Safe Report #36 main into Quick Check; do not rewrite the existing #37 history. The Quick Check source tree entering the merge matches the published b1eaa8a7 tree."
+    "sync": "Normal two-parent syncs retain the exact Safe Report #36 and English Setup #38 main histories; no rewrite of the Quick Check #37 history. Evidence sections remain scoped to their exact candidates."
   },
   "scope": "One native Windows Settings surface with five status cards and two separate explicit fixed-sample tests. No new top-level Tool Box route, capture popup feature, general diagnostic runner or aggregate pass badge.",
   "ux": {
@@ -154,6 +154,27 @@
       },
       "resolution": "Retain dedicated guarded Quick Check IPC and exact zero-argument Diagnostics Preview IPC; Settings route transitions clear either stale preview. Both ordinary and optional signed package runs use the same visible owned window and root-contained localized navigation checks. Quick Check still uses real UIA activation/refusal with no sample bypass; localized UIA responses are escaped safely.",
       "combined_windows": "pending exact regression, package, and opted-in signed production proof"
+    },
+    "english_base_sync": {
+      "main_parent": "2032859753dd33399488a7722f117a529f13c89f",
+      "quick_check_published_parent": "11ba33758f9ec4d600f46a9d2d222029f7752eb2",
+      "quick_check_local_parent": "7f6a60395a52fb0eea7eaa0478e569f5041bc361",
+      "same_quick_check_tree": "9d8466219c67bd8d0a651e7928839418f63d2ba1",
+      "pre_sync_quick_check": {
+        "standard": "https://github.com/rua-den/sig4a/actions/runs/46064414424",
+        "full_and_ordinary": "https://github.com/rua-den/sig4a/actions/runs/46064413965",
+        "scope": "Previous candidate passed standard, full engine and ordinary-package Quick Check refusal; no signed positive claimed."
+      },
+      "previously_verified_english_setup": {
+        "candidate": "83f1839df5f5bf849364f6c36d8b9016221dcb81",
+        "standard": "https://github.com/rua-den/sig4a/actions/runs/46064563579",
+        "full": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650603",
+        "native_engine": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650977",
+        "ordinary_package": "https://github.com/rua-den/sig4a/actions/runs/46064563653/job/140726650879",
+        "scope": "English native consent/decline/stale-view and actual digest-pinned publisher model setup plus local synthetic inference on its exact prior candidate only."
+      },
+      "resolution": "Preserve both native view fences. The normal release ZIP first proves Quick Check passive entry and unauthorized HTTP refusal, then explicitly invokes real Win32 English consent/download/verification/offline inference in the same isolated package. The signed Ollama proof runs on a separate package extraction and is never combined with English setup. Keep exact owned-dashboard relaunch, bounded root/ASCII localized UIA, and actual localized English dialog/button identities.",
+      "combined_windows": "Pending repeat at the exact combined revision; signed production positive not yet run."
     }
   },
   "revision": "advisor-offline-v1-final-refresh",

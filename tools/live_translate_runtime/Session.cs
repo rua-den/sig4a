@@ -1,13 +1,12 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Threading.Channels;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using SherpaOnnx;
 
-sealed partial class Session(long id, string source, string? deviceId, bool translate)
+sealed partial class Session(long id, string source, string? deviceId, bool translate, WindowsModelPaths.Pin packageRoot)
 {
     internal long Id => id;
     OfflineTranslation? translator;
@@ -23,43 +22,39 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
     });
     internal void Stop() => cancel.Cancel();
 
-    static readonly string ModelDir = Path.Combine(AppContext.BaseDirectory, "models", "zipformer");
-    const string ModelStem = "epoch-99-avg-1-chunk-16-left-128";
-    internal static OnlineRecognizer LoadModel()
+    internal sealed class RecognizerLease(OnlineRecognizer recognizer, EnglishModelInstaller.AssetLease assets) : IDisposable
     {
-        var names = new[] { "tokens.txt", $"encoder-{ModelStem}.int8.onnx", $"decoder-{ModelStem}.onnx", $"joiner-{ModelStem}.int8.onnx" };
-        if ((File.GetAttributes(Path.GetDirectoryName(ModelDir)!) & FileAttributes.ReparsePoint) != 0 ||
-            (File.GetAttributes(ModelDir) & FileAttributes.ReparsePoint) != 0) throw new FileNotFoundException();
-        var expected = new[] {
-            "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb",
-            "5022b2eca5b19d1bc104fcf33e26bc32604b7df553cd2e1f62e31dc7b05e9c87",
-            "85914f840b71110487ece7a30ebd0bd4b8fb5c2623215bba3aa5ab4c138fc591",
-            "abd5e30f3f16fc510605c6029dba33f10e4386bd75c5bdc30cf94076864db10d",
-        };
-        for (int i = 0; i < names.Length; i++)
+        internal OnlineRecognizer Recognizer { get; } = recognizer;
+        public void Dispose()
         {
-            var f = new FileInfo(Path.Combine(ModelDir, names[i]));
-            if (!f.Exists || f.Length is < 100 or > 250_000_000 || (f.Attributes & FileAttributes.ReparsePoint) != 0)
-                throw new FileNotFoundException();
-            using var data = f.OpenRead();
-            if (!Convert.ToHexString(SHA256.HashData(data)).Equals(expected[i], StringComparison.OrdinalIgnoreCase))
-                throw new FileNotFoundException();
+            try { Recognizer.Dispose(); }
+            finally { assets.Dispose(); }
         }
-        var config = new OnlineRecognizerConfig();
-        config.FeatConfig.SampleRate = 16000;
-        config.FeatConfig.FeatureDim = 80;
-        config.ModelConfig.Tokens = Path.Combine(ModelDir, names[0]);
-        config.ModelConfig.Transducer.Encoder = Path.Combine(ModelDir, names[1]);
-        config.ModelConfig.Transducer.Decoder = Path.Combine(ModelDir, names[2]);
-        config.ModelConfig.Transducer.Joiner = Path.Combine(ModelDir, names[3]);
-        config.ModelConfig.Provider = "cpu";
-        config.ModelConfig.NumThreads = Math.Clamp(Environment.ProcessorCount, 1, 4);
-        config.DecodingMethod = "greedy_search";
-        config.EnableEndpoint = 1;
-        config.Rule1MinTrailingSilence = 1.8f;
-        config.Rule2MinTrailingSilence = .60f;
-        config.Rule3MinUtteranceLength = 18f;
-        return new OnlineRecognizer(config);
+    }
+
+    internal static RecognizerLease LoadModel(WindowsModelPaths.Pin packageRoot)
+    {
+        var names = EnglishModelPins.ModelFiles;
+        var assets = EnglishModelInstaller.OpenInstalled(packageRoot, EnglishModelPins.Pins, CancellationToken.None);
+        try
+        {
+            var config = new OnlineRecognizerConfig();
+            config.FeatConfig.SampleRate = 16000;
+            config.FeatConfig.FeatureDim = 80;
+            config.ModelConfig.Tokens = assets.NativeName(names[0]);
+            config.ModelConfig.Transducer.Encoder = assets.NativeName(names[1]);
+            config.ModelConfig.Transducer.Decoder = assets.NativeName(names[2]);
+            config.ModelConfig.Transducer.Joiner = assets.NativeName(names[3]);
+            config.ModelConfig.Provider = "cpu";
+            config.ModelConfig.NumThreads = Math.Clamp(Environment.ProcessorCount, 1, 4);
+            config.DecodingMethod = "greedy_search";
+            config.EnableEndpoint = 1;
+            config.Rule1MinTrailingSilence = 1.8f;
+            config.Rule2MinTrailingSilence = .60f;
+            config.Rule3MinUtteranceLength = 18f;
+            return new RecognizerLease(new OnlineRecognizer(config), assets);
+        }
+        catch { assets.Dispose(); throw; }
     }
 
     internal async Task Run()
@@ -71,7 +66,8 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
         bool released = true;
         try
         {
-            using var model = LoadModel(); // Fail before accessing the endpoint if unavailable.
+            using var modelLease = LoadModel(packageRoot); // Pin file/namespace guards for native recognizer lifetime.
+            var model = modelLease.Recognizer;
             if (Cancelled) return;
             using var stream = model.CreateStream();
             using var host = new MMDeviceEnumerator();
@@ -229,7 +225,7 @@ sealed partial class Session(long id, string source, string? deviceId, bool tran
 
     static string DeviceCode(Exception error, bool issuedStart) => error switch
     {
-        FileNotFoundException or DirectoryNotFoundException => "model_missing",
+        FileNotFoundException or DirectoryNotFoundException or SetupFailure => "model_missing",
         DllNotFoundException or EntryPointNotFoundException or BadImageFormatException => "backend_missing",
         UnauthorizedAccessException => "permission_denied",
         COMException c when unchecked((uint)c.HResult) == 0x80070005 => "permission_denied",

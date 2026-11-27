@@ -234,6 +234,14 @@ pub fn message_box(text: &str) {
     };
 }
 
+/// Native explicit consent prompt for networked Live Translate model installation.
+pub fn confirm_model_install(hwnd: isize) -> bool {
+    let text = "Cài model nhận dạng tiếng Anh sherpa-onnx-streaming-zipformer-en-2023-06-26 từ nhà phát hành k2-fsa?\n\nNguồn chính thức (GitHub):\nhttps://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2\n\nTải 310 MB, giữ lại khoảng 72,5 MB trong thư mục app; cần ít nhất 450 MB trống. Chỉ tải tệp model này. Không gửi âm thanh hay phụ đề; app không tự bật nghe sau khi cài. Chọn Yes để tải hoặc No để không thay đổi gì.";
+    unsafe {
+        MessageBoxW(h(hwnd), wide(text).as_ptr(), wide("Live Translate · English model").as_ptr(), MB_YESNO | MB_ICONINFORMATION | MB_DEFBUTTON2) == IDYES
+    }
+}
+
 /// `core.set_autostart`: same value name as the tray build and the Python one, so there is only ever one entry.
 pub fn set_autostart(on: bool, exe: &Path) -> bool {
     // SAFETY: registry calls with NUL-terminated UTF-16 strings; the key is closed.

@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>Sig4a.LiveTranslate.InferenceSmoke</AssemblyName>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../Sig4a.LiveTranslate.csproj" /></ItemGroup>
 </Project>

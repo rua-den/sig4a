@@ -143,7 +143,7 @@ fn read_line(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
     }
 }
 
-fn colocated(current_exe: &Path) -> Option<PathBuf> {
+pub(crate) fn colocated(current_exe: &Path) -> Option<PathBuf> {
     let root = current_exe.canonicalize().ok()?;
     let dir = root.parent()?;
     let folder = dir.join("live-translate");

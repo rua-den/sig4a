@@ -46,7 +46,11 @@ Mặc định popup OCR vẫn nổi khi bạn bấm sang ứng dụng khác. Đ�
 
 Bản ZIP chuẩn cần .NET 8 SDK và PowerShell 7 trên máy **build**; khi giải nén, helper Windows x64 đi kèm không cần cài .NET. Nếu chỉ cần các công cụ cũ, dùng `build.ps1 -SkipLiveTranslate`.
 
-Sau khi giải nén trọn ZIP, chủ động tải model nhận dạng tiếng Anh đã ghim và kiểm checksum:
+Sau khi giải nén trọn ZIP vào một thư mục Windows cục bộ (NTFS), vào **Tool Box → Live Translate → Cài model tiếng Anh**. Chỉ khi xác nhận và trang Live Translate còn hoạt động, app mới tải gói Sherpa-ONNX chính thức đã ghim (~310 MB, cần khoảng 450 MB trống). App xác minh gói và các tệp trước khi báo **sẵn sàng**; cài xong không tự mở micro hay nghe tiếng máy.
+
+Mở trang chỉ hiển thị **chưa xác minh**, không kiểm tra tệp, mở helper hay tải gì. **Kiểm tra model đã cài** chạy xác minh ngoại tuyến khi bấm, phân biệt thiếu helper, thiếu model và model không hợp lệ. Nếu cần sửa, app không tự ghi đè: sao lưu thư mục `live-translate/models` hoặc giải nén bản ZIP đầy đủ vào thư mục mới rồi cài lại. Cài đặt không hỗ trợ ổ mạng hoặc đường dẫn đi qua junction hay liên kết tượng trưng.
+
+Nếu muốn cài chủ động từ PowerShell, dùng cùng bộ cài và kiểm tra:
 
 ```powershell
 pwsh -NoProfile -File .\live-translate\Provision-Model.ps1

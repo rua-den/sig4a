@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0-windows7.0": {
+      "NAudio.Wasapi": {
+        "type": "Direct",
+        "requested": "[2.2.1, 2.2.1]",
+        "resolved": "2.2.1",
+        "contentHash": "lFfXoqacZZe0WqNChJgGYI+XV/n/61LzPHT3C1CJp4khoxeo2sziyX5wzNYWeCMNbsWxFvT3b3iXeY1UYjBhZw==",
+        "dependencies": {
+          "NAudio.Core": "2.2.1"
+        }
+      },
+      "org.k2fsa.sherpa.onnx": {
+        "type": "Direct",
+        "requested": "[1.12.30, 1.12.30]",
+        "resolved": "1.12.30",
+        "contentHash": "YzSu8SoqH4SCX7wYavFG22USwqqr4RGbYVkZAeIUvC6UNw8+2NFDcY2BncpxErpaC0gcbkcHNnJtbPpZuvsHzA==",
+        "dependencies": {
+          "org.k2fsa.sherpa.onnx.runtime.linux-arm64": "1.12.30",
+          "org.k2fsa.sherpa.onnx.runtime.linux-x64": "1.12.30",
+          "org.k2fsa.sherpa.onnx.runtime.osx-arm64": "1.12.30",
+          "org.k2fsa.sherpa.onnx.runtime.osx-x64": "1.12.30",
+          "org.k2fsa.sherpa.onnx.runtime.win-arm64": "1.12.30",
+          "org.k2fsa.sherpa.onnx.runtime.win-x64": "1.12.30",
+          "org.k2fsa.sherpa.onnx.runtime.win-x86": "1.12.30"
+        }
+      },
+      "SharpZipLib": {
+        "type": "Direct",
+        "requested": "[1.4.2, 1.4.2]",
+        "resolved": "1.4.2",
+        "contentHash": "yjj+3zgz8zgXpiiC3ZdF/iyTBbz2fFvMxZFEBPUcwZjIvXOf37Ylm+K58hqMfIBt5JgU/Z2uoUS67JmTLe973A=="
+      },
+      "NAudio.Core": {
+        "type": "Transitive",
+        "resolved": "2.2.1",
+        "contentHash": "GgkdP6K/7FqXFo7uHvoqGZTJvW4z8g2IffhOO4JHaLzKCdDOUEzVKtveoZkCuUX8eV2HAINqi7VFqlFndrnz/g=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.linux-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "nlpnKcKHi/+gEvW/vWc+mVkeuJkcARYSz+uGcHbXQ9IXfw/zWs9wdV7V0fGgp4OHkyX1ZS4IauOdVkkl6/S1Vg=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.linux-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "NhXZMS6Tyx485KpNKID4tHLghNqxAEvuoSmSWZgbFJlcrWemCaWTp2C7/UkBOMaGRTqfXZ2sMj2+nlFyY78V5Q=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.osx-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "oSIiTKHwQKI4/u0/1waWLWGoxR9AzsJv7rvEEtQH+0cyA9nRqoWGU5DhswZDhpWjJ30i6qAYWom7ZGhBj79INw=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.osx-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "zZTIr78x3I90eX84k15y3PppXroSzWOTo4JCVGaf3pbuCFwgzOR9KV0/GU236ilnsonpn3hPEZoth0/Q7qKr7w=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "14SHjaskNsjRJYutY8TZl7keGjsiW1vtiXZGrcHFPk3qoio/XqCUNfuj4UWZDlLT3oZoQyeX8TaVXL+wosF5dA=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "ujv14JSj0NrduCWeLi3kHKThtPKMNp1+ZBWEnHJV/ZLoroXu/ZZ6Q0ouJNFrmVMLOEyf4kWhypMfeP5VSgMn5g=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-x86": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "M8J/xg/+ZHvhSyPHEpRI6BsOGzHjp7fgUUdfaU0+qgqDgbWkS0Ow0O40DYlVCNCS8DAYqO4MUgS+IG9eO73dhA=="
+      }
+    },
+    "net8.0-windows7.0/linux-x64": {
+      "org.k2fsa.sherpa.onnx.runtime.linux-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "nlpnKcKHi/+gEvW/vWc+mVkeuJkcARYSz+uGcHbXQ9IXfw/zWs9wdV7V0fGgp4OHkyX1ZS4IauOdVkkl6/S1Vg=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.linux-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "NhXZMS6Tyx485KpNKID4tHLghNqxAEvuoSmSWZgbFJlcrWemCaWTp2C7/UkBOMaGRTqfXZ2sMj2+nlFyY78V5Q=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.osx-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "oSIiTKHwQKI4/u0/1waWLWGoxR9AzsJv7rvEEtQH+0cyA9nRqoWGU5DhswZDhpWjJ30i6qAYWom7ZGhBj79INw=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.osx-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "zZTIr78x3I90eX84k15y3PppXroSzWOTo4JCVGaf3pbuCFwgzOR9KV0/GU236ilnsonpn3hPEZoth0/Q7qKr7w=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "14SHjaskNsjRJYutY8TZl7keGjsiW1vtiXZGrcHFPk3qoio/XqCUNfuj4UWZDlLT3oZoQyeX8TaVXL+wosF5dA=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "ujv14JSj0NrduCWeLi3kHKThtPKMNp1+ZBWEnHJV/ZLoroXu/ZZ6Q0ouJNFrmVMLOEyf4kWhypMfeP5VSgMn5g=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-x86": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "M8J/xg/+ZHvhSyPHEpRI6BsOGzHjp7fgUUdfaU0+qgqDgbWkS0Ow0O40DYlVCNCS8DAYqO4MUgS+IG9eO73dhA=="
+      }
+    },
+    "net8.0-windows7.0/win-x64": {
+      "org.k2fsa.sherpa.onnx.runtime.linux-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "nlpnKcKHi/+gEvW/vWc+mVkeuJkcARYSz+uGcHbXQ9IXfw/zWs9wdV7V0fGgp4OHkyX1ZS4IauOdVkkl6/S1Vg=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.linux-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "NhXZMS6Tyx485KpNKID4tHLghNqxAEvuoSmSWZgbFJlcrWemCaWTp2C7/UkBOMaGRTqfXZ2sMj2+nlFyY78V5Q=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.osx-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "oSIiTKHwQKI4/u0/1waWLWGoxR9AzsJv7rvEEtQH+0cyA9nRqoWGU5DhswZDhpWjJ30i6qAYWom7ZGhBj79INw=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.osx-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "zZTIr78x3I90eX84k15y3PppXroSzWOTo4JCVGaf3pbuCFwgzOR9KV0/GU236ilnsonpn3hPEZoth0/Q7qKr7w=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-arm64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "14SHjaskNsjRJYutY8TZl7keGjsiW1vtiXZGrcHFPk3qoio/XqCUNfuj4UWZDlLT3oZoQyeX8TaVXL+wosF5dA=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "ujv14JSj0NrduCWeLi3kHKThtPKMNp1+ZBWEnHJV/ZLoroXu/ZZ6Q0ouJNFrmVMLOEyf4kWhypMfeP5VSgMn5g=="
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-x86": {
+        "type": "Transitive",
+        "resolved": "1.12.30",
+        "contentHash": "M8J/xg/+ZHvhSyPHEpRI6BsOGzHjp7fgUUdfaU0+qgqDgbWkS0Ow0O40DYlVCNCS8DAYqO4MUgS+IG9eO73dhA=="
+      }
+    }
+  }
+}

@@ -1,7 +1,10 @@
 # Hosted Windows smoke of the ordinary extracted package. Does not open a physical endpoint.
-param([Parameter(Mandatory)][string]$Archive, [string]$RealGemmaManifestSha256 = "")
+param([Parameter(Mandatory)][string]$Archive, [string]$RealGemmaManifestSha256 = "", [switch]$InstallEnglishFromUI)
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
+if ($InstallEnglishFromUI -and $RealGemmaManifestSha256) {
+    throw 'Run the English installer and signed Ollama test as separate archive proofs.'
+}
 $root = Join-Path $env:RUNNER_TEMP ('sig4a-extracted-' + [guid]::NewGuid())
 $profile = Join-Path $root 'isolated'
 Expand-Archive -LiteralPath $Archive -DestinationPath $root
@@ -111,6 +114,11 @@ public static class Sig4aPackageSmokeWin {
     [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
     private static extern int GetClassNameW(IntPtr wnd, StringBuilder name, int capacity);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr wnd, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr wnd, uint what);
+    [DllImport("user32.dll")] private static extern IntPtr GetDlgItem(IntPtr dialog, int id);
+    [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr wnd);
+    [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
+    [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr wnd);
     [StructLayout(LayoutKind.Sequential)]
     private struct Rect { public int left, top, right, bottom; }
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr wnd, out Rect rect);
@@ -177,6 +185,41 @@ public static class Sig4aPackageSmokeWin {
         }, IntPtr.Zero);
         return windows.Count == 0 ? "<none>" : String.Join("; ", windows);
     }
+    [DllImport("user32.dll",CharSet=CharSet.Unicode,ExactSpelling=true)] static extern int GetWindowTextW(IntPtr hwnd,StringBuilder text,int n);
+    private static bool IsModelDialog(IntPtr dialog, uint expectedPid) {
+        var title=new StringBuilder(256);
+        return OwnerPid(dialog)==expectedPid && WindowClass(dialog)=="#32770" &&
+            GetWindowTextW(dialog,title,title.Capacity)>0 && title.ToString()=="Live Translate · English model";
+    }
+    public static IntPtr ModelDialog(uint expectedPid, IntPtr expectedOwner) {
+        IntPtr result=IntPtr.Zero;
+        EnumWindows(delegate(IntPtr wnd,IntPtr p) {
+            if (IsModelDialog(wnd,expectedPid) && GetWindow(wnd,4)==expectedOwner) { // GW_OWNER
+                result=wnd;return false;
+            }
+            return true;
+        },IntPtr.Zero);
+        return result;
+    }
+    public static IntPtr ConsentButton(IntPtr dialog, IntPtr expectedOwner, uint expectedPid, int id, bool visible) {
+        if ((id!=6 && id!=7) || !IsModelDialog(dialog,expectedPid) ||
+            GetWindow(dialog,4)!=expectedOwner || OwnerPid(expectedOwner)!=expectedPid) return IntPtr.Zero;
+        IntPtr button=GetDlgItem(dialog,id);
+        if (button==IntPtr.Zero || !IsChild(dialog,button) || OwnerPid(button)!=expectedPid ||
+            GetDlgCtrlID(button)!=id || WindowClass(button)!="Button" || !IsWindowEnabled(button) ||
+            (visible && (!IsWindowVisible(dialog) || !IsWindowVisible(button)))) return IntPtr.Zero;
+        return button;
+    }
+    public static string DescribeConsent(IntPtr dialog) {
+        var yes=GetDlgItem(dialog,6);
+        var no=GetDlgItem(dialog,7);
+        return String.Format("dialog=[{0}], owner={1}, IDYES=[{2}, enabled={3}], IDNO=[{4}, enabled={5}], foreground={6}",
+            Describe(dialog),GetWindow(dialog,4),Describe(yes),IsWindowEnabled(yes),Describe(no),IsWindowEnabled(no),GetForegroundWindow());
+    }
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr wnd,int cmd);
+    [DllImport("user32.dll",ExactSpelling=true)] public static extern bool PostMessageW(IntPtr wnd,uint msg,IntPtr wp,IntPtr lp);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint dx,uint dy,uint data,UIntPtr ext);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr wnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr wnd);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr wnd);
@@ -352,6 +395,11 @@ public static class Sig4aPackageSmokeWin {
     Wait-PackageUia 'Mẫu thử chỉ hỗ trợ Ollama chính thức trên cổng mặc định' 'state' | Out-Null
     Assert-PackageRefusalBoundary 'Refresh and fixed model sample refusal'
     'Ordinary Quick Check Settings route verified: passive entry and real refusal with no connection/config write/hook/flag/helper.'
+    if ($InstallEnglishFromUI) {
+        # Quick Check has finished and its no-helper/no-write/refusal assertions
+        # have passed. Only now explicitly opt into the independent English gate.
+        & (Join-Path $PSScriptRoot 'smoke-english-install-ui.ps1') -Dashboard $app -Window $hwnd -Package $root -Uia $uia
+    }
     if ($RealGemmaManifestSha256) {
         $app.Kill($true); [void]$app.WaitForExit(5000); $app.Dispose(); $app = $null
         . (Join-Path $PSScriptRoot '../quick-check/signed-ollama-proof.ps1')

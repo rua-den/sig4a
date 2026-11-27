@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
-sealed class CheckSession(long id, string source, string? deviceId)
+sealed class CheckSession(long id, string source, string? deviceId, WindowsModelPaths.Pin packageRoot)
 {
     const int SampleAfterMs = 2_400, SampleSeconds = 3;
     readonly CancellationTokenSource cancel = new(), cancelSample = new();
@@ -213,7 +213,8 @@ sealed class CheckSession(long id, string source, string? deviceId)
             // A single optional, bounded scratch path; never referenced by
             // capture deadlines. No provider or Vietnamese task is available here.
             if (!CanReport) return;
-            using var model = Session.LoadModel();
+            using var modelLease = Session.LoadModel(packageRoot);
+            var model = modelLease.Recognizer;
             if (!CanReport) return;
             Program.CheckModel(this, true);
             reportedModel = true;
