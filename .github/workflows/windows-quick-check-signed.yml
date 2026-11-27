@@ -27,6 +27,8 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Test signed-proof evidence sanitization
+        run: ./.github/quick-check/proof-evidence.test.ps1
       - name: Build independent ordinary candidate ZIP without the E2E bridge
         run: ./build.ps1
       - name: Prove both fixed samples in the separately built extracted ZIP

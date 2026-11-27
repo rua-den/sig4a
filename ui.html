@@ -268,8 +268,8 @@ textarea:focus{outline:0;border-color:var(--accent)}
     <section class="quick-check-card"><h3>Phím tắt</h3><p class="hint">Cấu hình đã lưu · chưa thử tổ hợp trong Windows.</p><ul class="hint" id="qc-shortcut-status"></ul><button class="b" type="button" id="qc-open-shortcuts" onclick="openQcDestination('shortcuts')">Mở Phím tắt</button></section>
    </div>
    <div class="quick-check-grid" aria-label="Mẫu thử Local AI">
-    <section class="quick-check-card"><h3>Translation</h3><p class="hint">Mẫu Anh → Việt: “The robot has two blue boxes.”</p><button class="b" type="button" id="qc-translation" disabled>Thử Translation</button><p class="hint" id="qc-translation-status" role="status">Chưa thử.</p><output id="qc-translation-output" hidden></output></section>
-    <section class="quick-check-card"><h3>Grammar</h3><p class="hint">Mẫu: “Every morning the robot carry two blue boxes.”</p><button class="b" type="button" id="qc-grammar" disabled>Thử Grammar</button><p class="hint" id="qc-grammar-status" role="status">Chưa thử.</p><output id="qc-grammar-output" hidden></output></section>
+    <section class="quick-check-card"><h3>Translation</h3><p class="hint">Mẫu Anh → Việt: “The robot has two blue boxes.”</p><button class="b" type="button" id="qc-translation" disabled>Thử Translation</button><div id="qc-translation-status-scope" role="group" aria-label="Trạng thái mẫu Translation"><p class="hint" id="qc-translation-status" role="status">Chưa thử.</p></div><output id="qc-translation-output" hidden></output></section>
+    <section class="quick-check-card"><h3>Grammar</h3><p class="hint">Mẫu: “Every morning the robot carry two blue boxes.”</p><button class="b" type="button" id="qc-grammar" disabled>Thử Grammar</button><div id="qc-grammar-status-scope" role="group" aria-label="Trạng thái mẫu Grammar"><p class="hint" id="qc-grammar-status" role="status">Chưa thử.</p></div><output id="qc-grammar-output" hidden></output></section>
    </div>
    <p class="hint">Mẫu có sẵn, không dùng văn bản hay prompt riêng của bạn. Kết quả chỉ áp dụng cho câu thử này.</p>
    <details class="hint"><summary>Nếu Ollama chưa báo tắt Cloud</summary><p>Trong PowerShell, đặt <code>$env:OLLAMA_NO_CLOUD='1'</code> trước khi tự khởi động Ollama bằng <code>ollama serve</code>. Chỉ cần làm khi bạn muốn dùng mẫu thử; nếu Ollama đang chạy sẵn, hãy tự thoát phiên đó trước. Sig4a không đổi biến, cài tải hoặc khởi động lại Ollama.</p></details>
@@ -838,13 +838,15 @@ function openQcDestination(destination){
 async function runQc(key){
  if(!qcActive()||!qcReady||!qcNonce||qcBusy)return;
  const nonce=qcNonce,run=++qcRun,refresh=key==='refresh',status='qc-'+key+'-status';
+ const fixtureLabel=key==='translation'?'Translation':'Grammar';
+ const show=msg=>setText(status,refresh?msg:fixtureLabel+' · '+msg);
  qcBusy=true;syncQcControls();
  if(!refresh){const output=$('qc-'+key+'-output');output.hidden=true;output.textContent=''}
- setText(status,refresh?'Đang kiểm tra trạng thái…':'Đang chạy mẫu local…');
+ show(refresh?'Đang kiểm tra trạng thái…':'Đang chạy mẫu local…');
  try{
   const result=await api['qc_'+key](nonce);
   if(run!==qcRun||qcNonce!==nonce||!qcActive())return;
-  if(!result){setText(status,'Kết quả không còn hiệu lực. Thử lại nếu cần.');return}
+  if(!result){show('Kết quả không còn hiệu lực. Thử lại nếu cần.');return}
   if(refresh){
    if(typeof result.helper==='boolean')setText('qc-live-status',result.helper? 'Đã thấy bộ chạy trong gói. Chưa thử thiết bị hoặc nhận dạng.':
     'Thiếu bộ chạy Live Translate. Dùng gói ZIP đầy đủ của Sig4a.');
@@ -861,13 +863,13 @@ async function runQc(key){
   }else{
    const ok=result.code==='match',mismatch=result.code==='mismatch';
    const ms=Number.isFinite(result.ms)?' · '+(result.ms/1000).toFixed(2)+' giây':'';
-   setText(status,(ok?((key==='translation'?'Translation':'Grammar')+' · Mẫu khớp. Ollama báo Cloud đã tắt.'):mismatch?'Có phản hồi, mẫu chưa khớp; xem kết quả.':
+   show((ok?'Mẫu khớp. Ollama báo Cloud đã tắt.':mismatch?'Có phản hồi, mẫu chưa khớp; xem kết quả.':
     qcReasons[result.code]||'Không xác minh được mẫu.')+ms);
    if((ok||mismatch)&&typeof result.preview==='string'){
     const output=$('qc-'+key+'-output');output.textContent=result.preview;output.hidden=false;
    }
   }
- }catch(_){if(run===qcRun&&qcNonce===nonce)setText(status,'Không kết nối được với dashboard Windows.')}
+ }catch(_){if(run===qcRun&&qcNonce===nonce)show('Không kết nối được với dashboard Windows.')}
  finally{if(run===qcRun){qcBusy=false;syncQcControls();fit()}}
 }
 for(const key of ['refresh','translation','grammar'])$('qc-'+key).addEventListener('click',()=>void runQc(key));

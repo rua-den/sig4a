@@ -5,9 +5,14 @@ param(
  [string]$Kind='',
  [ValidateSet('point','focus','state','list','invoke')][string]$Mode='point',
  [switch]$Patterns,
- [uint32]$ExpectedRootPid=0
+ [uint32]$ExpectedRootPid=0,
+ [string]$ScopeId='',
+ [string]$ScopeName=''
 )
 $ErrorActionPreference='Stop'
+if (($ScopeId -or $ScopeName) -and ($Mode -ne 'state' -or !$ScopeId -or !$ScopeName)) {
+ throw 'A scoped lookup requires state mode, exact id and accessible group name.'
+}
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes,WindowsBase
 Add-Type @'
 using System;
@@ -70,7 +75,27 @@ foreach($h in @($main)+@([DesktopUiaWin]::Children($main))){
   }
   if($ExpectedRootPid -and !$rootOwnerVerified){break}
   $cond=[Windows.Automation.Condition]::TrueCondition
-  foreach($e in $root.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)){
+  $elements=$root.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)
+  if($ScopeId){
+    # Resolve the real fixed group before matching text. A generated preview
+    # elsewhere can repeat a verdict but cannot enter this DOM/AX subtree.
+    $scopes=[Collections.Generic.List[object]]::new()
+    $idScopes=[Collections.Generic.List[object]]::new()
+    foreach($candidate in $elements){
+      try {$info=$candidate.Current} catch {continue}
+      if($info.ControlType -eq [Windows.Automation.ControlType]::Group -and
+         $info.Name -ceq $ScopeName){
+        $scopes.Add($candidate)
+        if($info.AutomationId -ceq $ScopeId){$idScopes.Add($candidate)}
+      }
+    }
+    $group=$null
+    if($idScopes.Count -eq 1){$group=$idScopes[0]}
+    elseif(!$idScopes.Count -and $scopes.Count -eq 1){$group=$scopes[0]}
+    if(!$group){continue}
+    $elements=$group.FindAll([Windows.Automation.TreeScope]::Descendants,$cond)
+  }
+  foreach($e in $elements){
     try {$c=$e.Current} catch {
       if($Mode -ne 'list'){throw}
       $scanErrors++

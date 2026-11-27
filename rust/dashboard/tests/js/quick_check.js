@@ -16,6 +16,12 @@ check('cached cards distinguish saved setup and unverified execution',
  $('qc-ai-config').textContent.includes('gemma4:e2b')&&get('notify').includes('Đang bật')&&
  $('qc-open-hooks').textContent.includes('Hook CLI')&&
  $('qc-shortcut-status').previousElementSibling.textContent.includes('chưa thử tổ hợp'));
+check('each fixed status has an accessibility group separate from model text',
+ ['translation','grammar'].every(key=>{
+  const scope=$('qc-'+key+'-status-scope');
+  return scope.getAttribute('role')==='group'&&scope.contains($('qc-'+key+'-status'))&&
+   !scope.contains($('qc-'+key+'-output'))&&scope.nextElementSibling===$('qc-'+key+'-output');
+ }));
 await stage('opened-passive');
 const wrong=await api.qc_refresh('00000000000000000000000000000000');
 check('wrong native view scope refuses even metadata',wrong?.code==='view_lost');

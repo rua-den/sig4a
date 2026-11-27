@@ -352,7 +352,7 @@ public static class Sig4aPackageSmokeWin {
     $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
     $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia $dashboard $root
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
-    function Wait-PackageUia([string]$Pattern, [string]$Mode, [string]$Kind='', [int]$Seconds=12, [string]$Id='') {
+    function Wait-PackageUia([string]$Pattern, [string]$Mode, [string]$Kind='', [int]$Seconds=12, [string]$Id='', [string]$ScopeId='', [string]$ScopeName='') {
         $clock = [Diagnostics.Stopwatch]::StartNew()
         do {
             if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($hwnd, [uint32]$app.Id)) {
@@ -361,6 +361,7 @@ public static class Sig4aPackageSmokeWin {
             $uiaArgs = @('-NoProfile','-STA','-File',$uia,'-Hwnd',"$($hwnd.ToInt64())",'-Name',$Pattern,'-Mode',$Mode,'-ExpectedRootPid',"$($app.Id)")
             if ($Kind) { $uiaArgs += @('-Kind',$Kind) }
             if ($Id) { $uiaArgs += @('-Id',$Id) }
+            if ($ScopeId) { $uiaArgs += @('-ScopeId',$ScopeId,'-ScopeName',$ScopeName) }
             $raw = & powershell.exe @uiaArgs
             if ($LASTEXITCODE -ne 0) { throw 'Native Quick Check UI automation failed.' }
             $item = ($raw -join "`n") | ConvertFrom-Json
@@ -368,7 +369,7 @@ public static class Sig4aPackageSmokeWin {
             Start-Sleep -Milliseconds 200
         } until ($clock.Elapsed.TotalSeconds -gt $Seconds)
         # Only allowlisted fixed UI labels/identifiers in diagnostics, never model samples.
-        $known = '^(Cài đặt|Chung|Widget|Cảnh báo|Hook CLI|OCR Popup|Phím tắt|Kiểm tra nhanh|Làm mới trạng thái|Thử Translation|Thử Grammar)$'
+        $known = '^(Cài đặt|Chung|Widget|Cảnh báo|Hook CLI|OCR Popup|Phím tắt|Kiểm tra nhanh|Làm mới trạng thái|Thử Translation|Thử Grammar|Trạng thái mẫu Translation|Trạng thái mẫu Grammar)$'
         $detail = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($hwnd.ToInt64())" -Name $known -Mode list -Patterns -ExpectedRootPid "$($app.Id)"
         $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow() -eq $hwnd
         throw "Native Quick Check UI did not reach $Pattern ($Mode, id=$Id, foreground=$foreground). Fixed controls: $($detail -join ' ')"
@@ -403,7 +404,9 @@ public static class Sig4aPackageSmokeWin {
     if ($RealGemmaManifestSha256) {
         $app.Kill($true); [void]$app.WaitForExit(5000); $app.Dispose(); $app = $null
         . (Join-Path $PSScriptRoot '../quick-check/signed-ollama-proof.ps1')
-        $proofDaemon = Start-SignedOllamaProof -Scratch (Join-Path $profile 'ollama-proof') -ManifestSha256 $RealGemmaManifestSha256
+        . (Join-Path $PSScriptRoot '../quick-check/proof-evidence.ps1')
+        $proofScratch = Join-Path $profile 'ollama-proof'
+        $proofDaemon = Start-SignedOllamaProof -Scratch $proofScratch -ManifestSha256 $RealGemmaManifestSha256
         $config = Get-Content -LiteralPath $fixtureConfig -Raw | ConvertFrom-Json -AsHashtable
         $config.local_ai_endpoint = 'http://127.0.0.1:11434'
         $config | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $fixtureConfig -Encoding utf8NoBOM
@@ -414,10 +417,52 @@ public static class Sig4aPackageSmokeWin {
         Wait-PackageUia '^Widget$' 'state' 'Button|TabItem' -Id 't-look' | Out-Null
         $quick = Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button|TabItem' -Id 't-quick-check-settings'
         Write-Host "Quick Check native UIA activation: Settings=$($settings.pattern), Quick Check=$($quick.pattern)."
+        $unmatchedFixtures = [Collections.Generic.List[string]]::new()
+        $priorUnobservedChat = $false
         foreach ($label in @('Translation','Grammar')) {
-            Wait-PackageUia ("^Thử $label$") 'invoke' 'Button' -Id ("qc-"+$label.ToLowerInvariant()) | Out-Null
-            $state = Wait-PackageUia ("^$label.+Mẫu khớp[.] Ollama báo Cloud đã tắt[.]") 'state' '' 36
-            Write-Host "PRODUCTION_SAMPLE_MATCH: $($state.name)"
+            $offsets = Get-IsolatedSignedLogOffsets $proofScratch
+            $fixtureTimer = [Diagnostics.Stopwatch]::StartNew()
+            $result = @{result='no_visible_terminal_status';elapsed_ms=$null}
+            $clicked = $false
+            $buttonId = "qc-"+$label.ToLowerInvariant()
+            $scopeId = "$buttonId-status-scope"
+            $scopeName = "Trạng thái mẫu $label"
+            try {
+                # Prove a fresh idle status from the fixture's DOM group before
+                # the real click. The model preview is a sibling of this group.
+                $result.result = 'fresh_status_not_observed'
+                Wait-PackageUia '^\s*Chưa thử[.]\s*$' 'state' -ScopeId $scopeId -ScopeName $scopeName | Out-Null
+                $result.result = 'button_not_activated'
+                Wait-PackageUia ("^Thử $label$") 'invoke' 'Button' -Id $buttonId | Out-Null
+                $clicked = $true
+                $result.result = 'no_visible_terminal_status'
+                $state = Wait-PackageUia (Get-SignedQuickFixtureStatusPattern $label) 'state' '' 36 -ScopeId $scopeId -ScopeName $scopeName
+                $observed = Convert-SignedQuickFixtureStatus $label $state.name
+                if (!$observed) { throw 'Could not map the fixed accessible sample result.' }
+                $result = $observed
+            } catch {
+                # Wait-PackageUia can print fixed control diagnostics. Never
+                # forward arbitrary accessibility names or model preview here.
+                # Keep the current fixed stage code.
+            } finally {
+                $requestProof = Get-IsolatedSignedCompletedRequests $proofScratch $offsets
+                $record = @{fixture=$label;clicked=$clicked;result=$result.result;app_ms=$result.elapsed_ms
+                    observed_ms=[int]$fixtureTimer.Elapsed.TotalMilliseconds;ollama_completed_in_window=$requestProof
+                    carryover_possible=$priorUnobservedChat}
+                Write-Host ("PRODUCTION_SAMPLE_EVIDENCE: " + ($record|ConvertTo-Json -Depth 6 -Compress))
+                # A delayed POST from a preceding failed run might complete in
+                # this time window. UI verdicts remain per-fixture; logs do not
+                # carry a request id and are never an independent pass.
+                $priorUnobservedChat = $priorUnobservedChat -or ($clicked -and !$requestProof.chat_completion_seen)
+            }
+            if ($result.result -ne 'match') {
+                $unmatchedFixtures.Add("$label=$($result.result)")
+            } else {
+                Write-Host "PRODUCTION_SAMPLE_MATCH: $label"
+            }
+        }
+        if ($unmatchedFixtures.Count) {
+            throw "Ordinary signed Quick Check proof did not match both fixed fixtures: $($unmatchedFixtures -join '; '); see fixed evidence."
         }
         if ($proofDaemon.HasExited) { throw 'The same signed Ollama daemon was not retained across the package samples.' }
         Assert-PackageRefusalBoundary 'Signed package Quick Check actions'
