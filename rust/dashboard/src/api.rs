@@ -527,11 +527,12 @@ impl Core {
     /// `Api.state()`
     pub fn state(&self) -> Value {
         let cfg = self.cfg();
+        let shortcuts = cu_core::hotkeys::value(cu_core::hotkeys::configured(&cfg));
         let interval = effective_interval(&cfg);
         let cache = load_cache(&self.paths);
         let usage_hooks = Self::usage_hooks(&cfg, cache.as_ref(), cu_core::cache::now_ts(), &self.tray_exe);
         let usage_policy_pending = Self::usage_policy_pending(&cfg, cache.as_ref());
-        json!({"cfg": cfg, "cache": cache, "usage_hooks": usage_hooks, "usage_policy_pending": usage_policy_pending, "version": VERSION, "interval": interval})
+        json!({"cfg": cfg, "shortcuts": shortcuts, "cache": cache, "usage_hooks": usage_hooks, "usage_policy_pending": usage_policy_pending, "version": VERSION, "interval": interval})
     }
 
     /// Inline the dashboard state. Quick tools do not need usage or hook reads.

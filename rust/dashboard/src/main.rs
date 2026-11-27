@@ -197,6 +197,30 @@ impl App {
         let f = |i: usize| a.get(i).and_then(Value::as_f64).unwrap_or(0.0);
         let c = &self.core;
         Ok(match m {
+            "shortcut_status" => {
+                use cu_core::hotkeys as hk;
+                match win::tray_call(hk::STATUS_MESSAGE, None) {
+                    Some(n) if (hk::STATUS..hk::STATUS + 16).contains(&n) => json!({"code":"ok","unavailable":n - hk::STATUS}),
+                    Some(hk::DISABLED) => json!({"code":"disabled"}),
+                    _ => json!({"code":"tray"}),
+                }
+            }
+            "shortcut_save" => {
+                use cu_core::hotkeys as hk;
+                let bindings = match hk::parse(a.first().unwrap_or(&Value::Null)) {
+                    Ok(bindings) => bindings,
+                    Err((i, duplicate)) => return Ok(json!({"code":if duplicate {"duplicate"} else {"invalid"}, "action":hk::KEYS[i]})),
+                };
+                let bindings = hk::value(bindings);
+                match win::tray_call(WM_COPYDATA, Some(bindings.to_string().as_bytes())) {
+                    Some(hk::OK) => json!({"code":"ok","bindings":bindings}),
+                    Some(hk::IO_ERROR) => json!({"code":"io"}),
+                    Some(hk::DISABLED) => json!({"code":"disabled"}),
+                    Some(n) if (hk::CONFLICT..hk::CONFLICT + 4).contains(&n) => json!({"code":"conflict","action":hk::KEYS[n - hk::CONFLICT]}),
+                    _ => json!({"code":"tray"}),
+                }
+            }
+            "open_toolbox" => Value::Bool(win::open_toolbox()),
             "state" => c.state(),
             "test_notify" => c.flag(&c.paths.testflag),
             "refresh" => c.flag(&c.paths.flag),
@@ -659,7 +683,13 @@ fn main() {
             if let Some((tool, text)) = app.quick_pending.take() {
                 hotkey_result = None;
                 app.anchored = false;
-                win::set_topmost(app.hwnd, false);
+                // Text quick tools are also transient popups. Keep them in the
+                // topmost band while the user moves back to the source window,
+                // otherwise a normal external click immediately covers the
+                // result and makes Grammar/Translate appear not to open.
+                // OCR applies its explicit preference below when a capture is
+                // actually revealed.
+                win::set_topmost(app.hwnd, true);
                 let mut js = format!("openQuickTool({},{});", json!(tool), json!(text));
                 if hidden_for_picker {
                     let token = present.begin();
