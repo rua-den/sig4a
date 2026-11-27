@@ -1,0 +1,14 @@
+{
+  "title": "OCR popup configuration and focus persistence",
+  "status": "planned",
+  "baseline": "a848df7a218ab0bd95a060191e85387080621d2a",
+  "scope": "SIG4A OCR quick popup and dashboard Settings page",
+  "goal": "Let users configure whether the OCR popup stays visible above other windows after clicking outside it; default to staying visible.",
+  "acceptance": [
+    {"id":"OCRCFG-AUTO-1","case":"Config default and round-trip save preserve ocr_popup_always_on_top without changing unknown keys","status":"planned"},
+    {"id":"OCRCFG-AUTO-2","case":"Settings page exposes OCR Popup section and persists the toggle","status":"planned"},
+    {"id":"OCRCFG-WIN-1","case":"Quick OCR popup remains visible when focus moves to another window with default enabled; explicit Escape/Close still exits","status":"planned"}
+  ],
+  "advisor":{"status":"pending"},
+  "gate":{"status":"pending","rule":"Do not mark passed until automated tests, independent Advisor review, and native Windows verification pass."}
+}
