@@ -34,7 +34,7 @@ function Capture-Usage([IntPtr]$h,[string]$path){
  foreach($fx in @(0.02,0.25,0.5,0.75,0.98)){
   foreach($fy in @(0.02,0.25,0.5,0.75,0.98)){
    $xx=[int]($r.Left+($r.Right-$r.Left-1)*$fx);$yy=[int]($r.Top+($r.Bottom-$r.Top-1)*$fy)
-   Assert-Proof ((Root-At $xx $yy) -eq $h) 'Won’t capture a dashboard screenshot overlapped by another app'
+   Assert-Proof ((Root-At $xx $yy) -eq $h) 'Refusing to capture a dashboard screenshot overlapped by another app'
   }
  }
  Capture-Evidence $h $path
