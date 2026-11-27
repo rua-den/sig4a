@@ -42,6 +42,20 @@ Mặc định popup OCR vẫn nổi khi bạn bấm sang ứng dụng khác. Đ�
 
 Đổi các phím tắt toàn hệ thống tại **Cài đặt → Phím tắt**. SIG4A trong khay hệ thống phải đang chạy. Phím mở Tool Box mặc định để trống; có thể mở bằng cách bấm biểu tượng khay hoặc nút **Mở Tool Box** trong popup. Chọn **Lưu phím tắt** để áp dụng ngay. Nếu Windows không đăng ký được tổ hợp mới hoặc hai chức năng trùng phím, SIG4A báo lỗi và giữ các phím cũ.
 
+## Live Translate (thử nghiệm)
+
+Bản ZIP chuẩn cần .NET 8 SDK và PowerShell 7 trên máy **build**; khi giải nén, helper Windows x64 đi kèm không cần cài .NET. Nếu chỉ cần các công cụ cũ, dùng `build.ps1 -SkipLiveTranslate`.
+
+Sau khi giải nén trọn ZIP, chủ động tải model nhận dạng tiếng Anh đã ghim và kiểm checksum:
+
+```powershell
+pwsh -NoProfile -File .\live-translate\Provision-Model.ps1
+```
+
+Vào **Tool Box → Live Translate**. Chọn **Tiếng máy** (mọi âm thanh phát qua thiết bị đã chọn) hoặc **Mic** (phải chọn đích danh). Chỉ **Bắt đầu** hoặc **Tiếp tục** mới mở nguồn. Mở trang/phím tắt không nghe; **Tạm dừng**, **Dừng**, chuyển nguồn hoặc rời trang sẽ dừng phiên. Không tự đổi sang mic nếu mất thiết bị. Âm thanh và phụ đề không được lưu hay gửi lên dịch vụ bên ngoài.
+
+Bản thử nghiệm ưu tiên câu tiếng Anh. Sai tên, số và ý phủ định vẫn có thể xảy ra; không dựa vào phụ đề để xác nhận quyết định quan trọng. Máy Windows CI không có thiết bị âm thanh vật lý; các kết quả thiết bị thật và bài chạy 60 phút được theo dõi riêng trong plan.
+
 ## Cài Local AI
 
 Mở **Local AI** từ Tổng quan hoặc nút **Local AI readiness** trong **Cài đặt**. Chọn backend, địa chỉ và model. SIG4A chỉ gửi yêu cầu đến địa chỉ HTTP loopback (ví dụ `127.0.0.1` hoặc `localhost`), không dùng endpoint hoặc model cloud. OCR cần model hỗ trợ ảnh; nếu cần dịch tiếng Việt, chọn model phù hợp với tiếng Việt.

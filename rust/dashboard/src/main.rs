@@ -507,7 +507,7 @@ fn main() {
     };
     let mut ctx = WebContext::new(Some(if quick_mode { storage_dir_named(&core.paths.data, "webview-quick") } else { storage_dir(&core.paths.data) }));
     let handler_proxy = proxy.clone();
-    let mode_script = format!("window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
+    let mode_script = format!("window.__SIG4A_RUST_LIVE__=true;window.__QUICK_MODE__={};", if quick_mode { "true" } else { "false" });
     let built = WebViewBuilder::new_with_web_context(&mut ctx)
         .with_html(core.page(UI_HTML, quick_mode))
         .with_initialization_script(SHIM)

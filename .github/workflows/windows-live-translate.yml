@@ -1,0 +1,39 @@
+name: Windows experimental Live Translate
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-experimental:
+    runs-on: windows-2025
+    timeout-minutes: 38
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Locked Windows workspace regression
+        working-directory: rust
+        run: |
+          tzutil.exe /s "SE Asia Standard Time"
+          cargo test --locked --workspace -- --test-threads=1
+      - name: Build the actual user ZIP
+        run: .\build.ps1
+      - name: Smoke-test ordinary extracted package
+        run: |
+          $files = @(Get-ChildItem dist -File -Filter 'sig4a-*-windows.zip')
+          if ($files.Count -ne 1) { throw 'Expected one app ZIP.' }
+          .\.github\live-translate\smoke-package.ps1 -Archive $files[0].FullName
+          git rev-parse HEAD | Set-Content dist/REVISION.txt
+          $hash = Get-FileHash -LiteralPath $files[0].FullName -Algorithm SHA256
+          "$($hash.Hash)  $($files[0].Name)" | Set-Content dist/SHA256.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sig4a-experimental-windows
+          path: dist/
+          if-no-files-found: error

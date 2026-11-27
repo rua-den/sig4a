@@ -384,8 +384,24 @@ impl Live {
                 }
             }
             Message::Caption(n, en, vi, seq) if n == self.generation && self.phase == Phase::Listening => {
-                if seq.zip(self.caption.seq).is_some_and(|(a,b)| a < b) { return Ok(()); }
-                self.caption = Caption {en,vi:if self.translate {vi} else {None},seq};
+                match (seq, vi) {
+                    // Translations never create a new line or change its English text.
+                    // A delayed translation is rendered only for the exact current row.
+                    (Some(seq), Some(vi)) => {
+                        if self.translate && self.caption.seq == Some(seq) && self.caption.en == en {
+                            self.caption.vi = Some(vi);
+                        }
+                    }
+                    (Some(seq), None) => {
+                        if self.caption.seq.is_none_or(|old| seq > old) {
+                            self.caption = Caption {en,vi:None,seq:Some(seq)};
+                        }
+                    }
+                    // An old helper can still provide English, but uncorrelated Vietnamese
+                    // is never accepted or retroactively attached.
+                    (None, _) if self.caption.seq.is_none() => self.caption = Caption {en,vi:None,seq:None},
+                    _ => {}
+                }
             }
             Message::Error(n, code) if n == 0 && self.listing.take().is_some() => self.code = Some(code),
             Message::Error(n, code) if n == self.generation && n > 0 && self.phase.busy() => {
@@ -474,4 +490,23 @@ mod tests {
         assert_eq!(live.caption.en, "English");
         assert_eq!(live.caption.vi, None);
     }
+    #[test]
+    fn vietnamese_only_updates_the_exact_current_english_row() {
+        let mut live = Live {generation:4,phase:Phase::Listening,translate:true,..Live::default()};
+        live.event(Message::Caption(4,"future only".into(),Some("not authorized".into()),Some(5))).unwrap();
+        assert_eq!(live.caption.en, "");
+        live.event(Message::Caption(4,"first".into(),None,Some(1))).unwrap();
+        live.event(Message::Caption(4,"different English".into(),Some("incorrect association".into()),Some(1))).unwrap();
+        assert_eq!(live.caption.vi, None);
+        live.event(Message::Caption(4,"first".into(),Some("một".into()),Some(1))).unwrap();
+        assert_eq!(live.caption.vi.as_deref(), Some("một"));
+        live.event(Message::Caption(4,"first".into(),None,Some(1))).unwrap();
+        assert_eq!(live.caption.vi.as_deref(), Some("một"));
+        live.event(Message::Caption(4,"second".into(),None,Some(2))).unwrap();
+        live.event(Message::Caption(4,"first".into(),Some("old translation".into()),Some(1))).unwrap();
+        live.event(Message::Caption(3,"second".into(),Some("old session".into()),Some(2))).unwrap();
+        assert_eq!(live.caption.en, "second");
+        assert_eq!(live.caption.vi, None);
+    }
+
 }

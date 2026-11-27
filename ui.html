@@ -142,7 +142,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
 <button class="b" id="quick-open-toolbox" onclick="openToolBox()">Mở Tool Box</button><button class="wb" title="thu nhỏ" onclick="api.minimize()">–</button><button class="wb" id="maxb" title="phóng to / khôi phục (nhấp đúp thanh tiêu đề)" onclick="toggleMax()">▢</button><button class="wb x" id="window-close" aria-label="Đóng" title="đóng" onclick="closeDash()">✕</button></div>
 <main>
 <div id="wrap">
- <nav class="toolnav" aria-label="Các khu vực chính"><button class="on" data-tool="overview" aria-current="page" onclick="toolTab('overview')">Tổng quan</button><button data-tool="ai" onclick="toolTab('ai')">Trợ lý AI</button><button data-tool="live" onclick="toolTab('live')">Live Translate</button><button data-tool="usage" onclick="toolTab('usage')">Claude Usage</button><button data-tool="cleaner" onclick="toolTab('cleaner')">Dọn ổ</button><button data-tool="settings" onclick="toolTab('settings')">Cài đặt</button></nav>
+ <nav class="toolnav" aria-label="Các khu vực chính"><button class="on" data-tool="overview" aria-current="page" onclick="toolTab('overview')">Tổng quan</button><button data-tool="ai" onclick="toolTab('ai')">Trợ lý AI</button><button data-tool="usage" onclick="toolTab('usage')">Claude Usage</button><button data-tool="live" onclick="toolTab('live')" hidden>Live Translate</button><button data-tool="cleaner" onclick="toolTab('cleaner')">Dọn ổ</button><button data-tool="settings" onclick="toolTab('settings')">Cài đặt</button></nav>
  <section class="toolpanel on" id="tool-overview"><div class="box"><div class="lbl">QUOTA ƯU TIÊN</div><div id="overview-quota"><div class="hdr">đang poll lần đầu...</div></div></div><div class="box"><div class="lbl">KANE'S TOOL BOX</div><div class="overview">
   <button class="tile" onclick="toolTab('grammar')"><b>Grammar</b><span class="tile-hotkey" data-shortcut-hint="grammar">Ctrl+Alt+G</span><span>Kiểm tra ngữ pháp tiếng Anh, chỉnh sửa và sao chép kết quả.</span></button>
   <button class="tile" onclick="toolTab('translation')"><b>Translation</b><span class="tile-hotkey" data-shortcut-hint="translation">Ctrl+Alt+T</span><span>Dịch nhanh, mặc định sang tiếng Việt; có thể chọn English.</span></button>
@@ -209,7 +209,7 @@ textarea:focus{outline:0;border-color:var(--accent)}
      <label>Grammar<input type="text" id="shortcut-grammar" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
      <label>Translate<input type="text" id="shortcut-translation" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
      <label>OCR<input type="text" id="shortcut-ocr" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
-     <label>Live Translate<input type="text" id="shortcut-live" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
+     <label id="shortcut-live-row" hidden>Live Translate<input type="text" id="shortcut-live" maxlength="40" spellcheck="false" autocomplete="off" aria-describedby="shortcuts-hint"></label>
     </div>
     <button class="b p" id="shortcuts-save" onclick="saveShortcuts()">Lưu phím tắt</button>
     <p class="hint" id="shortcuts-status" role="status"></p>
@@ -669,7 +669,10 @@ async function confirmCleanReview(){
 $('cleanlist').addEventListener('change',()=>{cancelCleanReview();syncCleanControls()});
 for(const id of ['croots','cdays','dmin'])$(id).addEventListener('input',()=>{cancelCleanReview();renderCleanConfig()});
 let activeRoute='overview',activeAi='grammar';
+const nativeLive=window.__SIG4A_RUST_LIVE__===true&&!window.__QUICK_MODE__;
+if(nativeLive){document.querySelector('.toolnav [data-tool=live]').hidden=false;$('shortcut-live-row').hidden=false}
 function toolTab(t){
+ if(t==='live'&&!nativeLive)return;
  const previousFocus=document.activeElement;
  const previousRoute=activeRoute;
  const route=t==='localai'?'settings':(t==='grammar'||t==='translation'||t==='ocr'?'ai':t);
@@ -1217,7 +1220,7 @@ async function hook(kind){const r=await api[kind==='install'?'hook_install':'hoo
 async function hookStatus(){const st=await api.hook_status();const ok=st.filter(x=>x[1]===true).length;
  $('hookst').textContent=`hook: đã cài ${ok}/${st.length} profile`+(st.some(x=>x[1]===null)?' (có file settings lỗi)':'')}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();if(cleanReview){cancelCleanReview(true);return}closeDash();return}const t=e.target;if(['INPUT','TEXTAREA','SELECT'].includes(t.tagName)||t.isContentEditable||e.ctrlKey||e.altKey||e.metaKey)return;if(e.key==='r')refresh()});
-document.addEventListener('keydown',e=>{const t=e.target;if(!(t instanceof Element)||!t.matches('.toolnav button,.ai-subnav button'))return;const group=[...t.parentElement.querySelectorAll('button')];const i=group.indexOf(t);let n=-1;if(e.key==='ArrowRight'||e.key==='ArrowDown')n=(i+1)%group.length;else if(e.key==='ArrowLeft'||e.key==='ArrowUp')n=(i-1+group.length)%group.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=group.length-1;else return;e.preventDefault();group[n].focus();group[n].click()});
+document.addEventListener('keydown',e=>{const t=e.target;if(!(t instanceof Element)||!t.matches('.toolnav button,.ai-subnav button'))return;const group=[...t.parentElement.querySelectorAll('button:not([hidden])')];const i=group.indexOf(t);let n=-1;if(e.key==='ArrowRight'||e.key==='ArrowDown')n=(i+1)%group.length;else if(e.key==='ArrowLeft'||e.key==='ArrowUp')n=(i-1+group.length)%group.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=group.length-1;else return;e.preventDefault();group[n].focus();group[n].click()});
 $('look').addEventListener('input',autoSave);$('look').addEventListener('change',autoSave);
 let accentSaving=Promise.resolve();$('accent').addEventListener('change',()=>{const value=applyAccent($('accent').value);accentSaving=api.save({dashboard_accent:value}).then(ok=>{if(!ok)toast('Không lưu được màu giao diện')}).catch(()=>toast('Không lưu được màu giao diện'))});
 if(window.__INIT__)apply(window.__INIT__);

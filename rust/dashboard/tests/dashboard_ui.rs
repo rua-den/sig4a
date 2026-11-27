@@ -239,7 +239,7 @@ fn dashboard_process_end_to_end() {
     assert_eq!(r["accent_initial"], "#fab283", "missing accent migrates to orange");
     assert!(r["accs"].as_str().unwrap().contains("p1"), "{r}");
     assert!(r["accs"].as_str().unwrap().contains("42%"), "{r}");
-    assert_eq!(r["routes"], json!(["overview", "ai", "usage", "cleaner", "settings"]));
+    assert_eq!(r["routes"], json!(["overview", "ai", "usage", "live", "cleaner", "settings"]));
     assert_eq!(r["ai_tools"], json!(["grammar", "translation", "ocr"]));
     assert_eq!(r["usage_visible"], true);
     assert_eq!(r["cleaner_visible"], true);

@@ -1,3 +1,6 @@
+[CmdletBinding()]
+param([switch]$SkipLiveTranslate)
+
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '.')).Path
 $rustRoot = Join-Path $repoRoot 'rust'
@@ -27,6 +30,31 @@ $files = @(
 foreach ($source in $files[0..1]) {
     if (-not (Test-Path -LiteralPath $source)) { throw "Build did not produce $source" }
 }
-Compress-Archive -LiteralPath $files -DestinationPath $archive -CompressionLevel Optimal -Force
+# Package the Windows companion beside the existing executables. Models are
+# provisioned only on explicit request after extraction; build never downloads
+# weights or opens an audio device.
+$companionPublish = Join-Path $repoRoot 'tools/live_translate_runtime/Publish.ps1'
+if (!$SkipLiveTranslate -and (!(Test-Path -LiteralPath $companionPublish -PathType Leaf) -or
+    !(Get-Command dotnet -ErrorAction SilentlyContinue))) {
+    throw 'Live Translate packaging requires the .NET 8 SDK. Use -SkipLiveTranslate to build only the existing tools.'
+}
+
+$stage = Join-Path ([System.IO.Path]::GetTempPath()) ("sig4a-package-" + [guid]::NewGuid())
+try {
+    New-Item -Path $stage -ItemType Directory | Out-Null
+    Copy-Item -LiteralPath $files -Destination $stage
+    if (!$SkipLiveTranslate) {
+        $companion = Join-Path $stage 'live-translate'
+        & $companionPublish -Output $companion
+        if (!(Test-Path -LiteralPath (Join-Path $companion 'Sig4a.LiveTranslate.exe') -PathType Leaf)) {
+            throw 'Live Translate helper executable is missing.'
+        }
+    }
+    Compress-Archive -LiteralPath @(Get-ChildItem -LiteralPath $stage | ForEach-Object FullName) -DestinationPath $archive -CompressionLevel Optimal -Force
+} finally {
+    if (Test-Path -LiteralPath $stage) {
+        Remove-Item -LiteralPath $stage -Recurse -Force
+    }
+}
 
 Write-Host "Built $archive"

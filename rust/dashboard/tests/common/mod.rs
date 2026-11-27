@@ -42,7 +42,11 @@ pub fn wait_for(what: &str, secs: u64, mut f: impl FnMut() -> bool) {
 }
 
 pub fn spawn(local: &Path, home: &Path, script: Option<(&Path, &Path)>) -> Guard {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_claude-usage-dashboard"));
+    spawn_exe(Path::new(env!("CARGO_BIN_EXE_claude-usage-dashboard")), local, home, script)
+}
+
+fn spawn_exe(exe: &Path, local: &Path, home: &Path, script: Option<(&Path, &Path)>) -> Guard {
+    let mut c = Command::new(exe);
     if let Some((s, o)) = script {
         c.arg("--e2e").arg(s).arg(o);
     }
@@ -82,12 +86,16 @@ pub struct Run {
 
 impl Run {
     pub fn start(local: &Path, home: &Path, dir: &Path, name: &str, js: &str, consts: &str) -> Run {
+        Self::start_from(Path::new(env!("CARGO_BIN_EXE_claude-usage-dashboard")), local, home, dir, name, js, consts)
+    }
+
+    pub fn start_from(exe: &Path, local: &Path, home: &Path, dir: &Path, name: &str, js: &str, consts: &str) -> Run {
         let s = dir.join(format!("{name}.js"));
         let o = dir.join(format!("{name}.out"));
         fs::write(&s, format!("{PRELUDE}\n{consts}\n{js}")).unwrap();
         let _ = fs::remove_file(&o);
         let started = Instant::now();
-        let guard = spawn(local, home, Some((&s, &o)));
+        let guard = spawn_exe(exe, local, home, Some((&s, &o)));
         Run {
             guard,
             out: o,
