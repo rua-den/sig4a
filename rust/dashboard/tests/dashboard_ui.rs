@@ -78,14 +78,22 @@ fn run_script(local: &Path, home: &Path, dir: &Path, name: &str, body: &str) -> 
     let s = dir.join(format!("{name}.js"));
     let o = dir.join(format!("{name}.out"));
     fs::write(&s, body).unwrap();
-    let g = spawn(local, home, Some((&s, &o)));
-    wait_for("script result", 40, || o.exists());
+    let mut g = spawn(local, home, Some((&s, &o)));
+    let deadline = Instant::now() + Duration::from_secs(40);
+    while !o.exists() && Instant::now() < deadline {
+        if let Ok(Some(exit)) = g.0.try_wait() {
+            panic!("{name} dashboard exited ({exit}); events: {}", fs::read_to_string(local.join("claude-usage/events.log")).unwrap_or_default());
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert!(o.exists(), "{name} script result missing; events: {}", fs::read_to_string(local.join("claude-usage/events.log")).unwrap_or_default());
     std::thread::sleep(Duration::from_millis(100)); // the file is written in one call; be safe
     let v = serde_json::from_str(&fs::read_to_string(&o).unwrap()).unwrap();
     (g, v)
 }
 
 const SCRIPT1: &str = r#"
+window.__cu_send('__log',['dashboard_ui: SCRIPT1 started']);
 await new Promise(r => setTimeout(r, 700));
 toolTab('usage'); await new Promise(r => setTimeout(r, 100)); document.querySelector('.toolnav').style.display='none';
 const $ = id => document.getElementById(id);
@@ -108,21 +116,25 @@ out.ocr_settings = {
 };
 $('ocr-popup-topmost').click();
 $('settings-save').click();
+window.__cu_send('__log',['dashboard_ui: waiting for existing OCR save']);
 await saving;
 out.ocr_topmost_saved = (await api.state()).cfg.ocr_popup_always_on_top;
 $('t-shortcuts').click();
 out.shortcut_tab = !$('shortcuts').hidden && $('ocrpopup').hidden && $('t-shortcuts').getAttribute('aria-pressed')==='true';
 out.shortcut_defaults = Object.fromEntries(['toolbox','grammar','translation','ocr'].map(k=>[k,$('shortcut-'+k).value]));
 $('shortcut-toolbox').value='alt + ctrl + g';
+window.__cu_send('__log',['dashboard_ui: waiting for duplicate']);
 await saveShortcuts();
 out.shortcut_duplicate = $('shortcuts-status').dataset.state;
 $('shortcut-toolbox').value='Win+Q';
+window.__cu_send('__log',['dashboard_ui: waiting for invalid']);
 await saveShortcuts();
 out.shortcut_invalid = $('shortcuts-status').dataset.state;
 
 toolTab('ai'); document.querySelector('.toolnav button[data-tool="ai"]').focus(); document.querySelector('.toolnav button[data-tool="ai"]').dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}));
 out.keyboard_route = document.querySelector('.toolnav button.on').dataset.tool;
 toolTab('overview');
+window.__cu_send('__log',['dashboard_ui: waiting for original state']);
 out.state = await api.state();
 out.win0 = await api.win_state();
 out.accent_initial = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -162,6 +174,7 @@ await api.toggle_max();
 out.rect_back = await api.rect();
 out.win_back = await api.win_state();
 try { await api.no_such_method(); out.unknown = 'resolved'; } catch (e) { out.unknown = String(e); }
+window.__cu_send('__log',['dashboard_ui: SCRIPT1 returning']);
 return out;
 "#;
 
