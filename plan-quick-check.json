@@ -5,8 +5,10 @@
     "start": "After Audio Check PR #35 merges, rebase/cut the implementation branch from exact latest main containing both #34 and #35; record that SHA in the repo plan. Draft review only before then.",
     "inspected_audio_check": "efec55d4d132881491038a6395de64136c4ce3e3",
     "inspected_local_ai_setup": "fcd82b1de383ab74fbed0bca990a3828193ca616",
-    "sha": "a20328f66046eb71c8708107330b62e21da2f336",
-    "ref": "origin/main"
+    "sha": "59e12b6815d57c8051597b0c47613986d4159a5d",
+    "ref": "origin/main",
+    "implementation_started_at_sha": "a20328f66046eb71c8708107330b62e21da2f336",
+    "sync": "Normal two-parent merge of the exact Safe Report #36 main into Quick Check; do not rewrite the existing #37 history. The Quick Check source tree entering the merge matches the published b1eaa8a7 tree."
   },
   "scope": "One native Windows Settings surface with five status cards and two separate explicit fixed-sample tests. No new top-level Tool Box route, capture popup feature, general diagnostic runner or aggregate pass badge.",
   "ux": {
@@ -129,7 +131,31 @@
     "rust/dashboard/src/win.rs and rust/app/src/tray.rs: bounded tray IPC, registered status and independently managed -hf process",
     "rust/crates/core/src/hookinstall.rs, hotkeys.rs and daemon/alerts.rs; ui.html settings links and navigation; plan-local-ai-setup.json"
   ],
-  "evidence": {},
+  "evidence": {
+    "baseline_sync": {
+      "main_parent": "59e12b6815d57c8051597b0c47613986d4159a5d",
+      "quick_check_published_parent": "b1eaa8a7ded69a75836fb39daa1e4debc9158a9e",
+      "quick_check_local_parent": "5859457c02734813d4e3fb86f83b3bbca725133e",
+      "same_quick_check_tree": "64e3ffb19016179028c9878c436ff6c1cf7fca7d",
+      "preserved_baseline": {
+        "safe_report_pr": "https://github.com/rua-den/sig4a/pull/36",
+        "verified_candidate": "a9bbdce5cbd606ad57a6e8bf2784f44b46d83fa3",
+        "standard_windows": "https://github.com/rua-den/sig4a/actions/runs/46061252312",
+        "full_windows": "https://github.com/rua-den/sig4a/actions/runs/46061252327",
+        "ordinary_zip": "https://github.com/rua-den/sig4a/actions/runs/46061252327/artifacts/15228313523",
+        "scope": "Previously verified Safe Report candidate only; no implication for Quick Check or combined candidate."
+      },
+      "pre_sync_quick_check": {
+        "standard_windows": "https://github.com/rua-den/sig4a/actions/runs/46060307275",
+        "full_windows_regression": "https://github.com/rua-den/sig4a/actions/runs/46060307264/job/140712678582",
+        "full_windows_engine": "https://github.com/rua-den/sig4a/actions/runs/46060307264/job/140712678624",
+        "ordinary_zip": "https://github.com/rua-den/sig4a/actions/runs/46060307264/job/140712678256",
+        "scope": "Regression and engine passed their pre-sync jobs. Package failed selecting the dashboard root; no Quick Check package or signed sample pass."
+      },
+      "resolution": "Retain dedicated guarded Quick Check IPC and exact zero-argument Diagnostics Preview IPC; Settings route transitions clear either stale preview. Both ordinary and optional signed package runs use the same visible owned window and root-contained localized navigation checks. Quick Check still uses real UIA activation/refusal with no sample bypass; localized UIA responses are escaped safely.",
+      "combined_windows": "pending exact regression, package, and opted-in signed production proof"
+    }
+  },
   "revision": "advisor-offline-v1-final-refresh",
   "pre_code_review": {
     "draft_sha256": "34b71d0f7277d597513335b1a148f6cb22f669509306c55f795810d31fc06594",

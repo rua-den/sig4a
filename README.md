@@ -166,3 +166,14 @@ Trạng thái sẵn sàng chỉ xác nhận tag local và metadata vision, khôn
 cho thử ảnh mẫu hoặc xác thực nội dung trọng số. Sau khi sẵn sàng, **Chọn preset Gemma 4 E2B** chỉ đổi backend, endpoint và
 model trong màn hình cấu hình. Bấm **Lưu Local AI** nếu muốn lưu lựa chọn; prompt
 không cần thay đổi.
+
+### Báo cáo chẩn đoán đã lọc
+
+Mở **Cài đặt → Chung → Xem báo cáo**. Gói JSON chỉ có phiên bản ứng dụng,
+nền tảng, kiến trúc, loại bản dựng và dấu mốc cài Local AI đã quan sát trong
+tiến trình dashboard này. Dấu mốc sẵn sàng là lịch sử, không kiểm tra server hiện
+tại hay xác nhận model đã suy luận. Không có nhật ký, tài khoản, tên model, đường
+dẫn, văn bản, ảnh hay âm thanh; tạo báo cáo không chạy thêm phép kiểm tra nào.
+
+**Sao chép JSON** sao chép đúng bản xem trước khi bạn bấm. SIG4A không tự gửi
+đi. **Xóa xem trước** xóa bản trong màn hình, không thu hồi nội dung đã sao chép.

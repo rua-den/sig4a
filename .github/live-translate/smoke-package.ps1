@@ -20,6 +20,37 @@ function Read-Event($proc, $task, [int]$ms=5500) {
     if ($j.v -ne 1) { throw 'Live Translate helper protocol version mismatch.' }
     return $j
 }
+function Read-IsolatedStartupSummary([string]$IsolatedProfile) {
+    # Only the profile constructed by this smoke above; never use the runner's real profile.
+    $path = Join-Path $IsolatedProfile 'local/claude-usage/events.log'
+    try {
+        if (!(Test-Path -LiteralPath $path -PathType Leaf)) { return '<no isolated startup log>' }
+        if ((Get-Item -LiteralPath $path).Length -gt 65536) { return '<isolated startup log exceeds diagnostic limit>' }
+        $lines = @(Get-Content -LiteralPath $path -Tail 10 | ForEach-Object { $_.Substring(0, [Math]::Min(240, $_.Length)) })
+        if (!$lines.Count) { return '<empty isolated startup log>' }
+        return ($lines -join ' | ')
+    } catch {
+        return '<isolated startup log unavailable>'
+    }
+}
+function Test-PositiveUiaRect($Rect) {
+    if ($null -eq $Rect) { return $false }
+    foreach ($edge in @('left','top','right','bottom')) {
+        $coordinate = $Rect.$edge
+        if ($null -eq $coordinate -or !($coordinate -is [ValueType])) { return $false }
+        $number = [double]$coordinate
+        if ([double]::IsNaN($number) -or [Math]::Abs($number) -gt 1000000) { return $false }
+    }
+    return ($Rect.right -gt $Rect.left -and $Rect.bottom -gt $Rect.top)
+}
+function Test-UiaButtonInRoot($Button,$Root) {
+    if ($Button.kind -ne 'ControlType.Button' -or $Button.offscreen -ne $false -or
+        !(Test-PositiveUiaRect $Button) -or !(Test-PositiveUiaRect $Root)) { return $false }
+    $centerX = ([double]$Button.left + [double]$Button.right) / 2
+    $centerY = ([double]$Button.top + [double]$Button.bottom) / 2
+    return ($centerX -ge $Root.left -and $centerX -lt $Root.right -and
+        $centerY -ge $Root.top -and $centerY -lt $Root.bottom)
+}
 $psi = [Diagnostics.ProcessStartInfo]::new($runtime)
 $psi.WorkingDirectory = Split-Path -Parent $runtime
 $psi.UseShellExecute = $false
@@ -71,6 +102,7 @@ try {
     $hookHash = (Get-FileHash -LiteralPath $hookConfig).Hash
     Add-Type @'
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 public static class Sig4aPackageSmokeWin {
@@ -78,23 +110,49 @@ public static class Sig4aPackageSmokeWin {
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr param);
     [DllImport("user32.dll", CharSet=CharSet.Unicode, ExactSpelling=true)]
     private static extern int GetClassNameW(IntPtr wnd, StringBuilder name, int capacity);
-    private static bool IsVisibleDashboard(IntPtr wnd, uint expectedPid) {
-        if (wnd == IntPtr.Zero || !IsWindowVisible(wnd)) return false;
-        uint ownerPid;
-        if (GetWindowThreadProcessId(wnd, out ownerPid) == 0 || ownerPid != expectedPid) return false;
-        var name = new StringBuilder(256);
-        return GetClassNameW(wnd, name, name.Capacity) > 0 &&
-            String.Equals(name.ToString(), "ClaudeUsageDashboard", StringComparison.Ordinal);
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr wnd, uint flags);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect { public int left, top, right, bottom; }
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr wnd, out Rect rect);
+    private static uint OwnerPid(IntPtr wnd) {
+        uint pid;
+        return wnd != IntPtr.Zero && GetWindowThreadProcessId(wnd, out pid) != 0 ? pid : 0;
     }
-    public static IntPtr FindDashboard(uint expectedPid, IntPtr mainWindow) {
-        if (IsVisibleDashboard(mainWindow, expectedPid)) return mainWindow;
-        IntPtr result = IntPtr.Zero;
+    private static string WindowClass(IntPtr wnd) {
+        var name = new StringBuilder(256);
+        return GetClassNameW(wnd, name, name.Capacity) > 0 ? name.ToString() : "<unavailable>";
+    }
+    public static bool IsVisibleOwnedRoot(IntPtr wnd, uint expectedPid) {
+        return wnd != IntPtr.Zero && expectedPid != 0 && OwnerPid(wnd) == expectedPid &&
+            IsWindowVisible(wnd) && GetAncestor(wnd, 2) == wnd; // GA_ROOT
+    }
+    public static IntPtr[] DashboardCandidates(uint expectedPid) {
+        var candidates = new List<IntPtr>();
         EnumWindows(delegate(IntPtr wnd, IntPtr unused) {
-            if (!IsVisibleDashboard(wnd, expectedPid)) return true;
-            result = wnd;
-            return false;
+            if (IsVisibleOwnedRoot(wnd, expectedPid) &&
+                String.Equals(WindowClass(wnd), "ClaudeUsageDashboard", StringComparison.Ordinal)) {
+                candidates.Add(wnd);
+            }
+            return true;
         }, IntPtr.Zero);
-        return result;
+        // MainWindowHandle can be Tao's event target (or another auxiliary
+        // window). Keep it diagnostic only; never lay out or probe those roots.
+        return candidates.ToArray();
+    }
+    public static string Describe(IntPtr wnd) {
+        Rect rect;
+        string bounds = GetWindowRect(wnd, out rect)
+            ? String.Format("{0},{1},{2},{3}", rect.left, rect.top, rect.right, rect.bottom) : "<unavailable>";
+        return String.Format("HWND={0}, class={1}, PID={2}, visible={3}, root={4}, bounds={5}",
+            wnd, WindowClass(wnd), OwnerPid(wnd), IsWindowVisible(wnd), GetAncestor(wnd, 2), bounds);
+    }
+    public static string DescribeOwned(uint expectedPid) {
+        var windows = new List<string>();
+        EnumWindows(delegate(IntPtr wnd, IntPtr unused) {
+            if (OwnerPid(wnd) == expectedPid) windows.Add(Describe(wnd));
+            return windows.Count < 12;
+        }, IntPtr.Zero);
+        return windows.Count == 0 ? "<none>" : String.Join("; ", windows);
     }
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr wnd, out uint pid);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr wnd);
@@ -103,44 +161,108 @@ public static class Sig4aPackageSmokeWin {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr wnd, IntPtr root, int x, int y, int w, int h, uint flags);
 }
 '@
-    $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-    $hwnd = [IntPtr]::Zero
-    do {
-        Start-Sleep -Milliseconds 250
-        $app.Refresh()
-        if ($app.HasExited) { throw "Extracted dashboard exited early ($($app.ExitCode))." }
-        $hwnd = [Sig4aPackageSmokeWin]::FindDashboard([uint32]$app.Id, $app.MainWindowHandle)
-    } until ($hwnd -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 20)
-    if ($hwnd -eq [IntPtr]::Zero) { throw ("Extracted ordinary dashboard did not show a visible owned ClaudeUsageDashboard window (launch PID={0}, process main HWND={1})." -f $app.Id,$app.MainWindowHandle) }
-    [void][Sig4aPackageSmokeWin]::SetWindowPos($hwnd, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014)
-    [void][Sig4aPackageSmokeWin]::SetForegroundWindow($hwnd)
-    # A native HWND alone can be blank. Confirm the actual ordinary WebView2
-    # navigation contains the experimental entry and a pre-existing tool.
     $uia = Join-Path $PSScriptRoot 'desktop-uia.ps1'
-    $seen = $false
-    $sample = $null
-    $timer.Restart()
-    do {
-        $raw = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($hwnd.ToInt64())" -Mode list
-        if ($LASTEXITCODE -ne 0) { throw 'Native dashboard UI automation failed.' }
-        $sample = ($raw -join "`n") | ConvertFrom-Json
-        $nodes = @($sample.items | Where-Object {!$_.offscreen -and $_.right -gt $_.left -and $_.bottom -gt $_.top})
-        $seen = (@($nodes | Where-Object name -eq 'Live Translate').Count -gt 0) -and
-                (@($nodes | Where-Object name -eq 'Claude Usage').Count -gt 0)
-        if (!$seen) { Start-Sleep -Milliseconds 350 }
-    } until ($seen -or $timer.Elapsed.TotalSeconds -gt 28)
-    if (!$seen) {
-        $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow() -eq $hwnd
-        $summary = @($sample.items | Select-Object -First 14 name,kind,offscreen) | ConvertTo-Json -Compress
-        throw "Extracted native dashboard navigation missing (foreground=$foreground): $summary"
+    function Find-VerifiedPackagedDashboard([Diagnostics.Process]$App,[string]$IsolatedProfile,[string]$Uia) {
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        [uint32]$launchPid = $app.Id
+        do {
+            Start-Sleep -Milliseconds 250
+            $app.Refresh()
+            if ($app.HasExited) {
+                $startup = Read-IsolatedStartupSummary $IsolatedProfile
+                throw "Extracted dashboard exited early ($($app.ExitCode)). Startup: $startup"
+            }
+            $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
+        } until ($candidates.Count -gt 0 -or $timer.Elapsed.TotalSeconds -gt 20)
+        if ($candidates.Count -eq 0) {
+            $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
+            $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
+            $startup = Read-IsolatedStartupSummary $IsolatedProfile
+            throw "Extracted dashboard has no visible owned ClaudeUsageDashboard root (launch PID=$launchPid; process main: $main; owned windows: $owned). Startup: $startup"
+        }
+        # A native HWND alone can be a dialog or a blank/framework window. Only pass
+        # when the same visible owned root exposes canonical dashboard navigation.
+        $hwnd = [IntPtr]::Zero
+        $observations = [ordered]@{}
+        $expectedButtons = @('Live Translate','Claude Usage','Cài đặt')
+        $examined = $null
+        $placed = [Collections.Generic.HashSet[IntPtr]]::new()
+        $timer.Restart()
+        do {
+            $app.Refresh()
+            if ($app.HasExited) {
+                $startup = Read-IsolatedStartupSummary $IsolatedProfile
+                throw "Extracted dashboard exited before navigation was shown ($($app.ExitCode)). Startup: $startup"
+            }
+            $candidates = @([Sig4aPackageSmokeWin]::DashboardCandidates($launchPid))
+            foreach ($h in $candidates) {
+                if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) { continue }
+                $examined = [Sig4aPackageSmokeWin]::Describe($h)
+                if ($placed.Add($h)) { [void][Sig4aPackageSmokeWin]::SetWindowPos($h, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014) }
+                [void][Sig4aPackageSmokeWin]::SetForegroundWindow($h)
+                $raw = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($h.ToInt64())" -Mode list
+                if ($LASTEXITCODE -ne 0) {
+                    $startup = Read-IsolatedStartupSummary $IsolatedProfile
+                    throw "Native dashboard UI automation failed ($examined). Startup: $startup"
+                }
+                $sample = ($raw -join "`n") | ConvertFrom-Json
+                $buttons = @($sample.items | Where-Object {Test-UiaButtonInRoot $_ $sample.root})
+                $names = @($buttons | ForEach-Object name)
+                $matched = @($expectedButtons | Where-Object {$_ -cin $names})
+                $allNamed = @($sample.items | Where-Object {$_.name -cin $expectedButtons})
+                $key = [string]($h.ToInt64())
+                if ($observations.Contains($key) -or $observations.Count -lt 6) {
+                    $entry = $observations[$key]
+                    if ($null -eq $entry) {
+                        $entry = @{window=$examined;attempts=0;bestScore=-1;best=$null;latest=$null}
+                        $observations[$key] = $entry
+                    }
+                    $entry.attempts++
+                    $snapshot = @{
+                        root=$sample.root; rootState=$sample.root_state; rootsRead=$sample.roots_read
+                        scanErrors=$sample.scan_errors; itemCount=@($sample.items).Count
+                        metRoleAndBounds=$matched
+                        namedCandidates=@($allNamed | Select-Object -First 9 name,id,kind,enabled,offscreen,left,top,right,bottom)
+                        sample=@($sample.items | Select-Object -First 8 @{Name='name';Expression={$_.name.Substring(0,[Math]::Min(96,$_.name.Length))}},kind,offscreen,left,top,right,bottom)
+                    }
+                    $score = 100000 * $matched.Count + 1000 * $allNamed.Count + @($sample.items).Count
+                    $entry.latest = $snapshot
+                    if ($score -gt $entry.bestScore) {
+                        $entry.bestScore = $score
+                        $entry.best = $snapshot
+                    }
+                }
+                if ($matched.Count -eq $expectedButtons.Count -and $sample.root.process_id -eq $launchPid -and
+                    [Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($h, $launchPid)) {
+                    $hwnd = $h
+                    break
+                }
+                if ($timer.Elapsed.TotalSeconds -gt 28) { break }
+            }
+            if ($hwnd -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 350 }
+        } until ($hwnd -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 28)
+        if ($hwnd -eq [IntPtr]::Zero) {
+            $main = [Sig4aPackageSmokeWin]::Describe($app.MainWindowHandle)
+            $owned = [Sig4aPackageSmokeWin]::DescribeOwned($launchPid)
+            $summary = @($observations.Values) | ConvertTo-Json -Depth 7 -Compress
+            $startup = Read-IsolatedStartupSummary $IsolatedProfile
+            $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow()
+            throw "Extracted native dashboard navigation missing (launch PID=$launchPid; foreground=$foreground; process main: $main; owned: $owned; last examined: $examined). Per-dashboard UIA observations: $summary. Startup: $startup"
+        }
+        $verifiedWindow = [Sig4aPackageSmokeWin]::Describe($hwnd)
+        Write-Host "Native UIA found visible Live Translate, Claude Usage and Settings buttons within the extracted app root ($verifiedWindow)."
+        return $hwnd
     }
-    'Native UIA found visible Live Translate and Claude Usage in the extracted app.'
+    $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
+    $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia
     if (Get-Process -Name 'Sig4a.LiveTranslate' -ErrorAction SilentlyContinue) { throw 'Helper should not start merely on dashboard launch.' }
     function Wait-PackageUia([string]$Pattern, [string]$Mode, [string]$Kind='', [int]$Seconds=12, [string]$Id='') {
         $clock = [Diagnostics.Stopwatch]::StartNew()
         do {
-            $uiaArgs = @('-NoProfile','-STA','-File',$uia,'-Hwnd',"$($hwnd.ToInt64())",'-Name',$Pattern,'-Mode',$Mode)
+            if (![Sig4aPackageSmokeWin]::IsVisibleOwnedRoot($hwnd, [uint32]$app.Id)) {
+                throw 'Extracted dashboard is no longer the verified visible owned root.'
+            }
+            $uiaArgs = @('-NoProfile','-STA','-File',$uia,'-Hwnd',"$($hwnd.ToInt64())",'-Name',$Pattern,'-Mode',$Mode,'-ExpectedRootPid',"$($app.Id)")
             if ($Kind) { $uiaArgs += @('-Kind',$Kind) }
             if ($Id) { $uiaArgs += @('-Id',$Id) }
             $raw = & powershell.exe @uiaArgs
@@ -151,7 +273,7 @@ public static class Sig4aPackageSmokeWin {
         } until ($clock.Elapsed.TotalSeconds -gt $Seconds)
         # Only allowlisted fixed UI labels/identifiers in diagnostics, never model samples.
         $known = '^(Cài đặt|Chung|Widget|Cảnh báo|Hook CLI|OCR Popup|Phím tắt|Kiểm tra nhanh|Làm mới trạng thái|Thử Translation|Thử Grammar)$'
-        $detail = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($hwnd.ToInt64())" -Name $known -Mode list -Patterns
+        $detail = & powershell.exe -NoProfile -STA -File $uia -Hwnd "$($hwnd.ToInt64())" -Name $known -Mode list -Patterns -ExpectedRootPid "$($app.Id)"
         $foreground = [Sig4aPackageSmokeWin]::GetForegroundWindow() -eq $hwnd
         throw "Native Quick Check UI did not reach $Pattern ($Mode, id=$Id, foreground=$foreground). Fixed controls: $($detail -join ' ')"
     }
@@ -186,17 +308,7 @@ public static class Sig4aPackageSmokeWin {
         $config | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $fixtureConfig -Encoding utf8NoBOM
         $fixtureHash = (Get-FileHash -LiteralPath $fixtureConfig).Hash
         $app = Start-Process -FilePath $dashboard -WorkingDirectory $root -PassThru
-        $timer.Restart()
-        $hwnd = [IntPtr]::Zero
-        do {
-            Start-Sleep -Milliseconds 200
-            $app.Refresh()
-            if ($app.HasExited) { throw 'Extracted proof dashboard exited before reopening.' }
-            $hwnd = [Sig4aPackageSmokeWin]::FindDashboard([uint32]$app.Id, $app.MainWindowHandle)
-        } until ($hwnd -ne [IntPtr]::Zero -or $timer.Elapsed.TotalSeconds -gt 20)
-        if ($hwnd -eq [IntPtr]::Zero) { throw 'Extracted proof dashboard did not become visible.' }
-        [void][Sig4aPackageSmokeWin]::SetWindowPos($hwnd, [IntPtr]::Zero, 24, 24, 900, 640, 0x0014)
-        [void][Sig4aPackageSmokeWin]::SetForegroundWindow($hwnd)
+        $hwnd = Find-VerifiedPackagedDashboard $app $profile $uia
         $settings = Wait-PackageUia '^Cài đặt$' 'invoke' 'Button'
         Wait-PackageUia '^Widget$' 'state' 'Button|TabItem' -Id 't-look' | Out-Null
         $quick = Wait-PackageUia '^Kiểm tra nhanh$' 'invoke' 'Button|TabItem' -Id 't-quick-check-settings'
@@ -209,7 +321,7 @@ public static class Sig4aPackageSmokeWin {
         if ($proofDaemon.HasExited) { throw 'The same signed Ollama daemon was not retained across the package samples.' }
         Assert-PackageRefusalBoundary 'Signed package Quick Check actions'
     } else {
-        'REAL_SIGNED_OLLAMA_GEMMA_NOT_RUN: optional job needs independently reviewed exact model digest.'
+        'REAL_SIGNED_OLLAMA_GEMMA_NOT_RUN: explicit signed Quick Check workflow was not requested.'
     }
     'SIG4A archive verified: actual released dashboard, explicit inventory, invalid source no fallback, no passive helper/capture. No physical endpoints accessed.'
 } finally {
