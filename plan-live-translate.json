@@ -64,6 +64,12 @@
           "status": "failed_exploratory_targets",
           "case": "Independent model-blinded bilingual review and matched source/freeze/result SHA-256: Whisper/LFM retained 40/122 annotated facts and clearly preserved 1/7 critical negations; Sherpa/LFM retained 1/122 and clearly preserved 0/7. These are exact exploratory fixture results, not human or accent-diverse certification. Reject both tested pipelines as configured; isolate MT using clean and ASR-transcribed text and diagnose systematic Sherpa prefix loss before retest.",
           "evidence": "https://github.com/rua-den/sig4a/actions/runs/45978546306/artifacts/15188646838"
+        },
+        {
+          "status": "verified_partial",
+          "case": "Sherpa 20M first word matched 0/48 in one-shot and paced replay and only 11/48 with +800 ms pre-roll using the same verified synthetic WAVs. This recipe is not a v1 candidate. Separate local translation diagnostic on clean references: official Marian EN→VI p95 342 ms vs LFM p95 1327 ms, not full pipeline latency. Accuracy and revised ASR candidate still being verified.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45981066971",
+          "tested_revision": "fd303b48eceb403ed2e77d4ab19eec7d4c6c9c9e"
         }
       ]
     },
