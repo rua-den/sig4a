@@ -3,6 +3,12 @@ toolTab('live');
 check('real Tool Box Live page is shown', $('tool-live').classList.contains('on'));
 check('translated captions disabled by default', !$('live-translate').checked);
 check('opening does not listen', $('live-lamp').dataset.listening === 'false');
+$('live-check-start').click();
+check('audio check without the helper asks for the full ZIP, not microphone permissions',
+ await waitFor(() => !$('live-check-result').hidden &&
+ $('live-check-status').textContent.includes('Thiếu bộ chạy Live Translate') &&
+ $('live-check-status').textContent.includes('ZIP đầy đủ') && !$('live-check-start').disabled,3000) &&
+ !$('live-check-status').textContent.includes('quyền') && $('live-lamp').dataset.listening==='false');
 $('live-refresh').click();
 check('missing helper gives actionable setup message', await waitFor(() => $('live-status').textContent.includes('Chưa cài helper'), 3000));
 check('no listening indicator after missing helper', $('live-lamp').dataset.listening === 'false');

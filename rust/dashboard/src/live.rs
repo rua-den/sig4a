@@ -483,7 +483,8 @@ impl Live {
             // the helper, but don't resurrect a result for the formerly selected source.
             if self.check.is_some() && code != "view_lost" {
                 self.check = Some(AudioCheck {outcome:Some(match code {
-                    "device_missing" | "device_lost" | "permission_denied" | "backend_missing" => "unavailable",
+                    "backend_missing" => "backend_missing",
+                    "device_missing" | "device_lost" | "permission_denied" => "unavailable",
                     _ => "failed",
                 }),..AudioCheck::default()});
             } else {
