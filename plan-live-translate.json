@@ -157,7 +157,7 @@
     "rule": "Advisor reviews plan before Luna codes; each later phase waits on prior phase evidence and review. Main stays unchanged until exact integrated product is reviewed and acceptance passes. Owner-authorized experimental merge is a separate gated path, not a pass of the existing quality/release gates."
   },
   "experimental_merge": {
-    "status": "implementation_in_progress",
+    "status": "passed",
     "authorization": "Owner requested Experimental Live Translate on main; improve candidate quality afterwards. Applies to this experimental opt-in launch only; release/quality gates are not passed.",
     "commit_baseline": "84926dcaab809543611f43e82b5886bb1eca4445",
     "presentation": "English first; Vietnamese intentionally opt-in with persistent test warning. Tool is off on launch; no cloud, recording, automatic capture, or audio-source fallback.",
@@ -193,6 +193,16 @@
       "reviewed_draft": "06ea86612eed43f882080a2d3e92c123d68af01b",
       "reviewer": "GPT-6.2 Astra",
       "contract": "docs/live-translate-experimental-protocol.md"
+    },
+    "tested_product": "bacd315fc4929eb18d2550f78a4c2950df97777b",
+    "evidence": {
+      "review": "GPT-6.2 Astra approved exact product tree at ab40b74a02845419d31d79b754f18dc09d84812d; compared to bacd315fc4929eb18d2550f78a4c2950df97777b with only the package smoke harness changed.",
+      "standard": "https://github.com/rua-den/sig4a/actions/runs/45992837541/job/140484755646",
+      "full_product_regression": "212 passed, 0 failed, 1 pre-existing optional ignored; native live WebView2/stop, process Job cleanup and renderer lease. Same application sources on 96c13be60fb53376c18356a561b8e88ac7040ec9, compare changes only .github/live-translate/smoke-package.ps1. https://github.com/rua-den/sig4a/actions/runs/45991182150/job/140479103495",
+      "local_english_engine": "https://github.com/rua-den/sig4a/actions/runs/45992837974/job/140484758296",
+      "ordinary_packaged_ui": "https://github.com/rua-den/sig4a/actions/runs/45992837974/job/140484758327",
+      "artifact": "https://github.com/rua-den/sig4a/actions/runs/45992837974/artifacts/15194193124",
+      "limitations": "Experimental only. Physical Windows microphone/headphone endpoint capture and release, end-to-end optional Vietnamese using the actual product, long soak, and translation accuracy/latency acceptance remain unverified or unpassed; earlier timing/accuracy diagnostics are not passes. No release or tag."
     }
   }
 }
