@@ -28,4 +28,4 @@ jobs:
       - name: Test dashboard API
         run: cargo test --locked -p claude-usage-dashboard --bin claude-usage-dashboard
       - name: Exercise the real dashboard WebView2
-        run: cargo test --locked -p claude-usage-dashboard --test dashboard_ui -- --test-threads=1
+        run: cargo test --locked -p claude-usage-dashboard --test dashboard_ui --test dashboard_usage_layout -- --test-threads=1

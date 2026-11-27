@@ -11,7 +11,7 @@ await sleep(1800);
 
 check('4 accounts rendered', accs().length === 4, accs().length);
 const spin = document.querySelectorAll('.acc .spin');
-check('spinner shown for the account being fetched', spin.length === 1 && spin[0].parentElement.textContent.includes('claude-da'));
+check('spinner shown for the account being fetched', spin.length === 1 && spin[0].closest('.acc')?.dataset.n === 'claude-da');
 check("footer shows 'updating' state while busy", $('stat').textContent.includes('đang cập nhật'));
 check('refresh button stays clickable while the app polls in the background', $('rbtn').disabled === false);
 const limited = accs().find(row => row.dataset.n === 'claude-hn');
@@ -46,7 +46,7 @@ check('account list is not rebuilt when nothing changed (no flicker)', document.
 
 // refresh feedback
 refresh(); await sleep(600);
-check("click refresh -> instant 'requesting' feedback", $('rbtn').textContent.includes('đang') && $('rbtn').disabled === true);
+check("click refresh -> instant 'requesting' feedback", $('rbtn').textContent === 'Đang làm mới…' && $('rbtn').disabled === true);
 await stage('refresh_result');                          // test: refresh.flag exists; cache gets busy + refresh result
 await sleep(1500);
 check('refresh result toast shown (what started / skipped)', $('toast').textContent.includes('đang refresh 1 account'), $('toast').textContent);
@@ -173,7 +173,7 @@ $('interval').dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: tr
 check("'r' typed in an input does not refresh", $('rbtn').disabled === false);
 await stage('r_in_input');                              // test: no refresh.flag
 document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true })); await sleep(500);
-check("'r' key refreshes (button shows the request)", $('rbtn').disabled === true && $('rbtn').textContent.includes('đang'));
+check("'r' key refreshes (button shows the request)", $('rbtn').disabled === true && $('rbtn').textContent === 'Đang làm mới…');
 await stage('r_key');                                   // test: refresh.flag exists
 
 // hook buttons (sandbox profiles only)
