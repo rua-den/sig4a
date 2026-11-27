@@ -54,9 +54,11 @@
           "evidence": "https://github.com/rua-den/sig4a/actions/runs/45977648093/job/140433306980"
         },
         {
-          "status": "in_progress",
-          "case": "Exploratory synthetic Windows proof for two local ASR engines with LFM translator cleared by independent Advisor for hosted run. Not device proof, not a model decision, and not a phase pass.",
-          "evidence": "https://github.com/rua-den/sig4a/pull/26"
+          "status": "verified_partial",
+          "case": "Pinned synthetic Windows replay completed for two offline ASR chains with the same LFM Q8 weights through local llama.cpp. All 48 speech cases emitted a caption; Sherpa p50/p95 1375/2787 ms, Whisper p50/p95 10866/17737 ms. Limitations: synthetic en-US voices with oracle segmentation, not VAD or real devices; utterance content/accuracy is not yet accepted, early review reveals clipped English prefixes and incorrect Vietnamese amounts.",
+          "evidence": "https://github.com/rua-den/sig4a/actions/runs/45978546306/job/140436315074",
+          "artifact": "https://github.com/rua-den/sig4a/actions/runs/45978546306/artifacts/15188646838",
+          "tested_revision": "a6fba24529a8af9923306a57346d0a34996d226e"
         }
       ]
     },
