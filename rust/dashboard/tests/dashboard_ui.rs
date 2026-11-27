@@ -100,6 +100,16 @@ toolTab('usage'); out.usage_visible = $('usage-accounts').getBoundingClientRect(
 toolTab('cleaner'); out.cleaner_visible = $('clean').hidden === false && $('usage-accounts').getBoundingClientRect().height === 0;
 toolTab('settings'); tab('gen'); const settingsGen = !$('gen').hidden && $('gen').getBoundingClientRect().height > 0; tab('look'); const settingsLook = !$('look').hidden && $('look').getBoundingClientRect().height > 0; out.settings_visible = settingsGen && settingsLook && $('settings-box').getBoundingClientRect().height > 0 && $('clean').hidden;
 toolTab('localai'); out.localai_settings = document.querySelector('.toolnav button[data-tool="settings"]').getAttribute('aria-current') === 'page' && $('tool-localai').classList.contains('on') && getComputedStyle($('settings-box')).display === 'none' && getComputedStyle($('ai-subnav-wrap')).display === 'none'; toolTab('settings');
+$('t-ocrpopup').click();
+out.ocr_settings = {
+  visible: !$('ocrpopup').hidden && $('ocrpopup').getBoundingClientRect().height > 0 && $('gen').hidden,
+  active: $('t-ocrpopup').getAttribute('aria-pressed') === 'true',
+  enabled_by_default: $('ocr-popup-topmost').checked
+};
+$('ocr-popup-topmost').click();
+$('settings-save').click();
+await saving;
+out.ocr_topmost_saved = (await api.state()).cfg.ocr_popup_always_on_top;
 toolTab('ai'); document.querySelector('.toolnav button[data-tool="ai"]').focus(); document.querySelector('.toolnav button[data-tool="ai"]').dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}));
 out.keyboard_route = document.querySelector('.toolnav button.on').dataset.tool;
 toolTab('overview');
@@ -147,7 +157,10 @@ return out;
 
 const SCRIPT2: &str = r#"
 await new Promise(r => setTimeout(r, 500));
-const out = { win: await api.win_state(), rect: await api.rect(), accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(), widget_label: $('wlabel').value, widget_font: $('wfont').value };
+document.querySelector('.toolnav button[data-tool="settings"]').click();
+$('t-ocrpopup').click();
+const ocr_topmost = $('ocr-popup-topmost').checked;
+const out = { ocr_topmost, win: await api.win_state(), rect: await api.rect(), accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(), widget_label: $('wlabel').value, widget_font: $('wfont').value };
 setTimeout(() => api.hide(), 50);       // the page's own close path
 return out;
 "#;
@@ -213,6 +226,8 @@ fn dashboard_process_end_to_end() {
     assert_eq!(r["cleaner_visible"], true);
     assert_eq!(r["settings_visible"], true);
     assert_eq!(r["localai_settings"], true);
+    assert_eq!(r["ocr_settings"], json!({"visible":true,"active":true,"enabled_by_default":true}));
+    assert_eq!(r["ocr_topmost_saved"], false);
     assert_eq!(r["keyboard_route"], "usage");
     assert!(r["sub"].as_str().unwrap().contains("1 accounts"), "{r}");
     assert_eq!(r["state"]["cfg"]["warn_pct"], 80);
@@ -238,6 +253,7 @@ fn dashboard_process_end_to_end() {
     assert_eq!(cfg["widget_label"], "short", "widget text setting preserved");
     assert_eq!(cfg["widget_font"], 135, "widget font setting preserved");
     assert_eq!(cfg["widget_theme"], "light", "widget theme remains independent");
+    assert_eq!(cfg["ocr_popup_always_on_top"], false, "OCR popup preference persisted");
     assert_eq!(cfg["accent_test_sentinel"], "keep", "unknown config key preserved");
     assert!(data.join("refresh.flag").exists() && data.join("notify_test.flag").exists());
     assert_eq!(r["hook_install"], json!([["p1", "đã cài"]]));
@@ -292,6 +308,7 @@ fn dashboard_process_end_to_end() {
 
     // ---- run 2: the saved size is restored; the page's hide() ends the process ----
     let (mut main2, r2) = run_script(&local, &home, tmp.path(), "s2", SCRIPT2);
+    assert_eq!(r2["ocr_topmost"], false, "OCR preference restored on dashboard restart");
     assert_eq!(
         r2["win"],
         json!({"user_sized": true, "maximized": false}),

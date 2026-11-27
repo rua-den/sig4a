@@ -38,6 +38,8 @@ Với Grammar và Translation, bôi đen văn bản rồi bấm phím tắt. Pop
 
 Với OCR, kéo chọn vùng sau khi bấm phím tắt. Sau khi thả chuột, popup xuất hiện cạnh vùng đã chọn và tự nhận chữ. Bấm **Sao chép** để chép chữ nhận được, hoặc **Dịch** để dịch sang tiếng Việt ngay trong popup; **Sao chép bản dịch** chép riêng bản dịch. `Esc` trong bộ chọn sẽ hủy chụp: lần đầu không mở popup rỗng; nếu đang chụp lại từ popup, kết quả trước vẫn còn. Trong tab OCR của dashboard, cũng có thể dán ảnh PNG, JPEG hoặc WebP tối đa 6 MB, hoặc dùng **Chụp vùng màn hình**, rồi bấm **Nhận chữ**.
 
+Mặc định popup OCR vẫn nổi khi bạn bấm sang ứng dụng khác. Đổi tại **Cài đặt → OCR Popup → Giữ popup OCR nổi khi bấm ra ngoài**, rồi bấm **Lưu cài đặt**. Thay đổi áp dụng từ lần chụp tiếp theo. Khi popup có focus, bấm `Esc` hoặc nút đóng để đóng nó.
+
 ## Cài Local AI
 
 Mở **Local AI** từ Tổng quan hoặc nút **Local AI readiness** trong **Cài đặt**. Chọn backend, địa chỉ và model. SIG4A chỉ gửi yêu cầu đến địa chỉ HTTP loopback (ví dụ `127.0.0.1` hoặc `localhost`), không dùng endpoint hoặc model cloud. OCR cần model hỗ trợ ảnh; nếu cần dịch tiếng Việt, chọn model phù hợp với tiếng Việt.

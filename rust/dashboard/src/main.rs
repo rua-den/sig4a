@@ -659,6 +659,7 @@ fn main() {
             if let Some((tool, text)) = app.quick_pending.take() {
                 hotkey_result = None;
                 app.anchored = false;
+                win::set_topmost(app.hwnd, false);
                 let mut js = format!("openQuickTool({},{});", json!(tool), json!(text));
                 if hidden_for_picker {
                     let token = present.begin();
@@ -687,6 +688,10 @@ fn main() {
             shown = true;
             want_reveal = false;
             if e2e.is_none() || e2e_visible() {
+                if app.quick_mode && app.anchored {
+                    let topmost = cu_core::config::ocr_popup_always_on_top(&app.core.cfg());
+                    win::set_topmost(app.hwnd, topmost);
+                }
                 window.set_visible(true);
                 window.set_focus();
             }
