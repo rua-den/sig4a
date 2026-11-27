@@ -1,0 +1,92 @@
+name: 'Live Translate Phase 1 - optional hardware proof ZIP'
+'on':
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/live-translate-hardware-package.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2025
+    timeout-minutes: 18
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Package self-contained Windows x64 diagnostic
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $src = './tools/live_translate_audio_probe'
+          $out = Join-Path $env:RUNNER_TEMP 'proof-publish'
+          $pkg = Join-Path $env:RUNNER_TEMP 'sig4a-audio-proof-win-x64'
+          $dist = Join-Path $env:RUNNER_TEMP 'proof-dist'
+          dotnet publish "$src/AudioProbe.csproj" -c Release -r win-x64 --self-contained true -p:AudioProofOperatorOnly=true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $out
+          New-Item -ItemType Directory -Force $pkg,$dist | Out-Null
+          Copy-Item "$out/AudioProbe.exe","$src/CHAY-TEST.cmd","$src/HUONG-DAN.txt" $pkg
+          & "$src/package-notices.ps1" -Assets "$src/obj/project.assets.json" -Destination "$pkg/notices"
+          # Auditable gentle tone generated from math, not recorded audio.
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.IO;
+          public static class TestTone {
+            public static void Write(string path) {
+              const int rate=16000, seconds=15, bytes=rate*seconds*2;
+              using (var w=new BinaryWriter(File.Open(path,FileMode.CreateNew))) {
+                w.Write(0x46464952u); w.Write(bytes+36); w.Write(0x45564157u);
+                w.Write(0x20746d66u); w.Write(16); w.Write((short)1); w.Write((short)1);
+                w.Write(rate); w.Write(rate*2); w.Write((short)2); w.Write((short)16);
+                w.Write(0x61746164u); w.Write(bytes);
+                for(int i=0;i<rate*seconds;i++) {
+                  double fade=Math.Min(1.0,Math.Min(i,rate*seconds-i)/(rate*0.10));
+                  w.Write((short)(1000*fade*Math.Sin(2*Math.PI*440*i/rate)));
+                }
+              }
+            }
+          }
+          '@
+          [TestTone]::Write("$pkg/am-thu.wav")
+          $zip = Join-Path $dist 'sig4a-audio-proof-win-x64.zip'
+          Compress-Archive -Path "$pkg/*" -DestinationPath $zip
+          (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant() | Set-Content -LiteralPath "$dist/SHA256.txt"
+          git rev-parse HEAD | Set-Content -LiteralPath "$dist/REVISION.txt"
+      - name: Smoke-test the extracted ordinary executable
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $run = Join-Path $env:RUNNER_TEMP 'proof-smoke'
+          Expand-Archive (Join-Path $env:RUNNER_TEMP 'proof-dist/sig4a-audio-proof-win-x64.zip') $run
+          $probe = Join-Path $run 'AudioProbe.exe'
+          $noticeDir = Join-Path $run 'notices'
+          $proof = Get-Content -Raw -LiteralPath "$noticeDir/notice-provenance.json" | ConvertFrom-Json -AsHashtable
+          foreach ($name in @('NAudio-v2.2.1-LICENSE.txt','dotnet-runtime-LICENSE.txt','dotnet-runtime-THIRD-PARTY-NOTICES.txt')) {
+            $file = Join-Path $noticeDir $name
+            if (!(Test-Path -LiteralPath $file -PathType Leaf) -or (Get-Item -LiteralPath $file).Length -lt 100 -or
+                $proof[$name].sha256 -ine (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash) {
+              throw "Packaged license notice missing, truncated or has wrong checksum: $name"
+            }
+          }
+          $status = & $probe --self-check | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or !$status.ok -or $status.mode -ne 'operator-only' -or $status.opened_endpoints -ne 0) {
+            throw 'Operator-only package cannot perform its no-capture self-check.'
+          }
+          # Every unauthorized invocation must stop silently, before endpoint work.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $line = '' | & $probe --operator
+          if ($LASTEXITCODE -ne 2 -or $line) { throw 'Noninteractive refusal failed.' }
+          $line = & $probe --list
+          if ($LASTEXITCODE -ne 2 -or $line) { throw 'Legacy inventory refusal failed.' }
+          $line = & $probe 1 playback default
+          if ($LASTEXITCODE -ne 2 -or $line) { throw 'Legacy capture refusal failed.' }
+          "Hosted package-only self-check and refusal validation; no audio or physical hardware tested."
+          exit 0
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: optional-sig4a-audio-proof-win-x64
+          path: ${{ runner.temp }}/proof-dist/
+          if-no-files-found: error

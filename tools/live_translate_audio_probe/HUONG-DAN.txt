@@ -1,0 +1,22 @@
+THỬ TAI NGHE + MIC SIG4A (1–2 phút, Windows x64)
+
+Đây là công cụ đo tín hiệu, KHÔNG phải SIG4A/Live Translate, không cần admin,
+không cần cài thêm .NET và không cần mạng. Công cụ chỉ đọc tạm tín hiệu trong
+bộ nhớ. Tiếng máy gồm mọi âm thanh đi qua thiết bị phát mà mày chọn. Không tạo
+bản ghi, không lưu, chép lời hay truyền âm thanh.
+Chỉ chạy gói do milo gửi cùng mã thử. Công cụ chưa ký; nếu Windows chặn,
+dừng và báo lại, không tắt bảo vệ.
+
+1. Giải nén ZIP. Kết nối tai nghe và mic vật lý. Đóng/thoát cuộc họp, tắt
+   thông báo và các app gây tiếng. Chọn tai nghe làm thiết bị phát của Windows.
+2. Mở CHAY-TEST.cmd, nhập mã thử milo gửi rồi chọn đúng tai nghe và mic trong
+   danh sách. Công cụ chờ mày gõ OK trước mỗi phép đo (5 giây + 1 giây mở lại).
+3. Khi cần tiếng tai nghe, phát am-thu.wav ở âm lượng thấp. Nếu âm hết trước
+   phép đo kế tiếp, phát lại. Khi cần mic, dừng hẳn file âm thử và đếm 1 đến 6.
+   Làm theo các bước mute/bật lại mic trên màn hình. Ctrl+C để hủy bất kỳ lúc nào.
+   Thiết bị ngắt/lỗi thì tool dừng, không tự thu lại. Muốn thử lại thì kết nối
+   lại và tự mở CHAY-TEST.cmd từ đầu.
+4. Chỉ copy dòng bắt đầu SHARE và gửi cho milo. Không gửi ảnh màn hình hay
+   nguyên cửa sổ, vì danh sách thiết bị chỉ để mày xem trên máy.
+   Dòng SHARE chỉ có mã thử, các số đo tổng hợp và thời điểm nhả nguồn.
+   Nếu không muốn chia sẻ thì Enter để thoát.
